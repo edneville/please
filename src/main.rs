@@ -21,6 +21,7 @@ use std::io::prelude::*;
 use std::path::Path;
 use std::collections::HashMap;
 use std::ffi::CString;
+use std::ffi::CStr;
 
 use chrono::{NaiveDate, NaiveDateTime, Utc};
 use getopt::prelude::*;
@@ -183,7 +184,7 @@ fn print_usage( program: &str ) {
 }
 
 fn auth_ok( u: &str, p: &str, service: &str ) -> bool {
-    let mut auth = pam::Authenticator::with_password("system-auth")
+    let mut auth = pam::Authenticator::with_password( &service )
         .expect("Failed to init PAM client.");
     auth.get_handler().set_credentials( u, p);
     if auth.authenticate().is_ok() && auth.open_session().is_ok() {
@@ -244,6 +245,7 @@ fn main() {
     let mut params: Vec<CString> = vec!();
     for a in new_args {
         params.push( CString::new(a.as_bytes()).unwrap() );
+        params.push( CString::new( a ).unwrap() );
     }
 
     let service = String::from( "please" );
@@ -280,7 +282,8 @@ fn main() {
     setgid( target_gid ).unwrap();
     setuid( target_uid ).unwrap();
 
-    execv( &params[0], &params ).expect( "Could not execute" );
+    let vec_obj: Vec<&CStr> = params.iter().map(|c| c.as_c_str()).collect();
+    execv( &params[0], &vec_obj ).expect( "Could not execute" );
 }
 
 #[test]
@@ -296,7 +299,6 @@ user=m{}:target=^ ".to_string();
     parse_config(&config, &mut hm);
 
     assert_eq!( can_run( &hm, "ed", "root", &date, "localhost", "/bin/bash" ).unwrap().permit, true );
-
 }
 
 #[test]
@@ -340,8 +342,6 @@ fn test_execute_config_too_early_long() {
     assert_eq!( can_run( &hm, "ed", "root", &NaiveDate::from_ymd(2020, 8, 11).and_hms(0, 0, 0), "localhost", "/bin/bash" ).unwrap().permit, false );
     assert_eq!( can_run( &hm, "ed", "root", &NaiveDate::from_ymd(2020, 8, 7).and_hms(0, 0, 0), "localhost", "/bin/bash" ).unwrap().permit, false );
 }
-
-
 
 #[test]
 fn test_execute_config_oracle() {
@@ -409,3 +409,14 @@ fn test_missing_user() {
     assert_eq!( can_run( &hm, "", "oracle", &date, "localhost", "/bin/sh /usr/local/oracle/backup_script" ).unwrap().permit, false );
 }
 
+#[test]
+fn test_regex_line_anchor() {
+    let config = "user=ed:target=oracle:hostname=localhost ^
+".to_string();
+
+    let date: NaiveDateTime = NaiveDate::from_ymd(2019, 12, 31).and_hms(0, 0, 0);
+
+    let mut hm: HashMap<String,UserData> = HashMap::new();
+    parse_config(&config, &mut hm);
+    assert_eq!( can_run( &hm, "ed", "oracle", &date, "localhost", "/bin/bash" ).unwrap().permit, true );
+}
