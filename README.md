@@ -11,7 +11,10 @@ A simple install:
 ```
   git clone https://gitlab.com/edneville/please.git
   cd please
-  cargo test && cargo build --release && cp target/release/please /usr/local/bin && chmod 4755 /usr/local/bin/please
+  cargo test && cargo build --release \
+  && cp target/release/please target/release/pleaseedit /usr/local/bin \
+  && chown root:root /usr/local/bin/please /usr/local/bin/pleaseedit
+  && chmod 4755 /usr/local/bin/please /usr/local/bin/pleaseedit
 ```
 
 Next, configure your /etc/please.conf similar to this, replace user names with appropriate values:
@@ -19,7 +22,8 @@ Next, configure your /etc/please.conf similar to this, replace user names with a
 ```
 user=ed:target=root:permit=true ^/bin/bash
 user=ed:target=root:require_pass=true:permit=true ^/bin/bash
-user=ed:target=rust:require_pass=false:permit=true ^/bin/bash
+user=ed:target=rust:require_pass=false:permit=true ^/bin/\(ba\|da)\?sh
+user=ed:target=root:require_pass=false:edit=true:permit=true ^/etc/init.d/
 ```
 
 The format is as follows, multiple arguments are separated by `:`:
@@ -29,6 +33,8 @@ The format is as follows, multiple arguments are separated by `:`:
 ```
 
 Using an anchor (`^`) for the regex field will be as good as saying the rule should match any command.
+
+Regex brackets should be escaped: `\(\)`.
 
 ```
 $ please /bin/bash
@@ -60,6 +66,18 @@ user=bob:target=postgres:notbefore=20200808:notafter=20200810 ^
 
 Many enterprises may wish to permit access to a user for a limited time only, even if that individual is in the role permanently.
 
+# pleaseedit
+
+`pleaseedit` enables editing of files as another user. Enable editing rather than execution with `edit=true`. The first argument will be passed to `EDITOR`.
+
+This is performed as follows:
+
+1. user runs edit as `pleaseedit -u root /etc/fstab`
+2. `/etc/fstab` is copied to `/tmp/fstab.pleaseedit.tmp`
+3. user's `EDITOR` is executed against `/tmp/fstab.pleaseedit.tmp`
+4. if `EDITOR` exits 0 then `/tmp/fstab.pleaseedit.tmp` is copied to `/etc/fstab.pleaseedit.tmp`
+5.  `/etc/fstab.pleaseedit.tmp` is set as root owned and `renamed` to `/etc/fstab`
+
 # contributions
 
 I welcome pull requests with open arms.
@@ -68,10 +86,12 @@ I welcome pull requests with open arms.
 
 ```
 [ ] groups
-[ ] plugins
+[ ] read links on source of edits and don't stray outside of permitted rule
 [ ] man page
 [ ] authentication disk caching
 [ ] packages
 [ ] docker image for testing
 [ ] PATH searching
+[ ] plugins
 ```
+
