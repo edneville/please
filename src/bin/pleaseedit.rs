@@ -98,7 +98,7 @@ fn main() {
 
     let new_args = args.split_off(opts.index());
 
-    if new_args.len() == 0 || new_args.len() > 1 {
+    if new_args.is_empty() || new_args.len() > 1 {
         print_usage(&program);
         return;
     }
@@ -147,7 +147,7 @@ fn main() {
         return;
     }
 
-    let lookup_name = users::get_user_by_name(&entry.clone().unwrap().target).unwrap();
+    let lookup_name = users::get_user_by_name(&entry.unwrap().target).unwrap();
     let source_file = Path::new(&new_args[0]);
 
     let edit_file = &setup_temp_edit_file(&service, source_file, original_uid, original_gid, &user);

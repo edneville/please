@@ -103,7 +103,7 @@ fn main() {
         }
     }
 
-    if new_args.len() == 0 {
+    if new_args.is_empty() {
         print_usage(&program);
         return;
     }
@@ -113,7 +113,7 @@ fn main() {
         return;
     }
 
-    let lookup_name = users::get_user_by_name(&entry.clone().unwrap().target).unwrap();
+    let lookup_name = users::get_user_by_name(&entry.unwrap().target).unwrap();
     let target_uid = nix::unistd::Uid::from_raw(lookup_name.uid());
     let target_gid = nix::unistd::Gid::from_raw(lookup_name.primary_group_id());
 

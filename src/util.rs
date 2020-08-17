@@ -215,7 +215,7 @@ pub fn get_editor() -> String {
 
     for prog in [String::from("VISUAL"), String::from("EDITOR")].iter() {
         match std::env::var(prog) {
-            Ok(val) => return val.clone(),
+            Ok(val) => return val,
             Err(_) => {}
         }
     }
@@ -262,18 +262,18 @@ pub fn list( hm: &HashMap<String, UserData>, user: &str, date: &NaiveDateTime, h
             for item in &user_options.option_list {
                 let mut prefixes = vec!();
                 if item.not_before > *date {
-                    prefixes.push( String::from( format!("upcomming({})", item.not_before) ) );
+                    prefixes.push( format!("upcomming({})", item.not_before ) );
                 }
 
                 if item.not_after < *date {
-                    prefixes.push( String::from( format!("expired({})", item.not_after ) ) );
+                    prefixes.push( format!("expired({})", item.not_after ) );
                 }
 
                 if item.edit != edit {
                     continue;
                 }
 
-                if item.permit != true {
+                if !item.permit {
                     prefixes.push( String::from( "not permitted" ) );
                 }
 
@@ -284,8 +284,8 @@ pub fn list( hm: &HashMap<String, UserData>, user: &str, date: &NaiveDateTime, h
                     continue;
                 }
                 let mut prefix = prefixes.join(", ");
-                if prefix.len() > 0 {
-                    prefix = prefix + " as ";
+                if !prefix.is_empty() {
+                    prefix += " as ";
                 }
                 println!("{}{}: {}", prefix, item.target, item.rule );
             }
