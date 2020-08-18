@@ -4,7 +4,7 @@ Great! This is what I needed.
 
 The aim is to allow admins to delegate accurate least privilege access with ease. There are times when what is intended to be executed can be expressed easily with a regex to expose only what is needed and nothing more.
 
-# how do i use it
+# how do i install it
 
 A simple install:
 
@@ -16,6 +16,8 @@ A simple install:
   && chown root:root /usr/local/bin/please /usr/local/bin/pleaseedit
   && chmod 4755 /usr/local/bin/please /usr/local/bin/pleaseedit
 ```
+
+# how do i set it up
 
 Next, configure your /etc/please.conf similar to this, replace user names with appropriate values:
 
@@ -48,7 +50,6 @@ $ please -t postgres /bin/bash
 postgres$
 ```
 
-
 The ordering of rules matters. The last match will win. Set `permit=false` if you wish to exclude something, but this should be very rare as the permit should be against a regex rather than using a positive and then a negative match. A rule of best practice is to avoid a fail open and then try and exclude most of the universe.
 
 # dated ranges
@@ -78,6 +79,10 @@ This is performed as follows:
 4. if `EDITOR` exits 0 then `/tmp/fstab.pleaseedit.tmp` is copied to `/etc/fstab.pleaseedit.tmp`
 5.  `/etc/fstab.pleaseedit.tmp` is set as root owned and `renamed` to `/etc/fstab`
 
+# FILES
+
+/etc/please.conf
+
 # contributions
 
 I welcome pull requests with open arms.
@@ -85,13 +90,14 @@ I welcome pull requests with open arms.
 # todo
 
 ```
-[ ] groups
+[ ] nested user groups
 [ ] read links on source of edits and don't stray outside of permitted rule
 [ ] man page
 [ ] authentication disk caching
-[ ] packages
 [ ] docker image for testing
 [ ] PATH searching
-[ ] plugins
+[ ] plugins/modules
+[ ] include readpart .d files
+[ ] packages
 ```
 

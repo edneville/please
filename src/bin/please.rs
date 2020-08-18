@@ -30,6 +30,7 @@ use users::*;
 fn print_usage(program: &str) {
     println!(" usage:");
     println!("{} /path/to/executable [arguments]", program);
+    println!(" -l: list what you may or may not execute");
     println!(" -t [user]: become target user");
 }
 
