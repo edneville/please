@@ -92,10 +92,8 @@ I welcome pull requests with open arms.
 ```
 [ ] nested user groups
 [ ] read links on source of edits and don't stray outside of permitted rule
-[ ] man page
 [ ] authentication disk caching
 [ ] docker image for testing
-[ ] PATH searching
 [ ] plugins/modules
 [ ] include readpart .d files
 [ ] packages

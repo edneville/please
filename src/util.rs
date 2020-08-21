@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use std::fs::File;
 use std::io::prelude::*;
 use std::path::Path;
+use std::env;
 
 use chrono::{NaiveDate, NaiveDateTime};
 
@@ -40,7 +41,7 @@ pub struct UserData {
     option_list: Vec<EnvOptions>,
 }
 
-pub fn read_config(config_path: &str, mut hm: &mut HashMap<String, UserData>) {
+pub fn read_config(config_path: &str, mut hm: &mut HashMap<String, UserData>, user: &str) {
     let path = Path::new(config_path);
     let display = path.display();
 
@@ -52,11 +53,11 @@ pub fn read_config(config_path: &str, mut hm: &mut HashMap<String, UserData>) {
     let mut s = String::new();
     match file.read_to_string(&mut s) {
         Err(why) => panic!("couldn't read {}: {}", display, why),
-        Ok(_) => parse_config(&s, &mut hm, &config_path),
+        Ok(_) => parse_config(&s, &mut hm, &config_path, &user),
     }
 }
 
-pub fn parse_config(lines: &str, hm: &mut HashMap<String, UserData>, config_path: &str ) {
+pub fn parse_config(lines: &str, hm: &mut HashMap<String, UserData>, config_path: &str, execute_user: &str ) {
     // a computer named 'any' will conflict with the definition of any
     let cfg_re = Regex::new(r"^\s*(?P<options>\S*[^\\])\s+(?P<rule>.*)\s*$").unwrap();
     let split_re = Regex::new(r"\s*(?P<label>[^:]+)\s*=\s*(?P<value>[^:]+\s*):?").unwrap();
@@ -70,7 +71,7 @@ pub fn parse_config(lines: &str, hm: &mut HashMap<String, UserData>, config_path
                 let mut user: String = "".to_string();
                 let mut opt = new_env_options();
                 opt.permit = true;
-                opt.rule = Regex::new(&x["rule"].to_string()).unwrap();
+                opt.rule = Regex::new(&x["rule"].to_string().replace("%\\{USER\\}",&execute_user) ).unwrap();
 
                 for parts in split_re.captures_iter(&options) {
                     match &parts["label"] {
@@ -105,19 +106,23 @@ pub fn parse_config(lines: &str, hm: &mut HashMap<String, UserData>, config_path
                                 parse_datetime_from_str(&parts["value"].to_string(), "%Y%m%d%H%M%S")
                                     .unwrap()
                         }
+
                         &_ => {}
                     }
                 }
 
-                if user == "" {
+                if user == "" { // will become user == "" && other == ""
                     continue;
+                }
+
+                if user != "" {
+                    opt.from_where = format!("{}, {}", config_path, &user);
                 }
 
                 let u = hm.entry(user.clone()).or_insert(UserData {
                     option_list: vec![],
                 });
 
-                opt.from_where = format!("{}:{}", config_path, &user);
 
                 u.option_list.push(opt);
             }
@@ -237,7 +242,6 @@ pub fn challenge_password(user: String, entry: EnvOptions, service: &str) -> boo
             .unwrap();
 
             if auth_ok(&user, &pass, &service) {
-                println!("returning true");
                 return true;
             }
             retry_counter = retry_counter + 1;
@@ -290,7 +294,8 @@ pub fn list( hm: &HashMap<String, UserData>, user: &str, date: &NaiveDateTime, h
                 if !prefix.is_empty() {
                     prefix += " as ";
                 }
-                println!("[{}]: {}{}: {}", item.from_where, prefix, item.target, item.rule );
+                println!("from {}:", item.from_where);
+                println!("  {}{}: {}", prefix, item.target, item.rule );
             }
         },
         None => {
@@ -298,10 +303,32 @@ pub fn list( hm: &HashMap<String, UserData>, user: &str, date: &NaiveDateTime, h
     }
 }
 
+pub fn search_path( binary: &str ) -> String {
+    if binary.starts_with('/') {
+        return binary.to_string();
+    }
+
+    match env::var("PATH") {
+        Ok(path) => {
+            for dir in path.split( ':' ) {
+                let path_name = format!("{}/{}", &dir, &binary.to_string());
+                let p = Path::new( &path_name );
+
+                if !p.exists() {
+                    continue;
+                }
+                return path_name;
+           }
+        },
+        Err(_) => {
+        }
+    }
+    binary.to_string()
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
-    use chrono::*;
     use std::collections::HashMap;
 
     #[test]
@@ -315,7 +342,7 @@ mod test {
         let date: NaiveDateTime = NaiveDate::from_ymd(2020, 1, 1).and_hms(0, 0, 0);
 
         let mut hm: HashMap<String, UserData> = HashMap::new();
-        parse_config(&config, &mut hm, "static" );
+        parse_config(&config, &mut hm, "static", "ed" );
 
         assert_eq!(
             can_run(&hm, "ed", "root", &date, "localhost", "/bin/bash")
@@ -336,7 +363,7 @@ mod test {
         let date: NaiveDateTime = NaiveDate::from_ymd(2019, 12, 31).and_hms(0, 0, 0);
 
         let mut hm: HashMap<String, UserData> = HashMap::new();
-        parse_config(&config, &mut hm, "static" );
+        parse_config(&config, &mut hm, "static", "ed" );
         assert_eq!(
             can_run(&hm, "gone", "root", &date, "localhost", "/bin/bash")
                 .unwrap()
@@ -354,7 +381,7 @@ mod test {
             .to_string();
 
         let mut hm: HashMap<String, UserData> = HashMap::new();
-        parse_config(&config, &mut hm, "static" );
+        parse_config(&config, &mut hm, "static", "ed" );
         assert_eq!(
             can_run(
                 &hm,
@@ -403,7 +430,7 @@ mod test {
         .to_string();
 
         let mut hm: HashMap<String, UserData> = HashMap::new();
-        parse_config(&config, &mut hm, "static" );
+        parse_config(&config, &mut hm, "static", "ed" );
         assert_eq!(
             can_run(
                 &hm,
@@ -481,7 +508,7 @@ mod test {
         let date: NaiveDateTime = NaiveDate::from_ymd(2019, 12, 31).and_hms(0, 0, 0);
 
         let mut hm: HashMap<String, UserData> = HashMap::new();
-        parse_config(&config, &mut hm, "static" );
+        parse_config(&config, &mut hm, "static", "ed" );
         assert_eq!(
             can_run(
                 &hm,
@@ -571,7 +598,7 @@ mod test {
         let date: NaiveDateTime = NaiveDate::from_ymd(2019, 12, 31).and_hms(0, 0, 0);
 
         let mut hm: HashMap<String, UserData> = HashMap::new();
-        parse_config(&config, &mut hm, "static" );
+        parse_config(&config, &mut hm, "static", "ed" );
         assert_eq!(
             can_run(
                 &hm,
@@ -662,7 +689,7 @@ mod test {
         let date: NaiveDateTime = NaiveDate::from_ymd(2019, 12, 31).and_hms(0, 0, 0);
 
         let mut hm: HashMap<String, UserData> = HashMap::new();
-        parse_config(&config, &mut hm, "static" );
+        parse_config(&config, &mut hm, "static", "ed" );
         assert_eq!(
             can_run(
                 &hm,
@@ -753,7 +780,7 @@ mod test {
         let date: NaiveDateTime = NaiveDate::from_ymd(2019, 12, 31).and_hms(0, 0, 0);
 
         let mut hm: HashMap<String, UserData> = HashMap::new();
-        parse_config(&config, &mut hm, "static" );
+        parse_config(&config, &mut hm, "static", "ed" );
         assert_eq!(
             can_run(
                 &hm,
@@ -778,7 +805,7 @@ mod test {
         let date: NaiveDateTime = NaiveDate::from_ymd(2019, 12, 31).and_hms(0, 0, 0);
 
         let mut hm: HashMap<String, UserData> = HashMap::new();
-        parse_config(&config, &mut hm, "static" );
+        parse_config(&config, &mut hm, "static", "ed" );
         assert_eq!(
             can_run(&hm, "ed", "oracle", &date, "localhost", "/bin/bash")
                 .unwrap()
@@ -798,7 +825,7 @@ mod test {
         let date: NaiveDateTime = NaiveDate::from_ymd(2020, 1, 1).and_hms(0, 0, 0);
 
         let mut hm: HashMap<String, UserData> = HashMap::new();
-        parse_config(&config, &mut hm, "static");
+        parse_config(&config, &mut hm, "static", "ed");
 
         assert_eq!(
             can_edit(
@@ -808,6 +835,31 @@ mod test {
                 &date,
                 "localhost",
                 "/etc/apache/httpd2.conf"
+            )
+            .unwrap()
+            .permit,
+            true
+        );
+    }
+
+    #[test]
+    fn test_edit_user_macro() {
+        let config = "user=ed:target=root ^/bin/cat /etc/%\\{USER\\}"
+            .to_string();
+
+        let date: NaiveDateTime = NaiveDate::from_ymd(2020, 1, 1).and_hms(0, 0, 0);
+
+        let mut hm: HashMap<String, UserData> = HashMap::new();
+        parse_config(&config, &mut hm, "static", "ed");
+
+        assert_eq!(
+            can_run(
+                &hm,
+                "ed",
+                "root",
+                &date,
+                "localhost",
+                "/bin/cat /etc/ed"
             )
             .unwrap()
             .permit,

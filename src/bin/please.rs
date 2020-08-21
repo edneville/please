@@ -15,7 +15,7 @@
 //    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 use chrono::Utc;
-use please::util::{can_run, challenge_password, read_config, UserData, list_edit, list_run};
+use please::util::{can_run, challenge_password, read_config, UserData, list_edit, list_run, search_path };
 
 use std::collections::HashMap;
 use std::os::unix::process::CommandExt;
@@ -57,21 +57,21 @@ fn main() {
         }
     }
 
-    let new_args = args.split_off(opts.index());
+    let mut new_args = args.split_off(opts.index());
 
     let mut hm: HashMap<String, UserData> = HashMap::new();
-    read_config("/etc/please.conf", &mut hm);
 
     let original_uid = get_current_uid();
     let original_user = get_user_by_uid(original_uid).unwrap();
     let user = original_user.name().to_string_lossy();
+    read_config("/etc/please.conf", &mut hm, &user);
+
     let date = Utc::now().naive_utc();
     let mut buf = [0u8; 64];
     let hostname = gethostname(&mut buf)
         .expect("Failed getting hostname")
         .to_str()
         .expect("Hostname wasn't valid UTF-8");
-    let entry = can_run(&hm, &user, &target, &date, &hostname, &new_args.join(" "));
 
     if list {
         println!("You may run the following:");
@@ -80,6 +80,15 @@ fn main() {
         list_edit( &hm, &user, &date, &hostname );
         return;
     }
+
+    if new_args.len() == 0 {
+        println!("No command given.");
+        return;
+    }
+
+    new_args[0] = search_path( &new_args[0] );
+
+    let entry = can_run(&hm, &user, &target, &date, &hostname, &new_args.join(" "));
 
     match &entry {
         Err(_) => {

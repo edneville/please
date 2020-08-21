@@ -104,12 +104,13 @@ fn main() {
     }
 
     let mut hm: HashMap<String, UserData> = HashMap::new();
-    read_config("/etc/please.conf", &mut hm);
 
     let original_uid = get_current_uid();
     let original_user = get_user_by_uid(original_uid).unwrap();
     let original_gid = original_user.primary_group_id();
     let user = original_user.name().to_string_lossy();
+
+    read_config("/etc/please.conf", &mut hm, &user);
 
     let date = Utc::now().naive_utc();
     let mut buf = [0u8; 64];
