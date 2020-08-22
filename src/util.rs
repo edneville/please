@@ -43,7 +43,12 @@ pub struct UserData {
     option_list: Vec<EnvOptions>,
 }
 
-pub fn read_config(config_path: &str, mut hm: &mut HashMap<String, UserData>, user: &str, fail_error: bool ) -> bool {
+pub fn read_config(
+    config_path: &str,
+    mut hm: &mut HashMap<String, UserData>,
+    user: &str,
+    fail_error: bool,
+) -> bool {
     let path = Path::new(config_path);
     let display = path.display();
 
@@ -75,7 +80,7 @@ pub fn parse_config(
     let mut faulty = false;
 
     for line in lines.split('\n') {
-        line_number+=1;
+        line_number += 1;
         match cfg_re.captures(line) {
             Some(x) => {
                 let options = x["options"].to_string();
@@ -85,7 +90,12 @@ pub fn parse_config(
 
                 let rule = Regex::new(&x["rule"].to_string().replace("%\\{USER\\}", &execute_user));
                 if rule.is_err() {
-                    println!("Error parsing {}:{}, {}", config_path, line_number, &x["rule"].to_string() );
+                    println!(
+                        "Error parsing {}:{}, {}",
+                        config_path,
+                        line_number,
+                        &x["rule"].to_string()
+                    );
                     faulty = true;
                     continue;
                 }
@@ -126,9 +136,11 @@ pub fn parse_config(
                         }
 
                         &_ => {
-                            println!("{}:{} unknown attribute \"{}\"", config_path, line_number, &parts["label"] );
+                            println!(
+                                "{}:{} unknown attribute \"{}\"",
+                                config_path, line_number, &parts["label"]
+                            );
                             faulty = true;
-
                         }
                     }
                 }
@@ -893,15 +905,9 @@ mod test {
         let mut hm: HashMap<String, UserData> = HashMap::new();
 
         let config = "user=ed:target=root ^/bin/cat /etc/(".to_string();
-        assert_eq!(
-            parse_config(&config, &mut hm, "static", "ed", true),
-            true
-        );
+        assert_eq!(parse_config(&config, &mut hm, "static", "ed", true), true);
 
         let config = "user=ed:target=root ^/bin/cat /etc/".to_string();
-        assert_eq!(
-            parse_config(&config, &mut hm, "static", "ed", true),
-            false
-        );
+        assert_eq!(parse_config(&config, &mut hm, "static", "ed", true), false);
     }
 }
