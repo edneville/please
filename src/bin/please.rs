@@ -15,7 +15,9 @@
 //    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 use chrono::Utc;
-use please::util::{can_run, challenge_password, read_config, UserData, list_edit, list_run, search_path };
+use please::util::{
+    can_run, challenge_password, list_edit, list_run, read_config, search_path, UserData,
+};
 
 use std::collections::HashMap;
 use std::os::unix::process::CommandExt;
@@ -32,15 +34,21 @@ fn print_usage(program: &str) {
     println!("{} /path/to/executable [arguments]", program);
     println!(" -l: list what you may or may not execute");
     println!(" -t [user]: become target user");
+    println!(" -c [file]: check config file");
 }
 
 fn main() {
     let mut args: Vec<String> = std::env::args().collect();
     let program = args[0].clone();
-    let mut opts = Parser::new(&args, "t:hl");
+    let mut opts = Parser::new(&args, "c:hlt:");
 
     let mut target = String::from("root");
     let mut list = false;
+
+    let original_uid = get_current_uid();
+    let original_user = get_user_by_uid(original_uid).unwrap();
+    let user = original_user.name().to_string_lossy();
+    let mut hm: HashMap<String, UserData> = HashMap::new();
 
     loop {
         match opts.next().transpose().expect("bad args") {
@@ -52,6 +60,7 @@ fn main() {
                 }
                 Opt('t', Some(string)) => target = string,
                 Opt('l', None) => list = true,
+                Opt('c', Some(string)) => std::process::exit( read_config( &string, &mut hm, &user, true) as i32 ),
                 _ => unreachable!(),
             },
         }
@@ -59,12 +68,7 @@ fn main() {
 
     let mut new_args = args.split_off(opts.index());
 
-    let mut hm: HashMap<String, UserData> = HashMap::new();
-
-    let original_uid = get_current_uid();
-    let original_user = get_user_by_uid(original_uid).unwrap();
-    let user = original_user.name().to_string_lossy();
-    read_config("/etc/please.conf", &mut hm, &user);
+    read_config("/etc/please.conf", &mut hm, &user, false);
 
     let date = Utc::now().naive_utc();
     let mut buf = [0u8; 64];
@@ -75,9 +79,9 @@ fn main() {
 
     if list {
         println!("You may run the following:");
-        list_run( &hm, &user, &date, &hostname );
+        list_run(&hm, &user, &date, &hostname);
         println!("You may edit the following:");
-        list_edit( &hm, &user, &date, &hostname );
+        list_edit(&hm, &user, &date, &hostname);
         return;
     }
 
@@ -86,7 +90,7 @@ fn main() {
         return;
     }
 
-    new_args[0] = search_path( &new_args[0] );
+    new_args[0] = search_path(&new_args[0]);
 
     let entry = can_run(&hm, &user, &target, &date, &hostname, &new_args.join(" "));
 

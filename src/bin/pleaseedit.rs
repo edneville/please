@@ -110,7 +110,7 @@ fn main() {
     let original_gid = original_user.primary_group_id();
     let user = original_user.name().to_string_lossy();
 
-    read_config("/etc/please.conf", &mut hm, &user);
+    read_config("/etc/please.conf", &mut hm, &user,false);
 
     let date = Utc::now().naive_utc();
     let mut buf = [0u8; 64];
