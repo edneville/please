@@ -16,7 +16,7 @@
 
 use chrono::Utc;
 use please::util::{
-    can_run, challenge_password, list_edit, list_run, read_config, search_path, UserData,
+    can_run, challenge_password, list_edit, list_run, read_config, search_path, UserData, log_action,
 };
 
 use std::collections::HashMap;
@@ -39,8 +39,10 @@ fn print_usage(program: &str) {
 
 fn main() {
     let mut args: Vec<String> = std::env::args().collect();
+    let original_command = args.clone();
     let program = args[0].clone();
     let mut opts = Parser::new(&args, "c:hlt:");
+    let service = String::from("please");
 
     let mut target = String::from("root");
     let mut list = false;
@@ -105,6 +107,7 @@ fn main() {
 
     match &entry {
         Err(_) => {
+            log_action( &service, "deny", &user, &target, &original_command.join(" ") );
             println!(
                 "You may not execute \"{}\" on {} as {}",
                 new_args.join(" "),
@@ -115,6 +118,7 @@ fn main() {
         }
         Ok(x) => {
             if !x.permit {
+                log_action( &service, "deny", &user, &target, &original_command.join(" ") );
                 println!(
                     "You may not execute \"{}\" on {} as {}",
                     new_args.join(" "),
@@ -131,11 +135,12 @@ fn main() {
         return;
     }
 
-    let service = String::from("please");
     if !challenge_password(user.to_string(), entry.clone().unwrap(), &service) {
+        log_action( &service, "deny", &user, &target, &original_command.join(" ") );
         return;
     }
 
+    log_action( &service, "permit", &user, &target, &original_command.join(" ") );
     let lookup_name = users::get_user_by_name(&entry.unwrap().target).unwrap();
     let target_uid = nix::unistd::Uid::from_raw(lookup_name.uid());
     let target_gid = nix::unistd::Gid::from_raw(lookup_name.primary_group_id());
