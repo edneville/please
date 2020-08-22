@@ -30,8 +30,8 @@ use nix::unistd::{gethostname, setgid, setgroups, setuid};
 use users::*;
 
 fn print_usage(program: &str) {
-    println!(" usage:");
-    println!("{} /path/to/executable [arguments]", program);
+    println!("usage:");
+    println!("{} [arguments] <path/to/executable>", program);
     println!(" -l: list what you may or may not execute");
     println!(" -t [user]: become target user");
     println!(" -c [file]: check config file");
@@ -51,17 +51,25 @@ fn main() {
     let mut hm: HashMap<String, UserData> = HashMap::new();
 
     loop {
-        match opts.next().transpose().expect("bad args") {
-            None => break,
-            Some(opt) => match opt {
-                Opt('h', None) => {
-                    print_usage(&program);
-                    return;
-                }
-                Opt('t', Some(string)) => target = string,
-                Opt('l', None) => list = true,
-                Opt('c', Some(string)) => std::process::exit( read_config( &string, &mut hm, &user, true) as i32 ),
-                _ => unreachable!(),
+
+        match opts.next().transpose() {
+            Err(_x) => {
+                println!("Cannot parse arguments");
+                print_usage(&program);
+                std::process::exit(1);
+            }
+            Ok(a) => match a {
+                None => break,
+                Some(opt) => match opt {
+                    Opt('h', None) => {
+                        print_usage(&program);
+                        return;
+                    }
+                    Opt('t', Some(string)) => target = string,
+                    Opt('l', None) => list = true,
+                    Opt('c', Some(string)) => std::process::exit( read_config( &string, &mut hm, &user, true) as i32 ),
+                    _ => unreachable!(),
+                },
             },
         }
     }

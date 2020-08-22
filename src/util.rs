@@ -125,7 +125,11 @@ pub fn parse_config(
                                     .unwrap()
                         }
 
-                        &_ => {}
+                        &_ => {
+                            println!("{}:{} unknown attribute \"{}\"", config_path, line_number, &parts["label"] );
+                            faulty = true;
+
+                        }
                     }
                 }
 
