@@ -51,7 +51,6 @@ fn main() {
     let mut hm: HashMap<String, UserData> = HashMap::new();
 
     loop {
-
         match opts.next().transpose() {
             Err(_x) => {
                 println!("Cannot parse arguments");
@@ -67,7 +66,9 @@ fn main() {
                     }
                     Opt('t', Some(string)) => target = string,
                     Opt('l', None) => list = true,
-                    Opt('c', Some(string)) => std::process::exit( read_config( &string, &mut hm, &user, true) as i32 ),
+                    Opt('c', Some(string)) => {
+                        std::process::exit(read_config(&string, &mut hm, &user, true) as i32)
+                    }
                     _ => unreachable!(),
                 },
             },
