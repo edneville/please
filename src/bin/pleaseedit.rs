@@ -31,7 +31,7 @@ use nix::unistd::{fork, gethostname, setgid, setgroups, setuid, ForkResult};
 use users::*;
 
 fn print_usage(program: &str) {
-    println!(" usage:");
+    println!("usage:");
     println!("{} /path/to/file", program);
     println!(" -t [user]: edit as target user");
 }
@@ -83,15 +83,21 @@ fn main() {
     let mut target = String::from("root");
 
     loop {
-        match opts.next().transpose().expect("bad args") {
-            None => break,
-            Some(opt) => match opt {
-                Opt('h', None) => {
-                    print_usage(&program);
-                    return;
-                }
-                Opt('t', Some(string)) => target = string,
-                _ => unreachable!(),
+        match opts.next().transpose() {
+            Err(_x) => {
+                print_usage(&program);
+                std::process::exit(1);
+            },
+            Ok(a) => match a {
+                None => break,
+                Some(opt) => match opt {
+                    Opt('h', None) => {
+                        print_usage(&program);
+                        return;
+                    }
+                    Opt('t', Some(string)) => target = string,
+                    _ => unreachable!(),
+                },
             },
         }
     }
