@@ -15,7 +15,7 @@
 //    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 use chrono::Utc;
-use please::util::{can_edit, challenge_password, get_editor, read_config, UserData};
+use please::util::{can_edit, challenge_password, get_editor, read_config, UserData, log_action};
 
 use std::collections::HashMap;
 use std::fs::*;
@@ -77,8 +77,10 @@ fn setup_temp_edit_file(
 
 fn main() {
     let mut args: Vec<String> = std::env::args().collect();
+    let original_command = args.clone();
     let program = args[0].clone();
     let mut opts = Parser::new(&args, "t:h");
+    let service = String::from("pleaseedit");
 
     let mut target = String::from("root");
 
@@ -128,6 +130,7 @@ fn main() {
 
     match &entry {
         Err(_) => {
+            log_action( &service, "deny", &user, &target, &original_command.join(" ") );
             println!(
                 "You may not edit \"{}\" on {} as {}",
                 new_args.join(" "),
@@ -138,6 +141,7 @@ fn main() {
         }
         Ok(x) => {
             if !x.permit {
+                log_action( &service, "deny", &user, &target, &original_command.join(" ") );
                 println!(
                     "You may not edit \"{}\" on {} as {}",
                     new_args.join(" "),
@@ -149,8 +153,8 @@ fn main() {
         }
     }
 
-    let service = String::from("pleaseedit");
     if !challenge_password(user.to_string(), entry.clone().unwrap(), &service) {
+        log_action( &service, "deny", &user, &target, &original_command.join(" ") );
         return;
     }
 
@@ -194,6 +198,7 @@ fn main() {
         return;
     }
 
+    log_action( &service, "permit", &user, &target, &original_command.join(" ") );
     let dir_parent_tmp = format!("{}.{}.{}", source_file.to_str().unwrap(), service, user);
     std::fs::copy(edit_file, dir_parent_tmp.as_str()).unwrap();
 

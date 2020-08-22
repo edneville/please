@@ -3,8 +3,11 @@ use regex::Regex;
 use std::collections::HashMap;
 use std::env;
 use std::fs::File;
+use std::ffi::CStr;
 use std::io::prelude::*;
 use std::path::Path;
+use std::process;
+use syslog::{Facility, Formatter3164};
 
 use chrono::{NaiveDate, NaiveDateTime};
 
@@ -365,6 +368,34 @@ pub fn search_path(binary: &str) -> String {
         Err(_) => {}
     }
     binary.to_string()
+}
+
+pub fn log_action( service: &str, result: &str, user: &str, target: &str, command: &str ) -> bool {
+    let formatter = Formatter3164 {
+        facility: Facility::LOG_USER,
+        hostname: None,
+        process: service.into(),
+        pid: process::id() as i32,
+    };
+
+    let ttyname;
+    
+    unsafe {
+        let ptr = libc::ttyname(0);
+        match CStr::from_ptr(ptr).to_str() {
+            Err(_x) => ttyname = "failed",
+            Ok(x) => ttyname = x,
+        }
+    };
+
+    match syslog::unix(formatter) {
+        Err(e) => println!("impossible to connect to syslog: {:?}", e),
+        Ok(mut writer) => {
+            writer.err(format!("user={} tty={} action={} target={} command={}", user, ttyname, result, target, command)).expect("could not write error message");
+        }
+    }
+
+    false
 }
 
 #[cfg(test)]
