@@ -295,12 +295,12 @@ pub fn challenge_password(user: String, entry: EnvOptions, service: &str) -> boo
     true
 }
 
-pub fn list_edit(hm: &HashMap<String, UserData>, user: &str, date: &NaiveDateTime, hostname: &str) {
-    list(&hm, &user, &date, &hostname, true);
+pub fn list_edit(hm: &HashMap<String, UserData>, user: &str, date: &NaiveDateTime, hostname: &str, target: &str) {
+    list(&hm, &user, &date, &hostname, true, &target);
 }
 
-pub fn list_run(hm: &HashMap<String, UserData>, user: &str, date: &NaiveDateTime, hostname: &str) {
-    list(&hm, &user, &date, &hostname, false);
+pub fn list_run(hm: &HashMap<String, UserData>, user: &str, date: &NaiveDateTime, hostname: &str, target: &str) {
+    list(&hm, &user, &date, &hostname, false, &target);
 }
 
 pub fn list(
@@ -309,8 +309,14 @@ pub fn list(
     date: &NaiveDateTime,
     hostname: &str,
     edit: bool,
+    target: &str,
 ) {
-    match hm.get(user) {
+    let mut search_user = String::from( user );
+    if target != "" {
+        search_user = String::from( target );
+    }
+
+    match hm.get(&search_user) {
         Some(user_options) => {
             for item in &user_options.option_list {
                 let mut prefixes = vec![];
