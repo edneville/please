@@ -23,6 +23,7 @@ pub struct EnvOptions {
     pub env_list: Vec<String>,
     pub edit: bool,
     pub from_where: String,
+    pub list: bool,
 }
 
 impl EnvOptions {
@@ -38,6 +39,7 @@ impl EnvOptions {
             env_list: vec![],
             edit: false,
             from_where: "".to_string(),
+            list: false,
         }
     }
 }
@@ -86,7 +88,8 @@ pub fn parse_config(
         line_number += 1;
         match cfg_re.captures(line) {
             Some(x) => {
-                let options = x["options"].to_string();
+                let mut options = x["options"].to_string();
+                options = options.trim().to_string();
                 let mut user: String = "".to_string();
                 let mut opt = EnvOptions::new();
                 opt.permit = true;
@@ -114,6 +117,7 @@ pub fn parse_config(
                         "permit" => opt.permit = &parts["value"] == "true",
                         "require_pass" => opt.require_pass = &parts["value"] != "false",
                         "edit" => opt.edit = &parts["value"] == "true",
+                        "list" => opt.list = &parts["value"] == "true",
 
                         "notbefore" if parts["value"].len() == 8 => {
                             opt.not_before =
@@ -140,8 +144,8 @@ pub fn parse_config(
 
                         &_ => {
                             println!(
-                                "{}:{} unknown attribute \"{}\"",
-                                config_path, line_number, &parts["label"]
+                                "{}:{} unknown attribute \"{}\": [{}]",
+                                config_path, line_number, &parts["label"], line
                             );
                             faulty = true;
                         }
@@ -180,7 +184,7 @@ pub fn can_run(
     hostname: &str,
     command: &str,
 ) -> Result<EnvOptions, ()> {
-    can(&hm, &user, &target, &date, &hostname, &command, false)
+    can(&hm, &user, &target, &date, &hostname, &command, false, false)
 }
 
 pub fn can_edit(
@@ -191,7 +195,18 @@ pub fn can_edit(
     hostname: &str,
     command: &str,
 ) -> Result<EnvOptions, ()> {
-    can(&hm, &user, &target, &date, &hostname, &command, true)
+    can(&hm, &user, &target, &date, &hostname, &command, true, false)
+}
+
+pub fn can_list(
+    hm: &HashMap<String, UserData>,
+    user: &str,
+    target: &str,
+    date: &NaiveDateTime,
+    hostname: &str,
+    command: &str,
+) -> Result<EnvOptions, ()> {
+    can(&hm, &user, &target, &date, &hostname, &command, false, true)
 }
 
 pub fn can(
@@ -202,6 +217,7 @@ pub fn can(
     hostname: &str,
     command: &str,
     edit: bool,
+    command_list: bool,
 ) -> Result<EnvOptions, ()> {
     match hm.get(user) {
         Some(user_options) => {
@@ -218,6 +234,10 @@ pub fn can(
                     continue;
                 }
 
+                if item.list != command_list {
+                    continue;
+                }
+
                 if item.edit != edit {
                     continue;
                 }
@@ -229,12 +249,22 @@ pub fn can(
                     continue;
                 }
 
-                if item.target != target {
-                    continue;
-                }
+                if command_list {
+                    if item.rule.is_match(target) {
+                        opt = item.clone();
+                    }
+                    else {
+                        println!("Failed regex '{}' != '{:?}'", target, item.rule);
+                    }
 
-                if item.rule.is_match(command) {
-                    opt = item.clone();
+                }
+                else {
+                    if item.target != target {
+                        continue;
+                    }
+                    if item.rule.is_match(command) {
+                        opt = item.clone();
+                    }
                 }
             }
             Ok(opt)
@@ -412,7 +442,7 @@ mod test {
     #[test]
     fn test_execute_config() {
         let config = "user=ed:target=root:notbefore=20200101:notafter=20201225 ^.*$
-    user=ed:target=oracle:allow=false ^/bin/bash .*$
+    user=ed:target=oracle:permit=false ^/bin/bash .*$
     user=ed:target=root ^/bin/bash .*$
     user=m{}:target=^ "
             .to_string();
@@ -454,7 +484,7 @@ mod test {
     fn test_execute_config_too_early() {
         let config = "user=ed:target=root:notbefore=20200101:notafter=20201225 ^.*$
     user=ed:target=oracle ^/bin/bash .*$
-    user=ed:target=root:notbefore=20200101:notafter=20201225  ^/bin/bash .*$
+    user=ed:target=root:notafter=20200125:notbefore=20200101  ^
     user=m{}:target=^ "
             .to_string();
 
@@ -895,7 +925,7 @@ mod test {
     #[test]
     fn test_edit_apache() {
         let config = "user=ed:target=root:notbefore=20200101:notafter=20201225:edit=true ^.*$
-    user=ed:target=oracle:allow=false:edit=true ^/etc/apache.*$
+    user=ed:target=oracle:permit=false:edit=true ^/etc/apache.*$
     user=ed:target=root:edit=true ^/etc/hosts$
     user=m{}:target=^:edit=true "
             .to_string();
@@ -946,5 +976,31 @@ mod test {
 
         let config = "user=ed:target=root ^/bin/cat /etc/".to_string();
         assert_eq!(parse_config(&config, &mut hm, "static", "ed", true), false);
+    }
+
+    #[test]
+    fn test_list_other_user() {
+        let config = "user=ed:target=root:notbefore=20200101:notafter=20201225:list=true ^.*$
+user=bob:target=root:list=false:edit=true ^.*$
+user=bob:target=root:list=false ^.*$
+user=meh:list=true:target=root ^ed$
+user=root:target=root:list=false ^.*$
+user=ben:target=root:permit=true:list=true ^(eng|dba|net)ops$"
+
+            .to_string();
+
+        let date: NaiveDateTime = NaiveDate::from_ymd(2020, 1, 1).and_hms(0, 0, 0);
+        let mut hm: HashMap<String, UserData> = HashMap::new();
+        parse_config(&config, &mut hm, "static", "ed", false);
+
+        assert_eq!( can_list( &hm, "ed", "root", &date, "localhost", "" ).unwrap().permit, true );
+        assert_eq!( can_list( &hm, "meh", "ed", &date, "localhost", "" ).unwrap().permit, true );
+        assert_eq!( can_list( &hm, "meh", "bob", &date, "localhost", "" ).unwrap().permit, false );
+        assert_eq!( can_list( &hm, "bob", "ed", &date, "localhost", "" ).unwrap().permit, false );
+        assert_eq!( can_list( &hm, "ben", "dbaops", &date, "localhost", "" ).unwrap().permit, true );
+        assert_eq!( can_list( &hm, "ben", "engops", &date, "localhost", "" ).unwrap().permit, true );
+        assert_eq!( can_list( &hm, "ben", "netops", &date, "localhost", "" ).unwrap().permit, true );
+        assert_eq!( can_list( &hm, "ben", "wwwops", &date, "localhost", "" ).unwrap().permit, false );
+
     }
 }

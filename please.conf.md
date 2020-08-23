@@ -15,7 +15,7 @@ All rules in `please.conf` will permit or deny based on command regex matches.
 The format is as follows, multiple arguments are separated by `:`:
 
 ```
-[user|target|require_pass|permit|notbefore|notafter|edit]=value regex
+[user|target|require_pass|permit|notbefore|notafter|edit|list]=value regex
 ```
 
 `regex` is a regular expression.
@@ -23,6 +23,8 @@ The format is as follows, multiple arguments are separated by `:`:
 Using an anchor (`^`) for the regex field will be as good as saying the rule should match any command.
 
 `notbefore`
+
+If you wish to permit a user to view another's command set, then you may do this using the `list` flag (off by default). Users must match the regex.
 
 
 # EXAMPLE
@@ -44,6 +46,13 @@ User joker can do what they want as root on `1st April 2021`:
 ```
 user=joker:target=root:permit=true:notbefore=20210401:notafter=20210401 ^/bin/bash
 ```
+
+User `ben` may list only users `eng`, `net` and `dba` operators:
+
+```
+user=ben:permit=true:list=true ^\(eng|net|dba\)ops$
+```
+
 
 # DATED RANGES
 

@@ -15,7 +15,7 @@
 //    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 use chrono::Utc;
-use please::util::{can_edit, challenge_password, get_editor, read_config, UserData, log_action};
+use pleaser::util::{can_edit, challenge_password, get_editor, read_config, UserData, log_action};
 
 use std::collections::HashMap;
 use std::fs::*;
