@@ -15,8 +15,8 @@
 //    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 use chrono::Utc;
-use please::util::{
-    can_run, challenge_password, list_edit, list_run, read_config, search_path, UserData, log_action,
+use pleaser::util::{
+    can_run, can_list, challenge_password, list_edit, list_run, read_config, search_path, UserData, log_action,
 };
 
 use std::collections::HashMap;
@@ -89,10 +89,25 @@ fn main() {
         .expect("Hostname wasn't valid UTF-8");
 
     if list {
-        println!("You may run the following:");
-        list_run(&hm, &user, &date, &hostname, &target);
-        println!("You may edit the following:");
-        list_edit(&hm, &user, &date, &hostname, &target);
+        if target != "" {
+            let can_do = can_list(&hm, &user, &target, &date, &hostname, &"" );
+            
+            if can_do.is_ok() && can_do.unwrap().permit == true {
+                    println!("{} may run the following:",target);
+                    list_run(&hm, &user, &date, &hostname, &target);
+                    println!("{} may edit the following:",target);
+                    list_edit(&hm, &user, &date, &hostname, &target);
+            }
+            else {
+                println!("You may not view {}'s command list", target);
+            }
+        }
+        else {
+            println!("You may run the following:");
+            list_run(&hm, &user, &date, &hostname, &target);
+            println!("You may edit the following:");
+            list_edit(&hm, &user, &date, &hostname, &target);
+        }
         return;
     }
 
