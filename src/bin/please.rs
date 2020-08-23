@@ -32,7 +32,7 @@ use users::*;
 fn print_usage(program: &str) {
     println!("usage:");
     println!("{} [arguments] <path/to/executable>", program);
-    println!(" -l: list what you may or may not execute");
+    println!(" -l <-t users permissions>: list permissions");
     println!(" -t [user]: become target user");
     println!(" -c [file]: check config file");
 }
@@ -44,7 +44,7 @@ fn main() {
     let mut opts = Parser::new(&args, "c:hlt:");
     let service = String::from("please");
 
-    let mut target = String::from("root");
+    let mut target = String::from("");
     let mut list = false;
 
     let original_uid = get_current_uid();
@@ -90,11 +90,13 @@ fn main() {
 
     if list {
         println!("You may run the following:");
-        list_run(&hm, &user, &date, &hostname);
+        list_run(&hm, &user, &date, &hostname, &target);
         println!("You may edit the following:");
-        list_edit(&hm, &user, &date, &hostname);
+        list_edit(&hm, &user, &date, &hostname, &target);
         return;
     }
+
+    if target == "" { target = "root".to_string(); }
 
     if new_args.len() == 0 {
         println!("No command given.");
