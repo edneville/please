@@ -93,16 +93,18 @@ fn main() {
             let can_do = can_list(&vec_eo, &user, &target, &date, &hostname, &"", &groups );
             
             if can_do.is_ok() && can_do.unwrap().permit == true {
-                    println!("{} may run the following:",target);
-                    list_run(&vec_eo, &user, &date, &hostname, &target, &groups);
-                    println!("{} may edit the following:",target);
-                    list_edit(&vec_eo, &user, &date, &hostname, &target, &groups);
+                println!("{} may run the following:",target);
+                list_run(&vec_eo, &user, &date, &hostname, &target, &groups);
+                println!("{} may edit the following:",target);
+                list_edit(&vec_eo, &user, &date, &hostname, &target, &groups);
             }
             else {
+                log_action( &service, "deny", &user, &target, &original_command.join(" ") );
                 println!("You may not view {}'s command list", target);
             }
         }
         else {
+            log_action( &service, "permit", &user, &target, &original_command.join(" ") );
             println!("You may run the following:");
             list_run(&vec_eo, &user, &date, &hostname, &target, &groups);
             println!("You may edit the following:");
