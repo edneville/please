@@ -15,9 +15,8 @@
 //    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 use chrono::Utc;
-use pleaser::util::{can_edit, challenge_password, get_editor, read_config, UserData, log_action};
+use pleaser::util::{can_edit, challenge_password, get_editor, read_config, log_action, EnvOptions, group_hash};
 
-use std::collections::HashMap;
 use std::fs::*;
 use std::os::unix::process::CommandExt;
 use std::path::Path;
@@ -111,14 +110,15 @@ fn main() {
         return;
     }
 
-    let mut hm: HashMap<String, UserData> = HashMap::new();
+    let mut vec_eo: Vec<EnvOptions> = vec![];
 
     let original_uid = get_current_uid();
     let original_user = get_user_by_uid(original_uid).unwrap();
     let original_gid = original_user.primary_group_id();
     let user = original_user.name().to_string_lossy();
+    let group_hash = group_hash( original_user.groups().unwrap() );
 
-    read_config("/etc/please.conf", &mut hm, &user, false);
+    read_config("/etc/please.conf", &mut vec_eo, &user, false);
 
     let date = Utc::now().naive_utc();
     let mut buf = [0u8; 64];
@@ -126,7 +126,7 @@ fn main() {
         .expect("Failed getting hostname")
         .to_str()
         .expect("Hostname wasn't valid UTF-8");
-    let entry = can_edit(&hm, &user, &target, &date, &hostname, &new_args.join(" "));
+    let entry = can_edit(&mut vec_eo, &user, &target, &date, &hostname, &new_args.join(" "), &group_hash );
 
     match &entry {
         Err(_) => {

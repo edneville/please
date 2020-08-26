@@ -16,10 +16,8 @@
 
 use chrono::Utc;
 use pleaser::util::{
-    can_run, can_list, challenge_password, list_edit, list_run, read_config, search_path, UserData, log_action,
-};
+    can_run, can_list, challenge_password, list_edit, list_run, read_config, search_path, log_action, EnvOptions, group_hash};
 
-use std::collections::HashMap;
 use std::os::unix::process::CommandExt;
 use std::process::Command;
 
@@ -32,9 +30,10 @@ use users::*;
 fn print_usage(program: &str) {
     println!("usage:");
     println!("{} [arguments] <path/to/executable>", program);
-    println!(" -l <-t users permissions>: list permissions");
+    println!(" -l <-t users permissions> <-v>: list permissions");
     println!(" -t [user]: become target user");
     println!(" -c [file]: check config file");
+    println!(" -v: display non-current rules");
 }
 
 fn main() {
@@ -50,7 +49,7 @@ fn main() {
     let original_uid = get_current_uid();
     let original_user = get_user_by_uid(original_uid).unwrap();
     let user = original_user.name().to_string_lossy();
-    let mut hm: HashMap<String, UserData> = HashMap::new();
+    let mut vec_eo: Vec<EnvOptions> = vec![];
 
     loop {
         match opts.next().transpose() {
@@ -69,7 +68,7 @@ fn main() {
                     Opt('t', Some(string)) => target = string,
                     Opt('l', None) => list = true,
                     Opt('c', Some(string)) => {
-                        std::process::exit(read_config(&string, &mut hm, &user, true) as i32)
+                        std::process::exit(read_config(&string, &mut vec_eo, &user, true) as i32)
                     }
                     _ => unreachable!(),
                 },
@@ -78,8 +77,9 @@ fn main() {
     }
 
     let mut new_args = args.split_off(opts.index());
+    let groups = group_hash( original_user.groups().unwrap() );
 
-    read_config("/etc/please.conf", &mut hm, &user, false);
+    read_config("/etc/please.conf", &mut vec_eo, &user, false);
 
     let date = Utc::now().naive_utc();
     let mut buf = [0u8; 64];
@@ -90,23 +90,25 @@ fn main() {
 
     if list {
         if target != "" {
-            let can_do = can_list(&hm, &user, &target, &date, &hostname, &"" );
+            let can_do = can_list(&vec_eo, &user, &target, &date, &hostname, &"", &groups );
             
             if can_do.is_ok() && can_do.unwrap().permit == true {
-                    println!("{} may run the following:",target);
-                    list_run(&hm, &user, &date, &hostname, &target);
-                    println!("{} may edit the following:",target);
-                    list_edit(&hm, &user, &date, &hostname, &target);
+                println!("{} may run the following:",target);
+                list_run(&vec_eo, &user, &date, &hostname, &target, &groups);
+                println!("{} may edit the following:",target);
+                list_edit(&vec_eo, &user, &date, &hostname, &target, &groups);
             }
             else {
+                log_action( &service, "deny", &user, &target, &original_command.join(" ") );
                 println!("You may not view {}'s command list", target);
             }
         }
         else {
+            log_action( &service, "permit", &user, &target, &original_command.join(" ") );
             println!("You may run the following:");
-            list_run(&hm, &user, &date, &hostname, &target);
+            list_run(&vec_eo, &user, &date, &hostname, &target, &groups);
             println!("You may edit the following:");
-            list_edit(&hm, &user, &date, &hostname, &target);
+            list_edit(&vec_eo, &user, &date, &hostname, &target, &groups);
         }
         return;
     }
@@ -120,7 +122,7 @@ fn main() {
 
     new_args[0] = search_path(&new_args[0]);
 
-    let entry = can_run(&hm, &user, &target, &date, &hostname, &new_args.join(" "));
+    let entry = can_run(&vec_eo, &user, &target, &date, &hostname, &new_args.join(" "), &groups);
 
     match &entry {
         Err(_) => {
