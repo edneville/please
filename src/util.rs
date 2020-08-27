@@ -388,13 +388,23 @@ pub fn list(
         }
         let mut prefix = prefixes.join(", ");
         if !prefix.is_empty() {
-            prefix += " as ";
+            if !item.list {
+                prefix = format!(" {} as ", prefix );
+            }
+            else {
+                prefix = format!(" {} to ", prefix );
+            }
         }
         if last_file != item.file_name {
             println!("file: {}", item.file_name);
             last_file = &item.file_name;
         }
 
+        if item.list {
+            println!("  {}:{}list: {}", item.line_number, prefix, item.rule);
+            continue;
+        }
+        
         println!("  {}:{}{}: {}", item.line_number, prefix, item.target, item.rule);
     }
 }
