@@ -4,75 +4,91 @@
 
 # NAME
 
-please.conf
+please.ini
 
 # DESCRIPTION
 
-The `please.conf` file contains the ACL for users of the `please` and `pleaseedit` programs.
+The `please.ini` file contains the ACL for users of the `please` and `pleaseedit` programs.
 
-All rules in `please.conf` will permit or deny based on command regex matches.
+All rules in `please.ini` will permit or deny based on command regex matches.
 
-The format is as follows, multiple arguments are separated by `:`:
+`please.ini` is an ini file, and as such it makes sense to label the sections with a good short description of what the section provides. You may then find this helpful when listing rights with `please -l`.
 
-```
-[user|target|require_pass|permit|notbefore|notafter|edit|list]=value regex
-```
+Rules are read and applied in the order they are presented in the configuration file. So if the user is permitted to run a command early in the file, but later a deny is matches against `.*`, then the user will not be permitted to run any command.
+
+`%{USER}` will expand to the user who is currently running `please`, this enables a single rule for a group to modify/run something that matches their name.
+
+The properties in ini permitted are as follows:
+
+ * name, or user, mandatory
+ * target user, defaults to root
+ * permit=[true|false] defaults to true
+ * require_pass=[true|false], defaults to true
+ * rule=regex, mandatory, is the regular expression that applies to this section
+ * list=[true|false], defaults to false
+ * edit=[true|false], defaults to false
+ * notbefore=[YYYYmmdd|YYYYmmddHHMMSS], defaults to 19700101000000
+ * notafter=[YYYYmmdd|YYYYmmddHHMMSS], defaults to 20380119031417, because this isn't version 0.3.0 yet
+ * group=[true|false] user, when true name refers to a group rather than a user
 
 `regex` is a regular expression.
 
 Using an anchor (`^`) for the regex field will be as good as saying the rule should match any command.
 
-`notbefore`
-
 If you wish to permit a user to view another's command set, then you may do this using the `list` flag (off by default). Users must match the regex.
-
 
 # EXAMPLE
 
 User `ed` may only start or stop a docker container:
 
 ```
-user=ed:target=root:permit=true ^/usr/bin/docker \(start|stop\) \S+
+[user_ed_root]
+user=ed
+target=root
+permit=true
+regex=^/usr/bin/docker (start|stop) \S+
 ```
 
 User `ben` may only edit `/etc/fstab`:
 
 ```
-user=ben:target=root:permit=true:edit=true ^/etc/fstab$
+[ben_fstab]
+user=ben
+target=root
+permit=true
+edit=true
+regex=^/etc/fstab$
 ```
 
 User joker can do what they want as root on `1st April 2021`:
 
 ```
-user=joker:target=root:permit=true:notbefore=20210401:notafter=20210401 ^/bin/bash
+[joker_april_first]
+user=joker
+target=root
+permit=true
+notbefore=20210401
+notafter=20210401
+regex=^/bin/bash
 ```
 
 User `ben` may list only users `eng`, `net` and `dba` operators:
 
 ```
-user=ben:permit=true:list=true ^\(eng|net|dba\)ops$
+[ben_ops]
+user=ben
+permit=true
+list=true
+regex=^(eng|net|dba)ops$
 ```
-
 
 # DATED RANGES
 
-For large environments it is not unusual for a third party to require access during a short time frame for debugging. To accommodate this there are the `notbefore` and `notafter` time brackets. These can be either `YYYYMMDD` or `YYYYMMDDHHMMSS`.
+For large environments it is not unusual for a third party to require access during a short time frame for debugging. To accommodate this there are the `notbefore` and `notafter` time brackets. These can be either `YYYYmmdd` or `YYYYMMDDHHMMSS`.
 
 The whole day is considered when using the shorter date form of `YYYYMMDD`.
 
-If you wish to give bob access to the `postgres` account for the weekend, the two are the same:
-
-```
-user=bob:target=postgres:notbefore=20200808000000:notafter=20200810235959 ^
-user=bob:target=postgres:notbefore=20200808:notafter=20200810 ^
-```
-
 Many enterprises may wish to permit access to a user for a limited time only, even if that individual is in the role permanently.
-
-# REGEX NOTES
-
-1. Regex brackets should be escaped: `\(\)`.
-2. +, to indicate that a sequence is more than once, does not require escaping.
 
 # FILES
 

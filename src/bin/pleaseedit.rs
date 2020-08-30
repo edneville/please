@@ -15,7 +15,7 @@
 //    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 use chrono::Utc;
-use pleaser::util::{can_edit, challenge_password, get_editor, read_config, log_action, EnvOptions, group_hash};
+use pleaser::util::{can_edit, challenge_password, get_editor, read_ini_config_file, log_action, EnvOptions, group_hash};
 
 use std::fs::*;
 use std::os::unix::process::CommandExt;
@@ -118,7 +118,7 @@ fn main() {
     let user = original_user.name().to_string_lossy();
     let group_hash = group_hash( original_user.groups().unwrap() );
 
-    read_config("/etc/please.conf", &mut vec_eo, &user, false);
+    read_ini_config_file("/etc/please.ini", &mut vec_eo, &user, true);
 
     let date = Utc::now().naive_utc();
     let mut buf = [0u8; 64];

@@ -16,7 +16,7 @@
 
 use chrono::Utc;
 use pleaser::util::{
-    can_run, can_list, challenge_password, list_edit, list_run, read_config, search_path, log_action, EnvOptions, group_hash};
+    can_run, can_list, challenge_password, list_edit, list_run, read_ini_config_file, search_path, log_action, EnvOptions, group_hash};
 
 use std::os::unix::process::CommandExt;
 use std::process::Command;
@@ -68,7 +68,7 @@ fn main() {
                     Opt('t', Some(string)) => target = string,
                     Opt('l', None) => list = true,
                     Opt('c', Some(string)) => {
-                        std::process::exit(read_config(&string, &mut vec_eo, &user, true) as i32)
+                        std::process::exit(read_ini_config_file(&string, &mut vec_eo, &user, true) as i32)
                     }
                     _ => unreachable!(),
                 },
@@ -79,7 +79,7 @@ fn main() {
     let mut new_args = args.split_off(opts.index());
     let groups = group_hash( original_user.groups().unwrap() );
 
-    read_config("/etc/please.conf", &mut vec_eo, &user, false);
+    read_ini_config_file("/etc/please.ini", &mut vec_eo, &user, true);
 
     let date = Utc::now().naive_utc();
     let mut buf = [0u8; 64];
