@@ -43,7 +43,7 @@ please -l -t username`
 
 # FILES
 
-/etc/please.conf
+/etc/please.ini
 
 # CONTRIBUTIONS
 
@@ -51,6 +51,6 @@ I welcome pull requests with open arms.
 
 # SEE ALSO
 
-please.conf
+please.ini
 
 

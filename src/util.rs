@@ -2,15 +2,14 @@ use regex::Regex;
 
 use std::collections::HashMap;
 use std::env;
-use std::fs::File;
 use std::ffi::CStr;
-use std::io::prelude::*;
 use std::path::Path;
 use std::process;
 use syslog::{Facility, Formatter3164};
 
 use chrono::{NaiveDate, NaiveDateTime};
 use users::*;
+use ini::Ini;
 
 #[derive(Clone)]
 pub struct EnvOptions {
@@ -25,7 +24,7 @@ pub struct EnvOptions {
     pub env_list: Vec<String>,
     pub edit: bool,
     pub file_name: String,
-    pub line_number: u32,
+    pub section: String,
     pub list: bool,
     pub group: bool,
 }
@@ -38,13 +37,13 @@ impl EnvOptions {
             target: "root".to_string(),
             not_before: NaiveDate::from_ymd(1970, 1, 1).and_hms(0, 0, 0),
             not_after: NaiveDate::from_ymd(2038, 1, 19).and_hms(3, 14, 7),
-            permit: true,
             hostname: "localhost".to_string(),
-            require_pass: true,
             env_list: vec![],
-            edit: false,
             file_name: "".to_string(),
-            line_number: 0,
+            section: "".to_string(),
+            permit: true,
+            require_pass: true,
+            edit: false,
             list: false,
             group: false,
         }
@@ -59,128 +58,139 @@ impl EnvOptions {
     }
 }
 
-pub fn read_config(
-    config_path: &str,
-    mut vec_eo: &mut Vec<EnvOptions>,
+pub fn read_ini(
+    conf: &ini::ini::Ini,
+    vec_eo: &mut Vec<EnvOptions>,
     user: &str,
     fail_error: bool,
+    config_path: &str,
 ) -> bool {
-    let path = Path::new(config_path);
-    let display = path.display();
+    let parse_datetime_from_str = NaiveDateTime::parse_from_str;
+    let parse_date_from_str = NaiveDate::parse_from_str;
+    let mut faulty = false;
+    let mut section = String::from("no section defined");
 
-    let mut file = match File::open(&path) {
-        Err(why) => panic!("couldn't open {}: {}", display, why),
-        Ok(file) => file,
-    };
+    for (sec, prop) in conf.iter() {
+        let mut opt = EnvOptions::new();
+        match sec {
+            Some(x) => { section = x.to_string() },
+            None => {},
+        }
+        opt.file_name = String::from(config_path);
+        opt.section = section.clone();
+        for (k, v) in prop.iter() {
+            match k.as_ref() {
+                "name" => opt.name = v.to_string(),
+                "user" => opt.name = v.to_string(),
+                "hostname" => opt.hostname = v.to_string(),
+                "target" => opt.target = v.to_string(),
+                "permit" => opt.permit = v == "true",
+                "require_pass" => opt.require_pass = v != "false",
+                "edit" => opt.edit = v == "true",
+                "list" => opt.list = v == "true",
+                "group" => opt.group = v == "true",
+                "regex" => {
+                    let rule = Regex::new( &v.to_string().replace("%\\{USER\\}", &user));
+                    if rule.is_err() {
+                        println!(
+                            "Error parsing {}:{}, {}",
+                            config_path,
+                            section,
+                            v.to_string()
+                        );
+                        faulty = true;
+                        continue;
+                    }
+                    opt.rule = rule.unwrap();
+                },
 
-    let mut s = String::new();
-    match file.read_to_string(&mut s) {
-        Err(why) => panic!("couldn't read {}: {}", display, why),
-        Ok(_) => return parse_config(&s, &mut vec_eo, &config_path, &user, fail_error),
+                "notbefore" if v.len() == 8 => {
+                    opt.not_before =
+                        parse_date_from_str(&v.to_string(), "%Y%m%d")
+                            .unwrap()
+                            .and_hms(0, 0, 0)
+                }
+                "notafter" if v.len() == 8 => {
+                    opt.not_after =
+                        parse_date_from_str(&v.to_string(), "%Y%m%d")
+                            .unwrap()
+                            .and_hms(23, 59, 59)
+                }
+                "notbefore" if v.len() == 14 => {
+                    opt.not_before =
+                        parse_datetime_from_str(&v.to_string(), "%Y%m%d%H%M%S")
+                            .unwrap()
+                }
+                "notafter" if v.len() == 14 => {
+                    opt.not_after =
+                        parse_datetime_from_str(&v.to_string(), "%Y%m%d%H%M%S")
+                            .unwrap()
+                }
+
+                &_ => {
+                    println!(
+                        "{}: unknown attribute \"{}\": {}",
+                        config_path, k, v
+                    );
+                    faulty = true;
+                }
+
+            }
+        }
+        /*
+        println!("Name: {}", opt.name);
+        println!("Target: {}", opt.target);
+        println!("Hostname: {}", opt.hostname);
+        println!("Rule: {}", opt.rule);
+        println!("Permit: {}", opt.permit);
+        */
+        vec_eo.push( opt );
+    }
+
+    if fail_error {
+        faulty
+    }
+    else {
+        false
     }
 }
 
-pub fn parse_config(
-    lines: &str,
-    vec_eo: &mut Vec<EnvOptions>,
+pub fn read_ini_config_file(
     config_path: &str,
-    execute_user: &str,
+    vec_eo: &mut Vec<EnvOptions>,
+    user: &str,
     fail_error: bool,
 ) -> bool {
-    // a computer named 'any' will conflict with the definition of any
-    let cfg_re = Regex::new(r"^\s*(?P<options>\S*[^\\])\s+(?P<rule>.*)\s*$").unwrap();
-    let split_re = Regex::new(r"\s*(?P<label>[^:]+)\s*=\s*(?P<value>[^:]+\s*):?").unwrap();
-    let parse_datetime_from_str = NaiveDateTime::parse_from_str;
-    let parse_date_from_str = NaiveDate::parse_from_str;
-    let mut line_number = 0;
-    let mut faulty = false;
 
-    for line in lines.split('\n') {
-        line_number += 1;
-        match cfg_re.captures(line) {
-            Some(x) => {
-                let mut options = x["options"].to_string();
-                options = options.trim().to_string();
-                let mut opt = EnvOptions::new();
-                opt.permit = true;
-
-                let rule = Regex::new(&x["rule"].to_string().replace("%\\{USER\\}", &execute_user));
-                if rule.is_err() {
-                    println!(
-                        "Error parsing {}:{}, {}",
-                        config_path,
-                        line_number,
-                        &x["rule"].to_string()
-                    );
-                    faulty = true;
-                    continue;
-                }
-                opt.rule = rule.unwrap();
-
-                for parts in split_re.captures_iter(&options) {
-                    match &parts["label"] {
-                        "user" => opt.name = parts["value"].to_string(),
-                        "name" => opt.name = parts["value"].to_string(),
-
-                        "hostname" => opt.hostname = parts["value"].to_string(),
-
-                        "target" => opt.target = parts["value"].to_string(),
-                        "permit" => opt.permit = &parts["value"] == "true",
-                        "require_pass" => opt.require_pass = &parts["value"] != "false",
-                        "edit" => opt.edit = &parts["value"] == "true",
-                        "list" => opt.list = &parts["value"] == "true",
-                        "group" => opt.group = &parts["value"] == "true",
-
-                        "notbefore" if parts["value"].len() == 8 => {
-                            opt.not_before =
-                                parse_date_from_str(&parts["value"].to_string(), "%Y%m%d")
-                                    .unwrap()
-                                    .and_hms(0, 0, 0)
-                        }
-                        "notafter" if parts["value"].len() == 8 => {
-                            opt.not_after =
-                                parse_date_from_str(&parts["value"].to_string(), "%Y%m%d")
-                                    .unwrap()
-                                    .and_hms(23, 59, 59)
-                        }
-                        "notbefore" if parts["value"].len() == 14 => {
-                            opt.not_before =
-                                parse_datetime_from_str(&parts["value"].to_string(), "%Y%m%d%H%M%S")
-                                    .unwrap()
-                        }
-                        "notafter" if parts["value"].len() == 14 => {
-                            opt.not_after =
-                                parse_datetime_from_str(&parts["value"].to_string(), "%Y%m%d%H%M%S")
-                                    .unwrap()
-                        }
-
-                        &_ => {
-                            println!(
-                                "{}:{} unknown attribute \"{}\": [{}]",
-                                config_path, line_number, &parts["label"], line
-                            );
-                            faulty = true;
-                        }
-                    }
-                }
-
-                if opt.name == "" {
-                    // will become user == "" && other == ""
-                    continue;
-                }
-
-                opt.file_name = config_path.to_string();
-                opt.line_number = line_number;
-
-                vec_eo.push(opt);
-            }
-            None => {}
+    let conf = Ini::load_from_file( config_path );
+    match conf {
+        Err(x) => {
+            println!("cannot open {}:{}", config_path, x);
+            std::process::exit(1);
+        },
+        Ok(x) => {
+            return read_ini( &x, vec_eo, &user, fail_error, config_path );
         }
     }
-    if fail_error {
-        return faulty;
+}
+
+pub fn read_ini_config_str(
+    config_path: &str,
+    vec_eo: &mut Vec<EnvOptions>,
+    user: &str,
+    fail_error: bool,
+) -> bool {
+
+    let conf = Ini::load_from_str( &config_path );
+    match conf {
+        Err(x) => {
+            println!("cannot open {}:{}", config_path, x);
+            std::process::exit(1);
+        },
+        Ok(x) => {
+            return read_ini( &x, vec_eo, &user, fail_error, "static" );
+        }
     }
-    false
 }
 
 pub fn can_run(
@@ -260,6 +270,7 @@ pub fn can(
             continue;
         }
 
+        // println!("can test {} {}", item.hostname, hostname );
         if item.hostname != hostname
             && item.hostname != "any"
             && item.hostname != "localhost"
@@ -269,17 +280,21 @@ pub fn can(
 
         if command_list {
             if item.rule.is_match(target) {
+                // println!("is list");
                 opt = item.clone();
             }
         }
         else {
             if item.target != target {
+                // println!("item target {} != target {}", item.target, target);
                 continue;
             }
             if item.rule.is_match(command) {
+                // println!("item rule is match");
                 opt = item.clone();
             }
         }
+        // println!("didn't match");
     }
     Ok(opt)
 }
@@ -401,11 +416,11 @@ pub fn list(
         }
 
         if item.list {
-            println!("  {}:{}list: {}", item.line_number, prefix, item.rule);
+            println!("  {}:{}list: {}", item.section, prefix, item.rule);
             continue;
         }
         
-        println!("  {}:{}{}: {}", item.line_number, prefix, item.target, item.rule);
+        println!("  {}:{}{}: {}", item.section, prefix, item.target, item.rule);
     }
 }
 
@@ -474,15 +489,31 @@ mod test {
 
     #[test]
     fn test_execute_config() {
-        let config = "user=ed:target=root:notbefore=20200101:notafter=20201225 ^.*$
-    user=ed:target=oracle:permit=false ^/bin/bash .*$
-    user=ed:target=root ^/bin/bash .*$
-    user=m{}:target=^ "
+        let config = "[ed_all_dated]
+user=ed
+target=root
+notbefore=20200101
+notafter=20201225
+regex =^.*$
+[ed_false_oracle]
+user=ed
+target=oracle
+permit=false
+regex=^/bin/bash .*$
+
+[ed_root_bash_all]
+user=ed
+target=root
+regex=^/bin/bash .*$
+[user_m_all_todo]
+user=m{}
+target=
+regex=^ "
             .to_string();
 
         let date: NaiveDateTime = NaiveDate::from_ymd(2020, 1, 1).and_hms(0, 0, 0);
         let mut vec_eo: Vec<EnvOptions> = vec![];
-        parse_config(&config, &mut vec_eo, "static", "ed", false);
+        read_ini_config_str(&config, &mut vec_eo, "ed", false);
         let group_hash: HashMap<String, u32> = HashMap::new();
 
         assert_eq!(
@@ -495,16 +526,30 @@ mod test {
 
     #[test]
     fn test_execute_user_does_not_exist() {
-        let config = "user=ed:target=root:notbefore=20200101:notafter=20201225 ^.*$
-    user=ed:target=oracle ^/bin/bash .*$
-    user=ed:target=root ^/bin/bash .*$
-    user=m{}:target=^ "
+        let config = "[ed_root_all]
+user=ed
+target=root
+notbefore=20200101
+notafter=20201225
+regex= ^.*$
+[ed_oracle_bash]
+user=ed
+target=oracle
+regex=^/bin/bash .*$
+[ed_root_bash]
+user=ed
+target=root
+regex=^/bin/bash .*$
+[user_all_todo]
+user=m{}
+target=
+regex=^ "
             .to_string();
 
         let date: NaiveDateTime = NaiveDate::from_ymd(2019, 12, 31).and_hms(0, 0, 0);
 
         let mut vec_eo: Vec<EnvOptions> = vec![];
-        parse_config(&config, &mut vec_eo, "static", "ed", false);
+        read_ini_config_str(&config, &mut vec_eo, "ed", false);
         let group_hash: HashMap<String, u32> = HashMap::new();
 
         assert_eq!(
@@ -517,14 +562,29 @@ mod test {
 
     #[test]
     fn test_execute_config_too_early() {
-        let config = "user=ed:target=root:notbefore=20200101:notafter=20201225 ^.*$
-    user=ed:target=oracle ^/bin/bash .*$
-    user=ed:target=root:notafter=20200125:notbefore=20200101  ^
-    user=m{}:target=^ "
+        let config = "
+[ed]
+user=ed
+target=root
+notbefore=20200101
+notafter=20201225
+regex =^.*$
+[ed_oracle]
+user=ed
+target=oracle ^/bin/bash .*$
+[ed_dated]
+user=ed
+target=root
+notafter=20200125
+notbefore=20200101
+regex =^
+[user_all_todo]
+user=m{}
+target=^ "
             .to_string();
 
         let mut vec_eo: Vec<EnvOptions> = vec![];
-        parse_config(&config, &mut vec_eo, "static", "ed", false);
+        read_ini_config_str(&config, &mut vec_eo, "ed", false);
         let group_hash: HashMap<String, u32> = HashMap::new();
 
         assert_eq!(
@@ -570,12 +630,18 @@ mod test {
 
     #[test]
     fn test_execute_config_too_early_long() {
-        let config = "user=ed:target=root:notbefore=20200808:notafter=20200810235959 ^
+        let config = "
+[ed_too_early]        
+user=ed
+target=root
+notbefore=20200808
+notafter=20200810235959
+regex=^
     "
         .to_string();
 
         let mut vec_eo: Vec<EnvOptions> = vec![];
-        parse_config(&config, &mut vec_eo, "static", "ed", false);
+        read_ini_config_str(&config, &mut vec_eo, "ed", false);
         let group_hash: HashMap<String, u32> = HashMap::new();
 
         assert_eq!(
@@ -647,15 +713,26 @@ mod test {
 
     #[test]
     fn test_execute_config_oracle() {
-        let config = "user=ed:target=oracle:notbefore=20200101:notafter=20201225 ^/bin/bash .*$
-    user=ed:target=oracle:notbefore=20190101:notafter=20201225:permit=true ^/bin/bash .*$
+        let config = "[ed_oracle]
+user=ed
+target=oracle
+notbefore=20200101
+notafter=20201225
+regex=^/bin/bash .*$
+[ed_oracle_permit]
+user=ed
+target=oracle
+notbefore=20190101
+notafter=20201225
+permit=true
+regex=^/bin/bash .*$
     "
         .to_string();
 
         let date: NaiveDateTime = NaiveDate::from_ymd(2019, 12, 31).and_hms(0, 0, 0);
 
         let mut vec_eo: Vec<EnvOptions> = vec![];
-        parse_config(&config, &mut vec_eo, "static", "ed", false);
+        read_ini_config_str(&config, &mut vec_eo, "ed", false);
         let group_hash: HashMap<String, u32> = HashMap::new();
 
         assert_eq!(
@@ -740,14 +817,18 @@ mod test {
 
     #[test]
     fn test_execute_config_hostname_any() {
-        let config = "user=ed:target=oracle:hostname=any ^/bin/bash\\b.*$
+        let config = "[ed_config_hostname]
+user=ed
+target=oracle
+hostname=any
+regex=^/bin/bash.*$
     "
         .to_string();
 
         let date: NaiveDateTime = NaiveDate::from_ymd(2019, 12, 31).and_hms(0, 0, 0);
 
         let mut vec_eo: Vec<EnvOptions> = vec![];
-        parse_config(&config, &mut vec_eo, "static", "ed", false);
+        read_ini_config_str(&config, &mut vec_eo, "ed", false);
         let group_hash: HashMap<String, u32> = HashMap::new();
 
         assert_eq!(
@@ -832,15 +913,24 @@ mod test {
 
     #[test]
     fn test_execute_config_hostname_locahost() {
-        let config = "user=ed:target=oracle:hostname=web1 ^/bin/bash\\b.*$
-    user=ed:target=oracle:hostname=localhost ^/bin/sh\\b.*$
+        let config = "[ed_oralce_web1]
+user=ed
+target=oracle
+hostname=web1
+regex=^/bin/bash .*$
+
+[ed_oracle_localhost]
+user=ed
+target=oracle
+hostname=localhost
+regex=^/bin/sh.*$
     "
         .to_string();
 
         let date: NaiveDateTime = NaiveDate::from_ymd(2019, 12, 31).and_hms(0, 0, 0);
 
         let mut vec_eo: Vec<EnvOptions> = vec![];
-        parse_config(&config, &mut vec_eo, "static", "ed", false);
+        read_ini_config_str(&config, &mut vec_eo, "ed", false);
         let group_hash: HashMap<String, u32> = HashMap::new();
 
         assert_eq!(
@@ -926,14 +1016,17 @@ mod test {
 
     #[test]
     fn test_missing_user() {
-        let config = "target=oracle:hostname=localhost ^/bin/sh\\b.*$
+        let config = "[missing_user]
+target=oracle
+hostname=localhost
+regex=^/bin/sh\\b.*$
     "
         .to_string();
 
         let date: NaiveDateTime = NaiveDate::from_ymd(2019, 12, 31).and_hms(0, 0, 0);
 
         let mut vec_eo: Vec<EnvOptions> = vec![];
-        parse_config(&config, &mut vec_eo, "static", "ed", false);
+        read_ini_config_str(&config, &mut vec_eo, "ed", false);
         let group_hash: HashMap<String, u32> = HashMap::new();
 
         assert_eq!(
@@ -953,14 +1046,19 @@ mod test {
 
     #[test]
     fn test_regex_line_anchor() {
-        let config = "user=ed:target=oracle:hostname=localhost ^
+        let config = "
+[regex_anchor]
+user=ed
+target=oracle
+hostname=localhost
+regex=^
     "
         .to_string();
 
         let date: NaiveDateTime = NaiveDate::from_ymd(2019, 12, 31).and_hms(0, 0, 0);
 
         let mut vec_eo: Vec<EnvOptions> = vec![];
-        parse_config(&config, &mut vec_eo, "static", "ed", false);
+        read_ini_config_str(&config, &mut vec_eo, "ed", false);
         let group_hash: HashMap<String, u32> = HashMap::new();
 
         assert_eq!(
@@ -973,16 +1071,37 @@ mod test {
 
     #[test]
     fn test_edit_apache() {
-        let config = "user=ed:target=root:notbefore=20200101:notafter=20201225:edit=true ^.*$
-    user=ed:target=oracle:permit=false:edit=true ^/etc/apache.*$
-    user=ed:target=root:edit=true ^/etc/hosts$
-    user=m{}:target=^:edit=true "
-            .to_string();
+        let config = "
+[ed_edit_root]
+user=ed
+target=root
+notbefore=20200101
+notafter=20201225
+edit=true
+regex = ^.*$
+
+[ed_edit_apache]
+user=ed
+target=oracle
+permit=false
+edit=true
+regex = ^/etc/apache.*$
+
+[ed_edit_hosts]
+user=ed
+target=root
+edit=true ^/etc/hosts$
+
+[user_all_todo]
+user=m{}
+target=^
+edit=true
+regex = ^".to_string();
 
         let date: NaiveDateTime = NaiveDate::from_ymd(2020, 1, 1).and_hms(0, 0, 0);
 
         let mut vec_eo: Vec<EnvOptions> = vec![];
-        parse_config(&config, &mut vec_eo, "static", "ed", false);
+        read_ini_config_str(&config, &mut vec_eo, "ed", false);
         let group_hash: HashMap<String, u32> = HashMap::new();
 
         assert_eq!(
@@ -1002,12 +1121,16 @@ mod test {
 
     #[test]
     fn test_edit_user_macro() {
-        let config = "user=ed:target=root ^/bin/cat /etc/%\\{USER\\}".to_string();
+        let config = "
+[ed]
+user=ed
+target=root
+regex =^/bin/cat /etc/%\\{USER\\}".to_string();
 
         let date: NaiveDateTime = NaiveDate::from_ymd(2020, 1, 1).and_hms(0, 0, 0);
 
         let mut vec_eo: Vec<EnvOptions> = vec![];
-        parse_config(&config, &mut vec_eo, "static", "ed", false);
+        read_ini_config_str(&config, &mut vec_eo, "ed", false);
         let group_hash: HashMap<String, u32> = HashMap::new();
 
         assert_eq!(
@@ -1022,27 +1145,40 @@ mod test {
     fn test_parse_regex_fail() {
         let mut vec_eo: Vec<EnvOptions> = vec![];
 
-        let config = "user=ed:target=root ^/bin/cat /etc/(".to_string();
-        parse_config(&config, &mut vec_eo, "static", "ed", false);
+        let config = "
+[ed]
+user=ed
+target=root
+regex = ^/bin/cat /etc/(".to_string();
 
-        assert_eq!(parse_config(&config, &mut vec_eo, "static", "ed", true), true);
+        assert_eq!(read_ini_config_str(&config, &mut vec_eo, "ed", true), true);
 
         let mut vec_eo: Vec<EnvOptions> = vec![];
-        let config = "user=ed:target=root ^/bin/cat /etc/".to_string();
-        parse_config(&config, &mut vec_eo, "static", "ed", false);
+        let config = "
+[ed]
+user=ed
+target=root
+regex = ^/bin/cat /etc/".to_string();
 
-        assert_eq!(parse_config(&config, &mut vec_eo, "static", "ed", true), false);
+        assert_eq!(read_ini_config_str(&config, &mut vec_eo, "ed", true), false);
     }
 
     #[test]
     fn test_group_assignment() {
-        let config = "name=users:group=true:target=root:notbefore=20200101:notafter=20201225 ^.*$"
+        let config = "
+[users]
+name=users
+group=true
+target=root
+notbefore=20200101
+notafter=20201225
+regex = ^.*$"
             .to_string();
 
         let date: NaiveDateTime = NaiveDate::from_ymd(2020, 1, 1).and_hms(0, 0, 0);
 
         let mut vec_eo: Vec<EnvOptions> = vec![];
-        parse_config(&config, &mut vec_eo, "static", "ed", false);
+        read_ini_config_str(&config, &mut vec_eo, "ed", false);
 
         let mut group_hash: HashMap<String, u32> = HashMap::new();
         group_hash.insert(String::from("users"),1);
@@ -1055,19 +1191,47 @@ mod test {
 
     #[test]
     fn test_list_other_user() {
-        let config = "user=ed:name=ed:target=root:notbefore=20200101:notafter=20201225:list=true ^.*$
-user=bob:target=root:list=false:edit=true ^.*$
-user=bob:target=root:list=true:permit=false ^.*$
-user=meh:list=true:target=root ^ed$
-user=root:target=root:list=false ^.*$
-user=ben:target=root:permit=true:list=true ^(eng|dba|net)ops$"
+        let config = "
+[ed_all]
+user=ed
+notbefore=20200101
+notafter=20201225
+list=true
+regex = ^.*$
 
-            .to_string();
+[bob_all]
+user=bob
+list=false
+edit=true
+regex = ^.*$
+
+[bob_all]
+user=bob
+list=true
+permit=false
+regex = ^.*$
+
+[meh_ed]
+user=meh
+list=true
+regex=^ed$
+
+[root_all]
+user=root
+list=false
+regex =^.*$
+
+[ben_ops]
+user=ben
+permit=true
+list=true 
+regex = ^(eng|dba|net)ops$
+".to_string();
 
         let date: NaiveDateTime = NaiveDate::from_ymd(2020, 1, 1).and_hms(0, 0, 0);
 
         let mut vec_eo: Vec<EnvOptions> = vec![];
-        parse_config(&config, &mut vec_eo, "static", "ed", false);
+        read_ini_config_str(&config, &mut vec_eo, "ed", false);
         let group_hash: HashMap<String, u32> = HashMap::new();
 
         assert_eq!( can_list( &vec_eo, "ed", "root", &date, "localhost", "", &group_hash ).unwrap().permit, true );

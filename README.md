@@ -19,24 +19,32 @@ A simple install:
 
 # how do i set it up
 
-Next, configure your /etc/please.conf similar to this, replace user names with appropriate values:
+Next, configure your `/etc/please.ini` similar to this, replace user names with appropriate values. One of the simplest, that does not require password authentication can be defined as follows, assuming the user is `ed`:
 
 ```
-user=ed:target=root:permit=true ^/bin/bash
-user=ed:target=root:require_pass=true:permit=true ^/bin/bash
-user=ed:target=rust:require_pass=false:permit=true ^/bin/\(ba\|da)\?sh
-user=ed:target=root:require_pass=false:edit=true:permit=true ^/etc/init.d/
+[ed_root_any]
+user=ed
+target=root
+permit=true
+regex = ^.*
+require_pass=false
 ```
 
-The format is as follows, multiple arguments are separated by `:`:
+The ini format is as follows, multiple arguments are separated by `:`:
 
-```
-[user|target|require_pass|permit|notbefore|notafter]=value regex
-```
+| part           | effect       |
+|----------------|--------------|
+| [section-name] | section name, naming sections may help you later |
+| user=person    | mandatory, apply configuration to this person |
+| target=person  | mandatory in run and edit, become this user   |
+| require_pass=[true/false]   | defaults to true, mandatory in run and edit, become this user   |
+| regex=rule     | mandatory, this is the regex for the section |
+| notbefore     | the date, in YYYYmmdd or YYYYmmddHHMMSS when this rule becomes effective |
+| notafter     | the date, in YYYYmmdd or YYYYmmddHHMMSS when this rule expires |
+| list=[true/false] | permit listing of users matching the regex rule |
+| edit=[true/false] | permit editing of files matching the regex rule as the target user |
 
 Using an anchor (`^`) for the regex field will be as good as saying the rule should match any command.
-
-Regex brackets should be escaped: `\(\)`.
 
 ```
 $ please /bin/bash
@@ -58,13 +66,6 @@ For large environments it is not unusual for a third party to require access dur
 
 The whole day is considered when using the shorter date form of `YYYYMMDD`.
 
-If you wish to give bob access to the `postgres` account for the weekend, the two are the same:
-
-```
-user=bob:target=postgres:notbefore=20200808000000:notafter=20200810235959 ^
-user=bob:target=postgres:notbefore=20200808:notafter=20200810 ^
-```
-
 Many enterprises may wish to permit access to a user for a limited time only, even if that individual is in the role permanently.
 
 # pleaseedit
@@ -81,7 +82,7 @@ This is performed as follows:
 
 # FILES
 
-/etc/please.conf
+/etc/please.ini
 
 # contributions
 
