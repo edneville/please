@@ -16,7 +16,9 @@
 
 use chrono::Utc;
 use pleaser::util::{
-    can_run, can_list, challenge_password, list_edit, list_run, read_ini_config_file, search_path, log_action, EnvOptions, group_hash};
+    can_list, can_run, challenge_password, group_hash, list_edit, list_run, log_action,
+    read_ini_config_file, search_path, EnvOptions,
+};
 
 use std::os::unix::process::CommandExt;
 use std::process::Command;
@@ -68,7 +70,9 @@ fn main() {
                     Opt('t', Some(string)) => target = string,
                     Opt('l', None) => list = true,
                     Opt('c', Some(string)) => {
-                        std::process::exit(read_ini_config_file(&string, &mut vec_eo, &user, true) as i32)
+                        std::process::exit(
+                            read_ini_config_file(&string, &mut vec_eo, &user, true) as i32
+                        )
                     }
                     _ => unreachable!(),
                 },
@@ -77,9 +81,12 @@ fn main() {
     }
 
     let mut new_args = args.split_off(opts.index());
-    let groups = group_hash( original_user.groups().unwrap() );
+    let groups = group_hash(original_user.groups().unwrap());
 
-    read_ini_config_file("/etc/please.ini", &mut vec_eo, &user, true);
+    if read_ini_config_file("/etc/please.ini", &mut vec_eo, &user, true) {
+        println!("Exiting due to error");
+        std::process::exit(1);
+    }
 
     let date = Utc::now().naive_utc();
     let mut buf = [0u8; 64];
@@ -90,21 +97,31 @@ fn main() {
 
     if list {
         if target != "" {
-            let can_do = can_list(&vec_eo, &user, &target, &date, &hostname, &"", &groups );
-            
-            if can_do.is_ok() && can_do.unwrap().permit == true {
-                println!("{} may run the following:",target);
+            let can_do = can_list(&vec_eo, &user, &target, &date, &hostname, &"", &groups);
+
+            if can_do.is_ok() && can_do.unwrap().permit {
+                println!("{} may run the following:", target);
                 list_run(&vec_eo, &user, &date, &hostname, &target, &groups);
-                println!("{} may edit the following:",target);
+                println!("{} may edit the following:", target);
                 list_edit(&vec_eo, &user, &date, &hostname, &target, &groups);
-            }
-            else {
-                log_action( &service, "deny", &user, &target, &original_command.join(" ") );
+            } else {
+                log_action(
+                    &service,
+                    "deny",
+                    &user,
+                    &target,
+                    &original_command.join(" "),
+                );
                 println!("You may not view {}'s command list", target);
             }
-        }
-        else {
-            log_action( &service, "permit", &user, &target, &original_command.join(" ") );
+        } else {
+            log_action(
+                &service,
+                "permit",
+                &user,
+                &target,
+                &original_command.join(" "),
+            );
             println!("You may run the following:");
             list_run(&vec_eo, &user, &date, &hostname, &target, &groups);
             println!("You may edit the following:");
@@ -113,20 +130,36 @@ fn main() {
         return;
     }
 
-    if target == "" { target = "root".to_string(); }
+    if target == "" {
+        target = "root".to_string();
+    }
 
-    if new_args.len() == 0 {
+    if new_args.is_empty() {
         println!("No command given.");
         return;
     }
 
     new_args[0] = search_path(&new_args[0]);
 
-    let entry = can_run(&vec_eo, &user, &target, &date, &hostname, &new_args.join(" "), &groups);
+    let entry = can_run(
+        &vec_eo,
+        &user,
+        &target,
+        &date,
+        &hostname,
+        &new_args.join(" "),
+        &groups,
+    );
 
     match &entry {
         Err(_) => {
-            log_action( &service, "deny", &user, &target, &original_command.join(" ") );
+            log_action(
+                &service,
+                "deny",
+                &user,
+                &target,
+                &original_command.join(" "),
+            );
             println!(
                 "You may not execute \"{}\" on {} as {}",
                 new_args.join(" "),
@@ -137,7 +170,13 @@ fn main() {
         }
         Ok(x) => {
             if !x.permit {
-                log_action( &service, "deny", &user, &target, &original_command.join(" ") );
+                log_action(
+                    &service,
+                    "deny",
+                    &user,
+                    &target,
+                    &original_command.join(" "),
+                );
                 println!(
                     "You may not execute \"{}\" on {} as {}",
                     new_args.join(" "),
@@ -155,11 +194,23 @@ fn main() {
     }
 
     if !challenge_password(user.to_string(), entry.clone().unwrap(), &service) {
-        log_action( &service, "deny", &user, &target, &original_command.join(" ") );
+        log_action(
+            &service,
+            "deny",
+            &user,
+            &target,
+            &original_command.join(" "),
+        );
         return;
     }
 
-    log_action( &service, "permit", &user, &target, &original_command.join(" ") );
+    log_action(
+        &service,
+        "permit",
+        &user,
+        &target,
+        &original_command.join(" "),
+    );
     let lookup_name = users::get_user_by_name(&entry.unwrap().target).unwrap();
     let target_uid = nix::unistd::Uid::from_raw(lookup_name.uid());
     let target_gid = nix::unistd::Gid::from_raw(lookup_name.primary_group_id());

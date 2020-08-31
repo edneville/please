@@ -8,8 +8,8 @@ use std::process;
 use syslog::{Facility, Formatter3164};
 
 use chrono::{NaiveDate, NaiveDateTime};
-use users::*;
 use ini::Ini;
+use users::*;
 
 #[derive(Clone)]
 pub struct EnvOptions {
@@ -73,8 +73,8 @@ pub fn read_ini(
     for (sec, prop) in conf.iter() {
         let mut opt = EnvOptions::new();
         match sec {
-            Some(x) => { section = x.to_string() },
-            None => {},
+            Some(x) => section = x.to_string(),
+            None => {}
         }
         opt.file_name = String::from(config_path);
         opt.section = section.clone();
@@ -90,7 +90,8 @@ pub fn read_ini(
                 "list" => opt.list = v == "true",
                 "group" => opt.group = v == "true",
                 "regex" => {
-                    let rule = Regex::new( &v.to_string().replace("%\\{USER\\}", &user));
+                    // println!("{}",v.to_string());
+                    let rule = Regex::new(&v.to_string().replace("%{USER}", &user));
                     if rule.is_err() {
                         println!(
                             "Error parsing {}:{}, {}",
@@ -102,39 +103,30 @@ pub fn read_ini(
                         continue;
                     }
                     opt.rule = rule.unwrap();
-                },
+                }
 
                 "notbefore" if v.len() == 8 => {
-                    opt.not_before =
-                        parse_date_from_str(&v.to_string(), "%Y%m%d")
-                            .unwrap()
-                            .and_hms(0, 0, 0)
+                    opt.not_before = parse_date_from_str(&v.to_string(), "%Y%m%d")
+                        .unwrap()
+                        .and_hms(0, 0, 0)
                 }
                 "notafter" if v.len() == 8 => {
-                    opt.not_after =
-                        parse_date_from_str(&v.to_string(), "%Y%m%d")
-                            .unwrap()
-                            .and_hms(23, 59, 59)
+                    opt.not_after = parse_date_from_str(&v.to_string(), "%Y%m%d")
+                        .unwrap()
+                        .and_hms(23, 59, 59)
                 }
                 "notbefore" if v.len() == 14 => {
                     opt.not_before =
-                        parse_datetime_from_str(&v.to_string(), "%Y%m%d%H%M%S")
-                            .unwrap()
+                        parse_datetime_from_str(&v.to_string(), "%Y%m%d%H%M%S").unwrap()
                 }
                 "notafter" if v.len() == 14 => {
-                    opt.not_after =
-                        parse_datetime_from_str(&v.to_string(), "%Y%m%d%H%M%S")
-                            .unwrap()
+                    opt.not_after = parse_datetime_from_str(&v.to_string(), "%Y%m%d%H%M%S").unwrap()
                 }
 
                 &_ => {
-                    println!(
-                        "{}: unknown attribute \"{}\": {}",
-                        config_path, k, v
-                    );
+                    println!("{}: unknown attribute \"{}\": {}", config_path, k, v);
                     faulty = true;
                 }
-
             }
         }
         /*
@@ -144,15 +136,10 @@ pub fn read_ini(
         println!("Rule: {}", opt.rule);
         println!("Permit: {}", opt.permit);
         */
-        vec_eo.push( opt );
+        vec_eo.push(opt);
     }
 
-    if fail_error {
-        faulty
-    }
-    else {
-        false
-    }
+    fail_error && faulty
 }
 
 pub fn read_ini_config_file(
@@ -161,15 +148,14 @@ pub fn read_ini_config_file(
     user: &str,
     fail_error: bool,
 ) -> bool {
-
-    let conf = Ini::load_from_file( config_path );
+    let conf = Ini::load_from_file(config_path);
     match conf {
         Err(x) => {
             println!("cannot open {}:{}", config_path, x);
             std::process::exit(1);
-        },
+        }
         Ok(x) => {
-            return read_ini( &x, vec_eo, &user, fail_error, config_path );
+            read_ini(&x, vec_eo, &user, fail_error, config_path)
         }
     }
 }
@@ -180,15 +166,14 @@ pub fn read_ini_config_str(
     user: &str,
     fail_error: bool,
 ) -> bool {
-
-    let conf = Ini::load_from_str( &config_path );
+    let conf = Ini::load_from_str(&config_path);
     match conf {
         Err(x) => {
             println!("cannot open {}:{}", config_path, x);
             std::process::exit(1);
-        },
+        }
         Ok(x) => {
-            return read_ini( &x, vec_eo, &user, fail_error, "static" );
+            read_ini(&x, vec_eo, &user, fail_error, "static")
         }
     }
 }
@@ -200,9 +185,19 @@ pub fn can_run(
     date: &NaiveDateTime,
     hostname: &str,
     command: &str,
-    group_list: &HashMap<String,u32>,
+    group_list: &HashMap<String, u32>,
 ) -> Result<EnvOptions, ()> {
-    can(vec_eo, &user, &target, &date, &hostname, &command, false, false, &group_list)
+    can(
+        vec_eo,
+        &user,
+        &target,
+        &date,
+        &hostname,
+        &command,
+        false,
+        false,
+        &group_list,
+    )
 }
 
 pub fn can_edit(
@@ -212,9 +207,19 @@ pub fn can_edit(
     date: &NaiveDateTime,
     hostname: &str,
     command: &str,
-    group_list: &HashMap<String,u32>,
+    group_list: &HashMap<String, u32>,
 ) -> Result<EnvOptions, ()> {
-    can(vec_eo, &user, &target, &date, &hostname, &command, true, false, &group_list)
+    can(
+        vec_eo,
+        &user,
+        &target,
+        &date,
+        &hostname,
+        &command,
+        true,
+        false,
+        &group_list,
+    )
 }
 
 pub fn can_list(
@@ -224,9 +229,19 @@ pub fn can_list(
     date: &NaiveDateTime,
     hostname: &str,
     command: &str,
-    group_list: &HashMap<String,u32>,
+    group_list: &HashMap<String, u32>,
 ) -> Result<EnvOptions, ()> {
-    can(vec_eo, &user, &target, &date, &hostname, &command, false, true, &group_list)
+    can(
+        vec_eo,
+        &user,
+        &target,
+        &date,
+        &hostname,
+        &command,
+        false,
+        true,
+        &group_list,
+    )
 }
 
 pub fn can(
@@ -238,61 +253,65 @@ pub fn can(
     command: &str,
     edit: bool,
     command_list: bool,
-    group_list: &HashMap<String,u32>,
+    group_list: &HashMap<String, u32>,
 ) -> Result<EnvOptions, ()> {
-
     let mut opt = EnvOptions::new_deny();
 
     for item in vec_eo {
+        //println!("{}:", item.section);
         if item.not_before > *date {
+            //println!("{}: now is before date", item.section);
             continue;
         }
 
         if item.not_after < *date {
+            //println!("{}: now is after date", item.section);
             continue;
         }
 
         if !item.group && item.name != user {
+            //println!("{}: not name match", item.section);
             continue;
         }
 
-        if item.group {
-            if group_list.get( &item.name ).is_none() {
-                continue;
-            }
+        if item.group && group_list.get(&item.name).is_none() {
+            //println!("{}: group name mismatch, {} != {}", item.section, item.group, item.name );
+            continue;
         }
 
         if item.list != command_list {
+            //println!("{}: not list, {} != {}", item.section, item.list, command_list);
             continue;
         }
 
         if item.edit != edit {
+            //println!("{}: item is for edit", item.section);
             continue;
         }
 
         // println!("can test {} {}", item.hostname, hostname );
-        if item.hostname != hostname
-            && item.hostname != "any"
-            && item.hostname != "localhost"
-        {
+        if item.hostname != hostname && item.hostname != "any" && item.hostname != "localhost" {
+            //println!("{}: hostname mismatch", item.section);
             continue;
         }
 
         if command_list {
             if item.rule.is_match(target) {
-                // println!("is list");
+                //println!("{}: is list", item.section);
                 opt = item.clone();
             }
-        }
-        else {
+        } else {
             if item.target != target {
-                // println!("item target {} != target {}", item.target, target);
+                //println!("{}: item target {} != target {}", item.section, item.target, target);
                 continue;
             }
             if item.rule.is_match(command) {
-                // println!("item rule is match");
+                //println!("{}: item rule is match", item.section);
                 opt = item.clone();
             }
+            //else {
+            //    println!("{}: item rule is not a match", item.section);
+            //}
         }
         // println!("didn't match");
     }
@@ -312,11 +331,9 @@ pub fn get_editor() -> String {
     let editor = "/usr/bin/vi";
 
     for prog in [String::from("VISUAL"), String::from("EDITOR")].iter() {
-        match std::env::var(prog) {
-            Ok(val) => return val,
-            Err(_) => {}
-        }
+        if let Ok(val) = std::env::var(prog) { return val; }
     }
+
     editor.to_string()
 }
 
@@ -334,7 +351,7 @@ pub fn challenge_password(user: String, entry: EnvOptions, service: &str) -> boo
             if auth_ok(&user, &pass, &service) {
                 return true;
             }
-            retry_counter = retry_counter + 1;
+            retry_counter += 1;
             if retry_counter == 3 {
                 println!("Authentication failed :-(");
                 return false;
@@ -344,11 +361,25 @@ pub fn challenge_password(user: String, entry: EnvOptions, service: &str) -> boo
     true
 }
 
-pub fn list_edit(vec_eo: &Vec<EnvOptions>, user: &str, date: &NaiveDateTime, hostname: &str, target: &str, group_list: &HashMap<String,u32>) {
+pub fn list_edit(
+    vec_eo: &Vec<EnvOptions>,
+    user: &str,
+    date: &NaiveDateTime,
+    hostname: &str,
+    target: &str,
+    group_list: &HashMap<String, u32>,
+) {
     list(vec_eo, &user, &date, &hostname, true, &target, &group_list);
 }
 
-pub fn list_run(vec_eo: &Vec<EnvOptions>, user: &str, date: &NaiveDateTime, hostname: &str, target: &str, group_list: &HashMap<String,u32>) {
+pub fn list_run(
+    vec_eo: &Vec<EnvOptions>,
+    user: &str,
+    date: &NaiveDateTime,
+    hostname: &str,
+    target: &str,
+    group_list: &HashMap<String, u32>,
+) {
     list(vec_eo, &user, &date, &hostname, false, &target, &group_list);
 }
 
@@ -359,12 +390,10 @@ pub fn list(
     hostname: &str,
     edit: bool,
     target: &str,
-    group_list: &HashMap<String,u32>,
+    group_list: &HashMap<String, u32>,
 ) {
-    let mut search_user = String::from( user );
-    if target != "" {
-        search_user = String::from( target );
-    }
+    let search_user = if target != "" { String::from(target) } else { String::from(user) };
+    
     let mut last_file = "";
 
     for item in vec_eo {
@@ -372,10 +401,8 @@ pub fn list(
             continue;
         }
 
-        if item.group {
-            if group_list.get( &item.name ).is_none() {
-                continue;
-            }
+        if item.group && group_list.get(&item.name).is_none() {
+            continue;
         }
 
         let mut prefixes = vec![];
@@ -395,19 +422,15 @@ pub fn list(
             prefixes.push(String::from("not permitted"));
         }
 
-        if item.hostname != hostname
-            && item.hostname != "any"
-            && item.hostname != "localhost"
-        {
+        if item.hostname != hostname && item.hostname != "any" && item.hostname != "localhost" {
             continue;
         }
         let mut prefix = prefixes.join(", ");
         if !prefix.is_empty() {
             if !item.list {
-                prefix = format!(" {} as ", prefix );
-            }
-            else {
-                prefix = format!(" {} to ", prefix );
+                prefix = format!(" {} as ", prefix);
+            } else {
+                prefix = format!(" {} to ", prefix);
             }
         }
         if last_file != item.file_name {
@@ -419,8 +442,11 @@ pub fn list(
             println!("  {}:{}list: {}", item.section, prefix, item.rule);
             continue;
         }
-        
-        println!("  {}:{}{}: {}", item.section, prefix, item.target, item.rule);
+
+        println!(
+            "  {}:{}{}: {}",
+            item.section, prefix, item.target, item.rule
+        );
     }
 }
 
@@ -429,24 +455,22 @@ pub fn search_path(binary: &str) -> String {
         return binary.to_string();
     }
 
-    match env::var("PATH") {
-        Ok(path) => {
-            for dir in path.split(':') {
-                let path_name = format!("{}/{}", &dir, &binary.to_string());
-                let p = Path::new(&path_name);
+    if let Ok(path) = env::var("PATH") {
+        for dir in path.split(':') {
+            let path_name = format!("{}/{}", &dir, &binary.to_string());
+            let p = Path::new(&path_name);
 
-                if !p.exists() {
-                    continue;
-                }
-                return path_name;
+            if !p.exists() {
+                continue;
             }
+            return path_name;
         }
-        Err(_) => {}
     }
+ 
     binary.to_string()
 }
 
-pub fn log_action( service: &str, result: &str, user: &str, target: &str, command: &str ) -> bool {
+pub fn log_action(service: &str, result: &str, user: &str, target: &str, command: &str) -> bool {
     let formatter = Formatter3164 {
         facility: Facility::LOG_USER,
         hostname: None,
@@ -454,7 +478,7 @@ pub fn log_action( service: &str, result: &str, user: &str, target: &str, comman
         pid: process::id() as i32,
     };
     let mut ttyname = "failed";
-    
+
     /* sometimes a tty isn't attached for all pipes FIXME: make this testable */
     unsafe {
         for n in 0..3 {
@@ -474,18 +498,24 @@ pub fn log_action( service: &str, result: &str, user: &str, target: &str, comman
     match syslog::unix(formatter) {
         Err(e) => println!("impossible to connect to syslog: {:?}", e),
         Ok(mut writer) => {
-            writer.err(format!("user={} tty={} action={} target={} command={}", user, ttyname, result, target, command)).expect("could not write error message");
+            writer
+                .err(format!(
+                    "user={} tty={} action={} target={} command={}",
+                    user, ttyname, result, target, command
+                ))
+                .expect("could not write error message");
         }
     }
     false
 }
 
-pub fn group_hash( groups: Vec<Group> ) -> HashMap<String, u32> {
-    let mut hm: HashMap<String,u32> = HashMap::new();
+pub fn group_hash(groups: Vec<Group>) -> HashMap<String, u32> {
+    let mut hm: HashMap<String, u32> = HashMap::new();
     for group in groups {
-        hm.entry( String::from( group.name().to_string_lossy() ) ).or_insert( group.gid() );
+        hm.entry(String::from(group.name().to_string_lossy()))
+            .or_insert_with(|| group.gid());
     }
-    return hm;
+    hm
 }
 
 #[cfg(test)]
@@ -523,9 +553,17 @@ regex=^ "
         let group_hash: HashMap<String, u32> = HashMap::new();
 
         assert_eq!(
-            can_run(&vec_eo, "ed", "root", &date, "localhost", "/bin/bash", &group_hash)
-                .unwrap()
-                .permit,
+            can_run(
+                &vec_eo,
+                "ed",
+                "root",
+                &date,
+                "localhost",
+                "/bin/bash",
+                &group_hash
+            )
+            .unwrap()
+            .permit,
             true
         );
     }
@@ -559,9 +597,17 @@ regex=^ "
         let group_hash: HashMap<String, u32> = HashMap::new();
 
         assert_eq!(
-            can_run(&vec_eo, "gone", "root", &date, "localhost", "/bin/bash", &group_hash )
-                .unwrap()
-                .permit,
+            can_run(
+                &vec_eo,
+                "gone",
+                "root",
+                &date,
+                "localhost",
+                "/bin/bash",
+                &group_hash
+            )
+            .unwrap()
+            .permit,
             false
         );
     }
@@ -600,7 +646,8 @@ target=^ "
                 "root",
                 &NaiveDate::from_ymd(2019, 12, 31).and_hms(0, 0, 0),
                 "localhost",
-                "/bin/bash", &group_hash
+                "/bin/bash",
+                &group_hash
             )
             .unwrap()
             .permit,
@@ -613,7 +660,8 @@ target=^ "
                 "root",
                 &NaiveDate::from_ymd(2020, 12, 25).and_hms(0, 0, 0),
                 "localhost",
-                "/bin/bash", &group_hash
+                "/bin/bash",
+                &group_hash
             )
             .unwrap()
             .permit,
@@ -626,7 +674,8 @@ target=^ "
                 "root",
                 &NaiveDate::from_ymd(2020, 12, 25).and_hms(1, 0, 0),
                 "localhost",
-                "/bin/bash", &group_hash
+                "/bin/bash",
+                &group_hash
             )
             .unwrap()
             .permit,
@@ -657,7 +706,8 @@ regex=^
                 "root",
                 &NaiveDate::from_ymd(2020, 8, 8).and_hms(0, 0, 0),
                 "localhost",
-                "/bin/bash", &group_hash
+                "/bin/bash",
+                &group_hash
             )
             .unwrap()
             .permit,
@@ -670,7 +720,8 @@ regex=^
                 "root",
                 &NaiveDate::from_ymd(2020, 8, 10).and_hms(0, 0, 0),
                 "localhost",
-                "/bin/bash", &group_hash
+                "/bin/bash",
+                &group_hash
             )
             .unwrap()
             .permit,
@@ -683,7 +734,8 @@ regex=^
                 "root",
                 &NaiveDate::from_ymd(2020, 8, 10).and_hms(23, 59, 59),
                 "localhost",
-                "/bin/bash", &group_hash
+                "/bin/bash",
+                &group_hash
             )
             .unwrap()
             .permit,
@@ -696,7 +748,8 @@ regex=^
                 "root",
                 &NaiveDate::from_ymd(2020, 8, 11).and_hms(0, 0, 0),
                 "localhost",
-                "/bin/bash", &group_hash
+                "/bin/bash",
+                &group_hash
             )
             .unwrap()
             .permit,
@@ -709,7 +762,8 @@ regex=^
                 "root",
                 &NaiveDate::from_ymd(2020, 8, 7).and_hms(0, 0, 0),
                 "localhost",
-                "/bin/bash", &group_hash
+                "/bin/bash",
+                &group_hash
             )
             .unwrap()
             .permit,
@@ -748,7 +802,8 @@ regex=^/bin/bash .*$
                 "oracle",
                 &date,
                 "localhost",
-                "/bin/bash /usr/local/oracle/backup_script", &group_hash
+                "/bin/bash /usr/local/oracle/backup_script",
+                &group_hash
             )
             .unwrap()
             .permit,
@@ -761,7 +816,8 @@ regex=^/bin/bash .*$
                 "oracle",
                 &date,
                 "localhost",
-                "/bin/sh /usr/local/oracle/backup_script", &group_hash
+                "/bin/sh /usr/local/oracle/backup_script",
+                &group_hash
             )
             .unwrap()
             .permit,
@@ -774,7 +830,8 @@ regex=^/bin/bash .*$
                 "oracle",
                 &date,
                 "web1",
-                "/bin/sh /usr/local/oracle/backup_script", &group_hash
+                "/bin/sh /usr/local/oracle/backup_script",
+                &group_hash
             )
             .unwrap()
             .permit,
@@ -787,7 +844,8 @@ regex=^/bin/bash .*$
                 "oracle",
                 &date,
                 "",
-                "/bin/sh /usr/local/oracle/backup_script", &group_hash
+                "/bin/sh /usr/local/oracle/backup_script",
+                &group_hash
             )
             .unwrap()
             .permit,
@@ -800,7 +858,8 @@ regex=^/bin/bash .*$
                 "grid",
                 &date,
                 "",
-                "/bin/bash /usr/local/oracle/backup_script", &group_hash
+                "/bin/bash /usr/local/oracle/backup_script",
+                &group_hash
             )
             .unwrap()
             .permit,
@@ -813,7 +872,8 @@ regex=^/bin/bash .*$
                 "root",
                 &date,
                 "",
-                "/bin/bash /usr/local/oracle/backup_script", &group_hash
+                "/bin/bash /usr/local/oracle/backup_script",
+                &group_hash
             )
             .unwrap()
             .permit,
@@ -844,7 +904,8 @@ regex=^/bin/bash.*$
                 "oracle",
                 &date,
                 "localhost",
-                "/bin/bash /usr/local/oracle/backup_script", &group_hash
+                "/bin/bash /usr/local/oracle/backup_script",
+                &group_hash
             )
             .unwrap()
             .permit,
@@ -857,7 +918,8 @@ regex=^/bin/bash.*$
                 "oracle",
                 &date,
                 "localhost",
-                "/bin/sh /usr/local/oracle/backup_script", &group_hash
+                "/bin/sh /usr/local/oracle/backup_script",
+                &group_hash
             )
             .unwrap()
             .permit,
@@ -870,7 +932,8 @@ regex=^/bin/bash.*$
                 "oracle",
                 &date,
                 "web1",
-                "/bin/sh /usr/local/oracle/backup_script", &group_hash
+                "/bin/sh /usr/local/oracle/backup_script",
+                &group_hash
             )
             .unwrap()
             .permit,
@@ -883,7 +946,8 @@ regex=^/bin/bash.*$
                 "oracle",
                 &date,
                 "",
-                "/bin/sh /usr/local/oracle/backup_script", &group_hash
+                "/bin/sh /usr/local/oracle/backup_script",
+                &group_hash
             )
             .unwrap()
             .permit,
@@ -896,7 +960,8 @@ regex=^/bin/bash.*$
                 "grid",
                 &date,
                 "",
-                "/bin/bash /usr/local/oracle/backup_script", &group_hash
+                "/bin/bash /usr/local/oracle/backup_script",
+                &group_hash
             )
             .unwrap()
             .permit,
@@ -909,7 +974,8 @@ regex=^/bin/bash.*$
                 "root",
                 &date,
                 "",
-                "/bin/bash /usr/local/oracle/backup_script", &group_hash
+                "/bin/bash /usr/local/oracle/backup_script",
+                &group_hash
             )
             .unwrap()
             .permit,
@@ -946,7 +1012,8 @@ regex=^/bin/sh.*$
                 "oracle",
                 &date,
                 "localhost",
-                "/bin/bash /usr/local/oracle/backup_script", &group_hash
+                "/bin/bash /usr/local/oracle/backup_script",
+                &group_hash
             )
             .unwrap()
             .permit,
@@ -959,7 +1026,8 @@ regex=^/bin/sh.*$
                 "oracle",
                 &date,
                 "web1",
-                "/bin/bash /usr/local/oracle/backup_script", &group_hash
+                "/bin/bash /usr/local/oracle/backup_script",
+                &group_hash
             )
             .unwrap()
             .permit,
@@ -972,7 +1040,8 @@ regex=^/bin/sh.*$
                 "oracle",
                 &date,
                 "web2",
-                "/bin/bash /usr/local/oracle/backup_script", &group_hash
+                "/bin/bash /usr/local/oracle/backup_script",
+                &group_hash
             )
             .unwrap()
             .permit,
@@ -986,7 +1055,8 @@ regex=^/bin/sh.*$
                 "oracle",
                 &date,
                 "localhost",
-                "/bin/sh /usr/local/oracle/backup_script", &group_hash
+                "/bin/sh /usr/local/oracle/backup_script",
+                &group_hash
             )
             .unwrap()
             .permit,
@@ -999,7 +1069,8 @@ regex=^/bin/sh.*$
                 "oracle",
                 &date,
                 "web1",
-                "/bin/sh /usr/local/oracle/backup_script", &group_hash
+                "/bin/sh /usr/local/oracle/backup_script",
+                &group_hash
             )
             .unwrap()
             .permit,
@@ -1012,7 +1083,8 @@ regex=^/bin/sh.*$
                 "oracle",
                 &date,
                 "web2",
-                "/bin/sh /usr/local/oracle/backup_script", &group_hash
+                "/bin/sh /usr/local/oracle/backup_script",
+                &group_hash
             )
             .unwrap()
             .permit,
@@ -1042,7 +1114,8 @@ regex=^/bin/sh\\b.*$
                 "oracle",
                 &date,
                 "localhost",
-                "/bin/sh /usr/local/oracle/backup_script", &group_hash
+                "/bin/sh /usr/local/oracle/backup_script",
+                &group_hash
             )
             .unwrap()
             .permit,
@@ -1068,9 +1141,17 @@ regex=^
         let group_hash: HashMap<String, u32> = HashMap::new();
 
         assert_eq!(
-            can_run(&vec_eo, "ed", "oracle", &date, "localhost", "/bin/bash", &group_hash)
-                .unwrap()
-                .permit,
+            can_run(
+                &vec_eo,
+                "ed",
+                "oracle",
+                &date,
+                "localhost",
+                "/bin/bash",
+                &group_hash
+            )
+            .unwrap()
+            .permit,
             true
         );
     }
@@ -1102,7 +1183,8 @@ edit=true ^/etc/hosts$
 user=m{}
 target=^
 edit=true
-regex = ^".to_string();
+regex = ^"
+            .to_string();
 
         let date: NaiveDateTime = NaiveDate::from_ymd(2020, 1, 1).and_hms(0, 0, 0);
 
@@ -1117,7 +1199,8 @@ regex = ^".to_string();
                 "root",
                 &date,
                 "localhost",
-                "/etc/apache/httpd2.conf", &group_hash
+                "/etc/apache/httpd2.conf",
+                &group_hash
             )
             .unwrap()
             .permit,
@@ -1131,7 +1214,8 @@ regex = ^".to_string();
 [ed]
 user=ed
 target=root
-regex =^/bin/cat /etc/%\\{USER\\}".to_string();
+regex =^/bin/cat /etc/%{USER}"
+            .to_string();
 
         let date: NaiveDateTime = NaiveDate::from_ymd(2020, 1, 1).and_hms(0, 0, 0);
 
@@ -1140,10 +1224,32 @@ regex =^/bin/cat /etc/%\\{USER\\}".to_string();
         let group_hash: HashMap<String, u32> = HashMap::new();
 
         assert_eq!(
-            can_run(&vec_eo, "ed", "root", &date, "localhost", "/bin/cat /etc/ed", &group_hash)
-                .unwrap()
-                .permit,
+            can_run(
+                &vec_eo,
+                "ed",
+                "root",
+                &date,
+                "localhost",
+                "/bin/cat /etc/ed",
+                &group_hash
+            )
+            .unwrap()
+            .permit,
             true
+        );
+        assert_eq!(
+            can_run(
+                &vec_eo,
+                "ned",
+                "root",
+                &date,
+                "localhost",
+                "/bin/cat /etc/ed",
+                &group_hash
+            )
+            .unwrap()
+            .permit,
+            false
         );
     }
 
@@ -1155,7 +1261,8 @@ regex =^/bin/cat /etc/%\\{USER\\}".to_string();
 [ed]
 user=ed
 target=root
-regex = ^/bin/cat /etc/(".to_string();
+regex = ^/bin/cat /etc/("
+            .to_string();
 
         assert_eq!(read_ini_config_str(&config, &mut vec_eo, "ed", true), true);
 
@@ -1164,7 +1271,8 @@ regex = ^/bin/cat /etc/(".to_string();
 [ed]
 user=ed
 target=root
-regex = ^/bin/cat /etc/".to_string();
+regex = ^/bin/cat /etc/"
+            .to_string();
 
         assert_eq!(read_ini_config_str(&config, &mut vec_eo, "ed", true), false);
     }
@@ -1187,12 +1295,22 @@ regex = ^.*$"
         read_ini_config_str(&config, &mut vec_eo, "ed", false);
 
         let mut group_hash: HashMap<String, u32> = HashMap::new();
-        group_hash.insert(String::from("users"),1);
-        assert_eq!( can_run( &vec_eo, "ed", "root", &date, "localhost", "", &group_hash ).unwrap().permit, true );
+        group_hash.insert(String::from("users"), 1);
+        assert_eq!(
+            can_run(&vec_eo, "ed", "root", &date, "localhost", "", &group_hash)
+                .unwrap()
+                .permit,
+            true
+        );
 
         let mut group_hash: HashMap<String, u32> = HashMap::new();
-        group_hash.insert(String::from("wwwadm"),1);
-        assert_eq!( can_run( &vec_eo, "ed", "root", &date, "localhost", "", &group_hash ).unwrap().permit, false );
+        group_hash.insert(String::from("wwwadm"), 1);
+        assert_eq!(
+            can_run(&vec_eo, "ed", "root", &date, "localhost", "", &group_hash)
+                .unwrap()
+                .permit,
+            false
+        );
     }
 
     #[test]
@@ -1232,7 +1350,8 @@ user=ben
 permit=true
 list=true 
 regex = ^(eng|dba|net)ops$
-".to_string();
+"
+        .to_string();
 
         let date: NaiveDateTime = NaiveDate::from_ymd(2020, 1, 1).and_hms(0, 0, 0);
 
@@ -1240,14 +1359,255 @@ regex = ^(eng|dba|net)ops$
         read_ini_config_str(&config, &mut vec_eo, "ed", false);
         let group_hash: HashMap<String, u32> = HashMap::new();
 
-        assert_eq!( can_list( &vec_eo, "ed", "root", &date, "localhost", "", &group_hash ).unwrap().permit, true );
-        assert_eq!( can_list( &vec_eo, "meh", "ed", &date, "localhost", "", &group_hash ).unwrap().permit, true );
-        assert_eq!( can_list( &vec_eo, "meh", "bob", &date, "localhost", "", &group_hash ).unwrap().permit, false );
-        assert_eq!( can_list( &vec_eo, "meh", "root", &date, "localhost", "", &group_hash ).unwrap().permit, false );
-        assert_eq!( can_list( &vec_eo, "bob", "ed", &date, "localhost", "", &group_hash ).unwrap().permit, false );
-        assert_eq!( can_list( &vec_eo, "ben", "dbaops", &date, "localhost", "" , &group_hash).unwrap().permit, true );
-        assert_eq!( can_list( &vec_eo, "ben", "engops", &date, "localhost", "" , &group_hash).unwrap().permit, true );
-        assert_eq!( can_list( &vec_eo, "ben", "netops", &date, "localhost", "", &group_hash ).unwrap().permit, true );
-        assert_eq!( can_list( &vec_eo, "ben", "wwwops", &date, "localhost", "" , &group_hash).unwrap().permit, false );
+        assert_eq!(
+            can_list(&vec_eo, "ed", "root", &date, "localhost", "", &group_hash)
+                .unwrap()
+                .permit,
+            true
+        );
+        assert_eq!(
+            can_list(&vec_eo, "meh", "ed", &date, "localhost", "", &group_hash)
+                .unwrap()
+                .permit,
+            true
+        );
+        assert_eq!(
+            can_list(&vec_eo, "meh", "bob", &date, "localhost", "", &group_hash)
+                .unwrap()
+                .permit,
+            false
+        );
+        assert_eq!(
+            can_list(&vec_eo, "meh", "root", &date, "localhost", "", &group_hash)
+                .unwrap()
+                .permit,
+            false
+        );
+        assert_eq!(
+            can_list(&vec_eo, "bob", "ed", &date, "localhost", "", &group_hash)
+                .unwrap()
+                .permit,
+            false
+        );
+        assert_eq!(
+            can_list(
+                &vec_eo,
+                "ben",
+                "dbaops",
+                &date,
+                "localhost",
+                "",
+                &group_hash
+            )
+            .unwrap()
+            .permit,
+            true
+        );
+        assert_eq!(
+            can_list(
+                &vec_eo,
+                "ben",
+                "engops",
+                &date,
+                "localhost",
+                "",
+                &group_hash
+            )
+            .unwrap()
+            .permit,
+            true
+        );
+        assert_eq!(
+            can_list(
+                &vec_eo,
+                "ben",
+                "netops",
+                &date,
+                "localhost",
+                "",
+                &group_hash
+            )
+            .unwrap()
+            .permit,
+            true
+        );
+        assert_eq!(
+            can_list(
+                &vec_eo,
+                "ben",
+                "wwwops",
+                &date,
+                "localhost",
+                "",
+                &group_hash
+            )
+            .unwrap()
+            .permit,
+            false
+        );
     }
+
+    #[test]
+    fn test_edit_regression() {
+        let config = "
+[www-data-bio]
+name = root
+group = true
+permit = true
+edit = true
+require_pass = false
+regex = ^/var/www/html/%{USER}.html"
+            .to_string();
+
+        let date: NaiveDateTime = NaiveDate::from_ymd(2020, 1, 1).and_hms(0, 0, 0);
+
+        let mut vec_eo: Vec<EnvOptions> = vec![];
+        read_ini_config_str(&config, &mut vec_eo, "ed", false);
+        let group_hash: HashMap<String, u32> = HashMap::new();
+
+        assert_eq!(
+            can_edit(&vec_eo, "ed", "root", &date, "localhost", "/etc/please.ini", &group_hash)
+                .unwrap()
+                .permit,
+            false
+        );
+
+        let mut group_hash: HashMap<String, u32> = HashMap::new();
+        group_hash.insert(String::from("root"), 1);
+        assert_eq!(
+            can_edit(&vec_eo, "ed", "root", &date, "localhost", "/etc/please.ini", &group_hash)
+                .unwrap()
+                .permit,
+            false
+        );
+
+        let mut group_hash: HashMap<String, u32> = HashMap::new();
+        group_hash.insert(String::from("root"), 1);
+        assert_eq!(
+            can_edit(&vec_eo, "ed", "root", &date, "localhost", "/var/www/html/ed.html", &group_hash)
+                .unwrap()
+                .permit,
+            true
+        );
+
+        let mut group_hash: HashMap<String, u32> = HashMap::new();
+        group_hash.insert(String::from("root"), 1);
+        assert_eq!(
+            can_edit(&vec_eo, "ed", "root", &date, "localhost", "/var/www/html/%{USER}.html", &group_hash)
+                .unwrap()
+                .permit,
+            false
+        );
+
+        let mut group_hash: HashMap<String, u32> = HashMap::new();
+        group_hash.insert(String::from("wwwadm"), 1);
+        assert_eq!(
+            can_edit(&vec_eo, "ed", "root", &date, "localhost", "", &group_hash)
+                .unwrap()
+                .permit,
+            false
+        );
+    }
+
+    #[test]
+    fn test_edit_user_expansion() {
+        let config = "
+[www-data-bio]
+name = root
+group = true
+permit = true
+edit = true
+require_pass = false
+regex = ^/var/www/html/%\\{USER\\}.html$"
+            .to_string();
+        let mut vec_eo: Vec<EnvOptions> = vec![];
+        read_ini_config_str(&config, &mut vec_eo, "ed", false);
+
+        let date: NaiveDateTime = NaiveDate::from_ymd(2020, 1, 1).and_hms(0, 0, 0);
+        let mut group_hash: HashMap<String, u32> = HashMap::new();
+        assert_eq!( vec_eo.iter().next().unwrap().rule.as_str(), "^/var/www/html/ed.html$" );
+
+        group_hash.insert(String::from("root"), 1);
+        assert_eq!(
+            can_edit(&vec_eo, "ed", "root", &date, "localhost", "/var/www/html/ed.html", &group_hash)
+                .unwrap()
+                .permit,
+            true
+        );
+    }
+
+    #[test]
+    fn test_edit_user_expansion_unescaped() {
+        let config = "
+[www-data-bio]
+name = root
+group = true
+permit = true
+edit = true
+require_pass = false
+regex = ^/var/www/html/%{USER}.html$"
+            .to_string();
+        let mut vec_eo: Vec<EnvOptions> = vec![];
+        read_ini_config_str(&config, &mut vec_eo, "ed", false);
+
+        let date: NaiveDateTime = NaiveDate::from_ymd(2020, 1, 1).and_hms(0, 0, 0);
+        let mut group_hash: HashMap<String, u32> = HashMap::new();
+        assert_eq!( vec_eo.iter().next().unwrap().rule.as_str(), "^/var/www/html/ed.html$" );
+
+        group_hash.insert(String::from("root"), 1);
+        assert_eq!(
+            can_edit(&vec_eo, "ed", "root", &date, "localhost", "/var/www/html/ed.html", &group_hash)
+                .unwrap()
+                .permit,
+            true
+        );
+    }
+
+    #[test]
+    fn test_edit_user_expansion_unbalanced_escapes() {
+        let config = "
+[www-data-bio]
+name = root
+group = true
+permit = true
+edit = true
+require_pass = false
+regex = ^/var/www/html/%{USER\\}.html$"
+            .to_string();
+        let mut vec_eo: Vec<EnvOptions> = vec![];
+        read_ini_config_str(&config, &mut vec_eo, "ed", false);
+
+        let date: NaiveDateTime = NaiveDate::from_ymd(2020, 1, 1).and_hms(0, 0, 0);
+        let mut group_hash: HashMap<String, u32> = HashMap::new();
+        assert_eq!( vec_eo.iter().next().unwrap().rule.as_str(), "^/var/www/html/ed.html$" );
+
+        group_hash.insert(String::from("root"), 1);
+        assert_eq!(
+            can_edit(&vec_eo, "ed", "root", &date, "localhost", "/var/www/html/ed.html", &group_hash)
+                .unwrap()
+                .permit,
+            true
+        );
+    }
+
+
+
+    #[test]
+    fn test_edit_regression_empty() {
+        let mut vec_eo: Vec<EnvOptions> = vec![];
+        let config = "".to_string();
+        read_ini_config_str(&config, &mut vec_eo, "ed", false);
+
+        let date: NaiveDateTime = NaiveDate::from_ymd(2020, 1, 1).and_hms(0, 0, 0);
+        let group_hash: HashMap<String, u32> = HashMap::new();
+        assert_eq!(
+            can_edit(&vec_eo, "ed", "root", &date, "localhost", "/etc/please.ini", &group_hash)
+                .unwrap()
+                .permit,
+            false
+        );
+
+    }
+
+
 }

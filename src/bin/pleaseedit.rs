@@ -15,7 +15,10 @@
 //    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 use chrono::Utc;
-use pleaser::util::{can_edit, challenge_password, get_editor, read_ini_config_file, log_action, EnvOptions, group_hash};
+use pleaser::util::{
+    can_edit, challenge_password, get_editor, group_hash, log_action, read_ini_config_file,
+    EnvOptions,
+};
 
 use std::fs::*;
 use std::os::unix::process::CommandExt;
@@ -116,9 +119,12 @@ fn main() {
     let original_user = get_user_by_uid(original_uid).unwrap();
     let original_gid = original_user.primary_group_id();
     let user = original_user.name().to_string_lossy();
-    let group_hash = group_hash( original_user.groups().unwrap() );
+    let group_hash = group_hash(original_user.groups().unwrap());
 
-    read_ini_config_file("/etc/please.ini", &mut vec_eo, &user, true);
+    if read_ini_config_file("/etc/please.ini", &mut vec_eo, &user, true) {
+        println!("Exiting due to error");
+        std::process::exit(1);
+    }    
 
     let date = Utc::now().naive_utc();
     let mut buf = [0u8; 64];
@@ -126,11 +132,25 @@ fn main() {
         .expect("Failed getting hostname")
         .to_str()
         .expect("Hostname wasn't valid UTF-8");
-    let entry = can_edit(&mut vec_eo, &user, &target, &date, &hostname, &new_args.join(" "), &group_hash );
+    let entry = can_edit(
+        &vec_eo,
+        &user,
+        &target,
+        &date,
+        &hostname,
+        &new_args.join(" "),
+        &group_hash,
+    );
 
     match &entry {
         Err(_) => {
-            log_action( &service, "deny", &user, &target, &original_command.join(" ") );
+            log_action(
+                &service,
+                "deny",
+                &user,
+                &target,
+                &original_command.join(" "),
+            );
             println!(
                 "You may not edit \"{}\" on {} as {}",
                 new_args.join(" "),
@@ -141,7 +161,13 @@ fn main() {
         }
         Ok(x) => {
             if !x.permit {
-                log_action( &service, "deny", &user, &target, &original_command.join(" ") );
+                log_action(
+                    &service,
+                    "deny",
+                    &user,
+                    &target,
+                    &original_command.join(" "),
+                );
                 println!(
                     "You may not edit \"{}\" on {} as {}",
                     new_args.join(" "),
@@ -154,7 +180,13 @@ fn main() {
     }
 
     if !challenge_password(user.to_string(), entry.clone().unwrap(), &service) {
-        log_action( &service, "deny", &user, &target, &original_command.join(" ") );
+        log_action(
+            &service,
+            "deny",
+            &user,
+            &target,
+            &original_command.join(" "),
+        );
         return;
     }
 
@@ -198,7 +230,13 @@ fn main() {
         return;
     }
 
-    log_action( &service, "permit", &user, &target, &original_command.join(" ") );
+    log_action(
+        &service,
+        "permit",
+        &user,
+        &target,
+        &original_command.join(" "),
+    );
     let dir_parent_tmp = format!("{}.{}.{}", source_file.to_str().unwrap(), service, user);
     std::fs::copy(edit_file, dir_parent_tmp.as_str()).unwrap();
 
