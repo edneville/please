@@ -453,16 +453,23 @@ pub fn log_action( service: &str, result: &str, user: &str, target: &str, comman
         process: service.into(),
         pid: process::id() as i32,
     };
-
-    let ttyname;
+    let mut ttyname = "failed";
     
+    /* sometimes a tty isn't attached for all pipes FIXME: make this testable */
     unsafe {
-        let ptr = libc::ttyname(0);
-        match CStr::from_ptr(ptr).to_str() {
-            Err(_x) => ttyname = "failed",
-            Ok(x) => ttyname = x,
+        for n in 0..3 {
+            let ptr = libc::ttyname(n);
+            if ptr.is_null() {
+                continue;
+            }
+
+            match CStr::from_ptr(ptr).to_str() {
+                Err(_x) => ttyname = "failed",
+                Ok(x) => ttyname = x,
+            }
+            break;
         }
-    };
+    }
 
     match syslog::unix(formatter) {
         Err(e) => println!("impossible to connect to syslog: {:?}", e),
@@ -470,7 +477,6 @@ pub fn log_action( service: &str, result: &str, user: &str, target: &str, comman
             writer.err(format!("user={} tty={} action={} target={} command={}", user, ttyname, result, target, command)).expect("could not write error message");
         }
     }
-
     false
 }
 

@@ -48,7 +48,7 @@ Using an anchor (`^`) for the regex field will be as good as saying the rule sho
 
 ```
 $ please /bin/bash
-#
+root#
 ```
 
 Or to execute as a user other than `root`, such as `postgres`:
