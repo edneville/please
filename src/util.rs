@@ -15,8 +15,8 @@ use users::*;
 pub struct EnvOptions {
     pub name: String,
     pub rule: Regex,
-    pub not_before: NaiveDateTime,
-    pub not_after: NaiveDateTime,
+    pub notbefore: Option<NaiveDateTime>,
+    pub notafter: Option<NaiveDateTime>,
     pub target: String,
     pub hostname: String,
     pub permit: bool,
@@ -35,8 +35,12 @@ impl EnvOptions {
             name: String::from(""),
             rule: Regex::new(&"").unwrap(),
             target: "root".to_string(),
-            not_before: NaiveDate::from_ymd(1970, 1, 1).and_hms(0, 0, 0),
-            not_after: NaiveDate::from_ymd(2038, 1, 19).and_hms(3, 14, 7),
+            /*
+            notbefore: Option::Some(NaiveDate::from_ymd(1970, 1, 1).and_hms(0, 0, 0)),
+            notafter: Option::Some(NaiveDate::from_ymd(2038, 1, 19).and_hms(3, 14, 7)),
+            */
+            notbefore: None,
+            notafter: None,
             hostname: "localhost".to_string(),
             env_list: vec![],
             file_name: "".to_string(),
@@ -106,21 +110,21 @@ pub fn read_ini(
                 }
 
                 "notbefore" if v.len() == 8 => {
-                    opt.not_before = parse_date_from_str(&v.to_string(), "%Y%m%d")
+                    opt.notbefore = Some(parse_date_from_str(&v.to_string(), "%Y%m%d")
                         .unwrap()
-                        .and_hms(0, 0, 0)
+                        .and_hms(0, 0, 0))
                 }
                 "notafter" if v.len() == 8 => {
-                    opt.not_after = parse_date_from_str(&v.to_string(), "%Y%m%d")
+                    opt.notafter = Some(parse_date_from_str(&v.to_string(), "%Y%m%d")
                         .unwrap()
-                        .and_hms(23, 59, 59)
+                        .and_hms(23, 59, 59))
                 }
                 "notbefore" if v.len() == 14 => {
-                    opt.not_before =
-                        parse_datetime_from_str(&v.to_string(), "%Y%m%d%H%M%S").unwrap()
+                    opt.notbefore =
+                        Some( parse_datetime_from_str(&v.to_string(), "%Y%m%d%H%M%S").unwrap())
                 }
                 "notafter" if v.len() == 14 => {
-                    opt.not_after = parse_datetime_from_str(&v.to_string(), "%Y%m%d%H%M%S").unwrap()
+                    opt.notafter = Some(parse_datetime_from_str(&v.to_string(), "%Y%m%d%H%M%S").unwrap())
                 }
 
                 &_ => {
@@ -259,12 +263,12 @@ pub fn can(
 
     for item in vec_eo {
         //println!("{}:", item.section);
-        if item.not_before > *date {
+        if item.notbefore.is_some() && item.notbefore.unwrap() > *date {
             //println!("{}: now is before date", item.section);
             continue;
         }
 
-        if item.not_after < *date {
+        if item.notafter.is_some() && item.notafter.unwrap() < *date {
             //println!("{}: now is after date", item.section);
             continue;
         }
@@ -406,12 +410,12 @@ pub fn list(
         }
 
         let mut prefixes = vec![];
-        if item.not_before > *date {
-            prefixes.push(format!("upcomming({})", item.not_before));
+        if item.notbefore.is_some() && item.notbefore.unwrap() > *date {
+            prefixes.push(format!("upcomming({})", item.notbefore.unwrap()));
         }
 
-        if item.not_after < *date {
-            prefixes.push(format!("expired({})", item.not_after));
+        if item.notafter.is_some() && item.notafter.unwrap() < *date {
+            prefixes.push(format!("expired({})", item.notafter.unwrap()));
         }
 
         if item.edit != edit {

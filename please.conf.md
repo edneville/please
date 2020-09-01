@@ -27,8 +27,8 @@ The properties in ini permitted are as follows:
  * rule=regex, mandatory, is the regular expression that applies to this section
  * list=[true|false], defaults to false
  * edit=[true|false], defaults to false
- * notbefore=[YYYYmmdd|YYYYmmddHHMMSS], defaults to 19700101000000
- * notafter=[YYYYmmdd|YYYYmmddHHMMSS], defaults to 20380119031417, because this isn't version 0.3.0 yet
+ * notbefore=[YYYYmmdd|YYYYmmddHHMMSS], defaults to never
+ * notafter=[YYYYmmdd|YYYYmmddHHMMSS], defaults to never
  * group=[true|false] user, when true name refers to a group rather than a user
 
 `regex` is a regular expression.
