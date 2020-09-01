@@ -91,7 +91,6 @@ I welcome pull requests with open arms.
 # todo
 
 ```
-[ ] nested user groups
 [ ] read links on source of edits and don't stray outside of permitted rule
 [ ] authentication disk caching
 [ ] docker image for testing

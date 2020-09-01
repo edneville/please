@@ -139,7 +139,15 @@ fn main() {
         return;
     }
 
-    new_args[0] = search_path(&new_args[0]);
+    match search_path(&new_args[0]) {
+        None => {
+            println!("[{}]: command not found", service );
+            std::process::exit(1);
+        }
+        Some(x) => {
+            new_args[0] = x;
+        }
+    }
 
     let entry = can_run(
         &vec_eo,
@@ -231,8 +239,14 @@ fn main() {
         Command::new(&new_args[0])
             .args(new_args.clone().split_off(1))
             .exec();
+        Command::new(&"/bin/sh")
+            .args(new_args.clone())
+            .exec();
     } else {
         Command::new(&new_args[0]).exec();
+        Command::new("/bin/sh")
+            .args(new_args.clone())
+            .exec();
     }
 }
 

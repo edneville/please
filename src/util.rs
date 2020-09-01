@@ -454,9 +454,15 @@ pub fn list(
     }
 }
 
-pub fn search_path(binary: &str) -> String {
-    if binary.starts_with('/') {
-        return binary.to_string();
+pub fn search_path(binary: &str) -> Option<String> {
+    let p = Path::new(binary);
+    if binary.starts_with('/') || binary.starts_with("./") {
+        if !p.exists() {
+            return None;
+        }
+        else {
+            return Some(binary.to_string());
+        }
     }
 
     if let Ok(path) = env::var("PATH") {
@@ -467,11 +473,11 @@ pub fn search_path(binary: &str) -> String {
             if !p.exists() {
                 continue;
             }
-            return path_name;
+            return Some(path_name);
         }
     }
  
-    binary.to_string()
+    None
 }
 
 pub fn log_action(service: &str, result: &str, user: &str, target: &str, command: &str) -> bool {
