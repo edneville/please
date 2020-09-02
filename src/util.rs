@@ -13,12 +13,12 @@ use users::*;
 
 #[derive(Clone)]
 pub struct EnvOptions {
-    pub name: String,
+    pub name: Regex,
     pub rule: Regex,
     pub notbefore: Option<NaiveDateTime>,
     pub notafter: Option<NaiveDateTime>,
-    pub target: String,
-    pub hostname: String,
+    pub target: Regex,
+    pub hostname: Regex,
     pub permit: bool,
     pub require_pass: bool,
     pub env_list: Vec<String>,
@@ -32,16 +32,16 @@ pub struct EnvOptions {
 impl EnvOptions {
     fn new() -> EnvOptions {
         EnvOptions {
-            name: String::from(""),
-            rule: Regex::new(&"").unwrap(),
-            target: "root".to_string(),
+            name: Regex::new(&"^$").unwrap(),
+            rule: Regex::new(&"^$").unwrap(),
+            target: Regex::new(&"root").unwrap(),
             /*
             notbefore: Option::Some(NaiveDate::from_ymd(1970, 1, 1).and_hms(0, 0, 0)),
             notafter: Option::Some(NaiveDate::from_ymd(2038, 1, 19).and_hms(3, 14, 7)),
             */
             notbefore: None,
             notafter: None,
-            hostname: "localhost".to_string(),
+            hostname: Regex::new(&"localhost").unwrap(),
             env_list: vec![],
             file_name: "".to_string(),
             section: "".to_string(),
@@ -56,10 +56,19 @@ impl EnvOptions {
         let mut opt = EnvOptions::new();
         opt.permit = false;
         opt.rule = Regex::new(".").unwrap();
-        opt.target = "".to_string();
+        opt.target = Regex::new("^$").unwrap();
         opt.edit = true;
         opt
     }
+}
+
+fn regex_build( v: &str, user: &str, config_path: &str, section: &str ) -> Option<Regex> {
+    let rule = Regex::new( &format!("^{}$", &v.to_string().replace("%{USER}", &user) ));
+    if rule.is_err() {
+        println!( "Error parsing {}:{}, {}", config_path, section, v.to_string());
+        return None;
+    }
+    Some(rule.unwrap())
 }
 
 pub fn read_ini(
@@ -84,29 +93,50 @@ pub fn read_ini(
         opt.section = section.clone();
         for (k, v) in prop.iter() {
             match k.as_ref() {
-                "name" => opt.name = v.to_string(),
-                "user" => opt.name = v.to_string(),
-                "hostname" => opt.hostname = v.to_string(),
-                "target" => opt.target = v.to_string(),
+                "name" | "user" => {
+                    match regex_build(v, user, config_path, &section) {
+                        Some(check) => {
+                            opt.name = check;
+                        },
+                        None => {
+                            faulty = true;
+                        }
+                    }
+                },
+                "hostname" => {
+                    match regex_build(v, user, config_path, &section) {
+                        Some(check) => {
+                            opt.hostname = check;
+                        },
+                        None => {
+                            faulty = true;
+                        }
+                    }
+                },
+                "target" => {
+                    match regex_build(v, user, config_path, &section) {
+                        Some(check) => {
+                            opt.target = check;
+                        },
+                        None => {
+                            faulty = true;
+                        }
+                    }
+                },
                 "permit" => opt.permit = v == "true",
                 "require_pass" => opt.require_pass = v != "false",
                 "edit" => opt.edit = v == "true",
                 "list" => opt.list = v == "true",
                 "group" => opt.group = v == "true",
                 "regex" => {
-                    // println!("{}",v.to_string());
-                    let rule = Regex::new(&v.to_string().replace("%{USER}", &user));
-                    if rule.is_err() {
-                        println!(
-                            "Error parsing {}:{}, {}",
-                            config_path,
-                            section,
-                            v.to_string()
-                        );
-                        faulty = true;
-                        continue;
+                    match regex_build(v, user, config_path, &section) {
+                        Some(check) => {
+                            opt.rule = check;
+                        },
+                        None => {
+                            faulty = true;
+                        }
                     }
-                    opt.rule = rule.unwrap();
                 }
 
                 "notbefore" if v.len() == 8 => {
@@ -272,15 +302,24 @@ pub fn can(
             //println!("{}: now is after date", item.section);
             continue;
         }
-
-        if !item.group && item.name != user {
+        if !item.group && !item.name.is_match(user) {
             //println!("{}: not name match", item.section);
             continue;
         }
 
-        if item.group && group_list.get(&item.name).is_none() {
-            //println!("{}: group name mismatch, {} != {}", item.section, item.group, item.name );
-            continue;
+        if item.group {
+            let mut found = false;
+            for (k,_) in group_list.iter() {
+                if item.name.is_match(&k) {
+                    //println!("{}: {} matches group {}", item.section,item.name, k);
+                    found = true;
+                    break;
+                }
+            }
+            if !found {
+                //println!("{}: did not find a group name match",item.section);
+                continue;
+            }
         }
 
         if item.list != command_list {
@@ -293,8 +332,7 @@ pub fn can(
             continue;
         }
 
-        // println!("can test {} {}", item.hostname, hostname );
-        if item.hostname != hostname && item.hostname != "any" && item.hostname != "localhost" {
+        if !item.hostname.is_match(hostname) && !item.hostname.is_match("any") && !item.hostname.is_match("localhost") {
             //println!("{}: hostname mismatch", item.section);
             continue;
         }
@@ -305,7 +343,7 @@ pub fn can(
                 opt = item.clone();
             }
         } else {
-            if item.target != target {
+            if !item.target.is_match(target) {
                 //println!("{}: item target {} != target {}", item.section, item.target, target);
                 continue;
             }
@@ -313,11 +351,11 @@ pub fn can(
                 //println!("{}: item rule is match", item.section);
                 opt = item.clone();
             }
-            //else {
-            //    println!("{}: item rule is not a match", item.section);
-            //}
+            else {
+                //println!("{}: item rule ({}) is not a match for {}", item.section, item.rule, command);
+            }
         }
-        // println!("didn't match");
+        //println!("didn't match");
     }
     Ok(opt)
 }
@@ -401,12 +439,21 @@ pub fn list(
     let mut last_file = "";
 
     for item in vec_eo {
-        if !item.group && item.name != search_user {
+        if !item.group && !item.name.is_match(&search_user) {
             continue;
         }
 
-        if item.group && group_list.get(&item.name).is_none() {
-            continue;
+        if item.group {
+            let mut found = false;
+            for (k,_) in group_list.iter() {
+                if item.name.is_match(&k) {
+                    found = true;
+                    break;
+                }
+            }
+            if found {
+                continue;
+            }
         }
 
         let mut prefixes = vec![];
@@ -426,7 +473,7 @@ pub fn list(
             prefixes.push(String::from("not permitted"));
         }
 
-        if item.hostname != hostname && item.hostname != "any" && item.hostname != "localhost" {
+        if !item.hostname.is_match(hostname) && !item.hostname.is_match("any") && !item.hostname.is_match("localhost") {
             continue;
         }
         let mut prefix = prefixes.join(", ");
@@ -595,9 +642,9 @@ user=ed
 target=root
 regex=^/bin/bash .*$
 [user_all_todo]
-user=m{}
-target=
-regex=^ "
+user=.*
+target=thingy
+regex=^/bin/bash"
             .to_string();
 
         let date: NaiveDateTime = NaiveDate::from_ymd(2019, 12, 31).and_hms(0, 0, 0);
@@ -620,6 +667,21 @@ regex=^ "
             .permit,
             false
         );
+        assert_eq!(
+            can_run(
+                &vec_eo,
+                "gone",
+                "thingy",
+                &date,
+                "localhost",
+                "/bin/bash",
+                &group_hash
+            )
+            .unwrap()
+            .permit,
+            true
+        );
+
     }
 
     #[test]
@@ -701,7 +763,7 @@ user=ed
 target=root
 notbefore=20200808
 notafter=20200810235959
-regex=^
+regex=^.*
     "
         .to_string();
 
@@ -1107,7 +1169,7 @@ regex=^/bin/sh.*$
         let config = "[missing_user]
 target=oracle
 hostname=localhost
-regex=^/bin/sh\\b.*$
+regex=/bin/sh\\b.*
     "
         .to_string();
 
@@ -1140,7 +1202,7 @@ regex=^/bin/sh\\b.*$
 user=ed
 target=oracle
 hostname=localhost
-regex=^
+regex=.*
     "
         .to_string();
 
@@ -1175,19 +1237,19 @@ target=root
 notbefore=20200101
 notafter=20201225
 edit=true
-regex = ^.*$
+regex = .*
 
 [ed_edit_apache]
 user=ed
 target=oracle
 permit=false
 edit=true
-regex = ^/etc/apache.*$
+regex = /etc/apache
 
 [ed_edit_hosts]
 user=ed
 target=root
-edit=true ^/etc/hosts$
+edit=true /etc/hosts
 
 [user_all_todo]
 user=m{}
@@ -1535,7 +1597,7 @@ regex = ^/var/www/html/%\\{USER\\}.html$"
 
         let date: NaiveDateTime = NaiveDate::from_ymd(2020, 1, 1).and_hms(0, 0, 0);
         let mut group_hash: HashMap<String, u32> = HashMap::new();
-        assert_eq!( vec_eo.iter().next().unwrap().rule.as_str(), "^/var/www/html/ed.html$" );
+        assert_eq!( vec_eo.iter().next().unwrap().rule.as_str(), "^^/var/www/html/ed.html$$" );
 
         group_hash.insert(String::from("root"), 1);
         assert_eq!(
@@ -1562,7 +1624,7 @@ regex = ^/var/www/html/%{USER}.html$"
 
         let date: NaiveDateTime = NaiveDate::from_ymd(2020, 1, 1).and_hms(0, 0, 0);
         let mut group_hash: HashMap<String, u32> = HashMap::new();
-        assert_eq!( vec_eo.iter().next().unwrap().rule.as_str(), "^/var/www/html/ed.html$" );
+        assert_eq!( vec_eo.iter().next().unwrap().rule.as_str(), "^^/var/www/html/ed.html$$" );
 
         group_hash.insert(String::from("root"), 1);
         assert_eq!(
@@ -1589,7 +1651,7 @@ regex = ^/var/www/html/%{USER\\}.html$"
 
         let date: NaiveDateTime = NaiveDate::from_ymd(2020, 1, 1).and_hms(0, 0, 0);
         let mut group_hash: HashMap<String, u32> = HashMap::new();
-        assert_eq!( vec_eo.iter().next().unwrap().rule.as_str(), "^/var/www/html/ed.html$" );
+        assert_eq!( vec_eo.iter().next().unwrap().rule.as_str(), "^^/var/www/html/ed.html$$" );
 
         group_hash.insert(String::from("root"), 1);
         assert_eq!(
@@ -1600,7 +1662,44 @@ regex = ^/var/www/html/%{USER\\}.html$"
         );
     }
 
+    #[test]
+    fn test_target_regex() {
+        let config = "
+[ed_target_ot]
+name = .*ot 
+group = true
+target = .*ot 
+permit = true
+require_pass = false
+regex = /bin/bash"
+            .to_string();
+        let mut vec_eo: Vec<EnvOptions> = vec![];
+        read_ini_config_str(&config, &mut vec_eo, "ed", false);
 
+        let date: NaiveDateTime = NaiveDate::from_ymd(2020, 1, 1).and_hms(0, 0, 0);
+        let mut group_hash: HashMap<String, u32> = HashMap::new();
+        assert_eq!( vec_eo.iter().next().unwrap().rule.as_str(), "^/bin/bash$" );
+
+        group_hash.insert(String::from("root"), 1);
+        assert_eq!(
+            can_run(&vec_eo, "ed", "root", &date, "localhost", "/bin/bash", &group_hash)
+                .unwrap()
+                .permit,
+            true
+        );
+        assert_eq!(
+            can_run(&vec_eo, "ed", "moot", &date, "localhost", "/bin/bash", &group_hash)
+                .unwrap()
+                .permit,
+            true
+        );
+        assert_eq!(
+            can_run(&vec_eo, "ed", "woot", &date, "localhost", "/bin/bash", &group_hash)
+                .unwrap()
+                .permit,
+            true
+        );
+    }
 
     #[test]
     fn test_edit_regression_empty() {
@@ -1618,6 +1717,5 @@ regex = ^/var/www/html/%{USER\\}.html$"
         );
 
     }
-
-
 }
+

@@ -36,6 +36,7 @@ fn print_usage(program: &str) {
     println!(" -t [user]: become target user");
     println!(" -c [file]: check config file");
     println!(" -v: display non-current rules");
+    println!("version: 0.3.3");
 }
 
 fn main() {
@@ -201,7 +202,7 @@ fn main() {
         return;
     }
 
-    if !challenge_password(user.to_string(), entry.clone().unwrap(), &service) {
+    if !challenge_password(user.to_string(), entry.unwrap(), &service) {
         log_action(
             &service,
             "deny",
@@ -219,7 +220,7 @@ fn main() {
         &target,
         &original_command.join(" "),
     );
-    let lookup_name = users::get_user_by_name(&entry.unwrap().target).unwrap();
+    let lookup_name = users::get_user_by_name(&target).unwrap();
     let target_uid = nix::unistd::Uid::from_raw(lookup_name.uid());
     let target_gid = nix::unistd::Gid::from_raw(lookup_name.primary_group_id());
 
@@ -240,12 +241,12 @@ fn main() {
             .args(new_args.clone().split_off(1))
             .exec();
         Command::new(&"/bin/sh")
-            .args(new_args.clone())
+            .args(new_args)
             .exec();
     } else {
         Command::new(&new_args[0]).exec();
         Command::new("/bin/sh")
-            .args(new_args.clone())
+            .args(new_args)
             .exec();
     }
 }

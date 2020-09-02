@@ -26,7 +26,7 @@ Next, configure your `/etc/please.ini` similar to this, replace user names with 
 user=ed
 target=root
 permit=true
-regex = ^.*
+regex = .*
 require_pass=false
 ```
 
@@ -35,8 +35,8 @@ The ini format is as follows, multiple arguments are separated by `:`:
 | part           | effect       |
 |----------------|--------------|
 | [section-name] | section name, naming sections may help you later |
-| user=person    | mandatory, apply configuration to this person |
-| target=person  | mandatory in run and edit, become this user   |
+| user=regex     | mandatory, apply configuration to this person |
+| target=regex   | mandatory in run and edit, become this user   |
 | require_pass=[true/false]   | defaults to true, mandatory in run and edit, become this user   |
 | regex=rule     | mandatory, this is the regex for the section |
 | notbefore     | the date, in YYYYmmdd or YYYYmmddHHMMSS when this rule becomes effective |
@@ -44,7 +44,7 @@ The ini format is as follows, multiple arguments are separated by `:`:
 | list=[true/false] | permit listing of users matching the regex rule |
 | edit=[true/false] | permit editing of files matching the regex rule as the target user |
 
-Using an anchor (`^`) for the regex field will be as good as saying the rule should match any command.
+Using a greedy `.*` for the regex field will be as good as saying the rule should match any command. In previous releases there was no anchor (`^` and `$`) however, it seems more sensible to follow `find`'s approach and insist that there are anchors around the regex. This avoids `/bin/bash` matching `/home/user/bin/bash` unless the rule permits something like `/home/%{USER}/bin/bash`.
 
 ```
 $ please /bin/bash

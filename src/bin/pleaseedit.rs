@@ -36,6 +36,7 @@ fn print_usage(program: &str) {
     println!("usage:");
     println!("{} /path/to/file", program);
     println!(" -t [user]: edit as target user");
+    println!("version: 0.3.3");
 }
 
 fn setup_temp_edit_file(
@@ -179,7 +180,7 @@ fn main() {
         }
     }
 
-    if !challenge_password(user.to_string(), entry.clone().unwrap(), &service) {
+    if !challenge_password(user.to_string(), entry.unwrap(), &service) {
         log_action(
             &service,
             "deny",
@@ -190,7 +191,7 @@ fn main() {
         return;
     }
 
-    let lookup_name = users::get_user_by_name(&entry.unwrap().target).unwrap();
+    let lookup_name = users::get_user_by_name(&target).unwrap();
     let source_file = Path::new(&new_args[0]);
 
     let edit_file = &setup_temp_edit_file(&service, source_file, original_uid, original_gid, &user);
@@ -221,13 +222,14 @@ fn main() {
             setuid(nix::unistd::Uid::from_raw(original_uid)).unwrap();
 
             Command::new(editor.as_str()).arg(&edit_file).exec();
+            std::process::exit(1);
         }
         Err(_) => println!("Fork failed"),
     }
 
     if !good_edit {
         println!("Exiting as editor or child did not close cleanly.");
-        return;
+        std::process::exit(1);
     }
 
     log_action(
