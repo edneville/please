@@ -4,8 +4,11 @@ use std::collections::HashMap;
 use std::env;
 use std::ffi::CStr;
 use std::path::Path;
+use std::io::prelude::*;
+use std::fs;
 use std::process;
 use syslog::{Facility, Formatter3164};
+use std::time::SystemTime;
 
 use chrono::{NaiveDate, NaiveDateTime};
 use ini::Ini;
@@ -382,6 +385,10 @@ pub fn get_editor() -> String {
 pub fn challenge_password(user: String, entry: EnvOptions, service: &str) -> bool {
     if entry.require_pass {
         let mut retry_counter = 0;
+        if valid_token(&user) {
+            update_token(&user);
+            return true;
+        }
 
         loop {
             let pass = rpassword::read_password_from_tty(Some(&format!(
@@ -391,6 +398,7 @@ pub fn challenge_password(user: String, entry: EnvOptions, service: &str) -> boo
             .unwrap();
 
             if auth_ok(&user, &pass, &service) {
+                update_token(&user);
                 return true;
             }
             retry_counter += 1;
@@ -527,18 +535,12 @@ pub fn search_path(binary: &str) -> Option<String> {
     None
 }
 
-pub fn log_action(service: &str, result: &str, user: &str, target: &str, command: &str) -> bool {
-    let formatter = Formatter3164 {
-        facility: Facility::LOG_USER,
-        hostname: None,
-        process: service.into(),
-        pid: process::id() as i32,
-    };
+pub fn tty_name() -> String {
     let mut ttyname = "failed";
 
     /* sometimes a tty isn't attached for all pipes FIXME: make this testable */
     unsafe {
-        for n in 0..3 {
+        for n in 0..255 {
             let ptr = libc::ttyname(n);
             if ptr.is_null() {
                 continue;
@@ -552,18 +554,86 @@ pub fn log_action(service: &str, result: &str, user: &str, target: &str, command
         }
     }
 
+    ttyname.to_string()
+}
+
+pub fn log_action(service: &str, result: &str, user: &str, target: &str, command: &str) -> bool {
+    let formatter = Formatter3164 {
+        facility: Facility::LOG_USER,
+        hostname: None,
+        process: service.into(),
+        pid: process::id() as i32,
+    };
     match syslog::unix(formatter) {
         Err(e) => println!("impossible to connect to syslog: {:?}", e),
         Ok(mut writer) => {
             writer
                 .err(format!(
                     "user={} tty={} action={} target={} command={}",
-                    user, ttyname, result, target, command
+                    user, tty_name(), result, target, command
                 ))
                 .expect("could not write error message");
         }
     }
     false
+}
+
+pub fn token_dir() -> String {
+    "/var/run/please/token".to_string()
+}
+
+pub fn token_path( user: &str ) -> String {
+    format!("{}/{}:{}", token_dir(), user, tty_name().replace("/","_"))
+}
+
+pub fn valid_token( user: &str ) -> bool {
+    if !Path::new(&token_dir()).is_dir() {
+        if fs::create_dir_all(&token_dir()).is_err() {
+            return false
+        }
+    }
+
+    match fs::metadata( token_path( user ) ) {
+        Ok(meta) => {
+            match meta.modified() {
+                Ok(t) => {
+                    match SystemTime::now().duration_since( t ) {
+                        Ok(d) => {
+                            if d.as_secs() < 600 {
+                                return true;
+                            }
+                            return false;
+                        }
+                        Err(_e) => { return false; }
+                    }
+                }
+                Err(_e) => { return false; }
+            }
+
+            return false;
+        },
+        Err(_) => { return false; }
+    }
+}
+
+pub fn update_token( user: &str) {
+    if !Path::new(&token_dir()).is_dir() {
+        if fs::create_dir_all(&token_dir()).is_err() {
+            return;
+        }
+    }
+
+    fs::File::create(token_path(&user));
+}
+
+pub fn remove_token( user: &str ) {
+    if !Path::new(&token_dir()).is_dir() {
+        if fs::create_dir_all(&token_dir()).is_err() {
+            return;
+        }
+    }
+
+    fs::remove_file(token_path(&user));
 }
 
 pub fn group_hash(groups: Vec<Group>) -> HashMap<String, u32> {

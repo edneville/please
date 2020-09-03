@@ -92,7 +92,6 @@ I welcome pull requests with open arms.
 
 ```
 [ ] read links on source of edits and don't stray outside of permitted rule
-[ ] authentication disk caching
 [ ] docker image for testing
 [ ] plugins/modules
 [ ] include readpart .d files

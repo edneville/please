@@ -20,8 +20,8 @@ Rules are read and applied in the order they are presented in the configuration 
 
 The properties in ini permitted are as follows:
 
- * name, or user, mandatory
- * target user, defaults to root
+ * name=regex, or user, mandatory
+ * target=regex user, defaults to ^root$
  * permit=[true|false] defaults to true
  * require_pass=[true|false], defaults to true
  * rule=regex, mandatory, is the regular expression that applies to this section
@@ -30,6 +30,7 @@ The properties in ini permitted are as follows:
  * notbefore=[YYYYmmdd|YYYYmmddHHMMSS], defaults to never
  * notafter=[YYYYmmdd|YYYYmmddHHMMSS], defaults to never
  * group=[true|false] user, when true name refers to a group rather than a user
+ * hostname
 
 `regex` is a regular expression.
 
