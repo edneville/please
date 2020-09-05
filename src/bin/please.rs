@@ -16,7 +16,8 @@
 
 use chrono::Utc;
 use pleaser::util::{
-    can_list, can_run, challenge_password, group_hash, list_edit, list_run, log_action,read_ini_config_file, search_path, EnvOptions, valid_token, update_token
+    can_list, can_run, challenge_password, group_hash, list_edit, list_run, log_action,
+    read_ini_config_file, search_path, update_token, valid_token, EnvOptions,
 };
 
 use std::os::unix::process::CommandExt;
@@ -24,13 +25,10 @@ use std::process::Command;
 
 use getopt::prelude::*;
 
-use nix::unistd::{gethostname, setsid, setgid, setgroups, setuid};
+use nix::unistd::{gethostname, setgid, setgroups, setsid, setuid};
 
-use users::*;
-//use users::base::os::unix::UserExt;
 use users::os::unix::UserExt;
-
-// use users::{get_current_uid,get_user_by_name};
+use users::*;
 
 fn print_usage(program: &str) {
     println!("usage:");
@@ -38,7 +36,6 @@ fn print_usage(program: &str) {
     println!(" -l <-t users permissions> <-v>: list permissions");
     println!(" -t [user]: become target user");
     println!(" -c [file]: check config file");
-    println!(" -v: display non-current rules");
     println!("version: 0.3.3");
 }
 
@@ -145,7 +142,7 @@ fn main() {
 
     match search_path(&new_args[0]) {
         None => {
-            println!("[{}]: command not found", service );
+            println!("[{}]: command not found", service);
             std::process::exit(1);
         }
         Some(x) => {
@@ -229,7 +226,14 @@ fn main() {
     let target_gid = nix::unistd::Gid::from_raw(lookup_name.primary_group_id());
 
     for (key, _) in std::env::vars() {
-        if key == "LANGUAGE" || key == "XAUTHORITY" || key == "LANG" || key == "LS_COLORS" || key == "TERM" || key == "DISPLAY" || key == "LOGNAME" {
+        if key == "LANGUAGE"
+            || key == "XAUTHORITY"
+            || key == "LANG"
+            || key == "LS_COLORS"
+            || key == "TERM"
+            || key == "DISPLAY"
+            || key == "LOGNAME"
+        {
             continue;
         }
         std::env::remove_var(key);
@@ -238,19 +242,22 @@ fn main() {
     std::env::set_var("PLEASE_USER", original_user.name());
     std::env::set_var("PLEASE_UID", original_uid.to_string());
     std::env::set_var("PLEASE_GID", original_user.primary_group_id().to_string());
-    std::env::set_var("PLEASE_COMMAND", new_args.join( " " ) );
+    std::env::set_var("PLEASE_COMMAND", new_args.join(" "));
 
     std::env::set_var("SUDO_USER", original_user.name());
     std::env::set_var("SUDO_UID", original_uid.to_string());
     std::env::set_var("SUDO_GID", original_user.primary_group_id().to_string());
-    std::env::set_var("SUDO_COMMAND", new_args.join( " " ) );
+    std::env::set_var("SUDO_COMMAND", new_args.join(" "));
 
-    std::env::set_var("PATH", "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin".to_string());
+    std::env::set_var(
+        "PATH",
+        "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin".to_string(),
+    );
     std::env::set_var("HOME", lookup_name.home_dir().as_os_str());
-    std::env::set_var("MAIL", format!("/var/mail/{}", target) );
-    std::env::set_var("SHELL", lookup_name.shell() );
-    std::env::set_var("USER", &target );
-    std::env::set_var("LOGNAME", &target );
+    std::env::set_var("MAIL", format!("/var/mail/{}", target));
+    std::env::set_var("SHELL", lookup_name.shell());
+    std::env::set_var("USER", &target);
+    std::env::set_var("LOGNAME", &target);
 
     let mut groups: Vec<nix::unistd::Gid> = vec![];
     for x in lookup_name.groups().unwrap() {
@@ -258,7 +265,7 @@ fn main() {
     }
     setgroups(groups.as_slice()).unwrap();
 
-    setsid();
+    setsid().unwrap();
     setgid(target_gid).unwrap();
     setuid(target_uid).unwrap();
 
@@ -266,14 +273,10 @@ fn main() {
         Command::new(&new_args[0])
             .args(new_args.clone().split_off(1))
             .exec();
-        Command::new(&"/bin/sh")
-            .args(new_args)
-            .exec();
+        Command::new(&"/bin/sh").args(new_args).exec();
     } else {
         Command::new(&new_args[0]).exec();
-        Command::new("/bin/sh")
-            .args(new_args)
-            .exec();
+        Command::new("/bin/sh").args(new_args).exec();
     }
 }
 

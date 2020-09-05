@@ -125,7 +125,7 @@ fn main() {
     if read_ini_config_file("/etc/please.ini", &mut vec_eo, &user, true) {
         println!("Exiting due to error");
         std::process::exit(1);
-    }    
+    }
 
     let date = Utc::now().naive_utc();
     let mut buf = [0u8; 64];
