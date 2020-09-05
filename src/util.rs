@@ -583,7 +583,9 @@ pub fn token_dir() -> String {
 }
 
 pub fn token_path( user: &str ) -> String {
-    format!("{}/{}:{}", token_dir(), user, tty_name().replace("/","_"))
+    let ppid = nix::unistd::getppid();
+    return format!("{}/{}:{}:{}", token_dir(), user, tty_name().replace("/","_"),ppid);
+
 }
 
 pub fn valid_token( user: &str ) -> bool {

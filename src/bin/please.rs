@@ -24,9 +24,13 @@ use std::process::Command;
 
 use getopt::prelude::*;
 
-use nix::unistd::{gethostname, setgid, setgroups, setuid};
+use nix::unistd::{gethostname, setsid, setgid, setgroups, setuid};
 
 use users::*;
+//use users::base::os::unix::UserExt;
+use users::os::unix::UserExt;
+
+// use users::{get_current_uid,get_user_by_name};
 
 fn print_usage(program: &str) {
     println!("usage:");
@@ -209,6 +213,7 @@ fn main() {
             &target,
             &original_command.join(" "),
         );
+        println!("Keyboard not present or not functioning, press F1 to continue.");
         return;
     }
 
@@ -219,12 +224,33 @@ fn main() {
         &target,
         &original_command.join(" "),
     );
-    let lookup_name = users::get_user_by_name(&target).unwrap();
+    let lookup_name = get_user_by_name(&target).unwrap();
     let target_uid = nix::unistd::Uid::from_raw(lookup_name.uid());
     let target_gid = nix::unistd::Gid::from_raw(lookup_name.primary_group_id());
 
+    for (key, _) in std::env::vars() {
+        if key == "LANGUAGE" || key == "XAUTHORITY" || key == "LANG" || key == "LS_COLORS" || key == "TERM" || key == "DISPLAY" || key == "LOGNAME" {
+            continue;
+        }
+        std::env::remove_var(key);
+    }
+
     std::env::set_var("PLEASE_USER", original_user.name());
     std::env::set_var("PLEASE_UID", original_uid.to_string());
+    std::env::set_var("PLEASE_GID", original_user.primary_group_id().to_string());
+    std::env::set_var("PLEASE_COMMAND", new_args.join( " " ) );
+
+    std::env::set_var("SUDO_USER", original_user.name());
+    std::env::set_var("SUDO_UID", original_uid.to_string());
+    std::env::set_var("SUDO_GID", original_user.primary_group_id().to_string());
+    std::env::set_var("SUDO_COMMAND", new_args.join( " " ) );
+
+    std::env::set_var("PATH", "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin".to_string());
+    std::env::set_var("HOME", lookup_name.home_dir().as_os_str());
+    std::env::set_var("MAIL", format!("/var/mail/{}", target) );
+    std::env::set_var("SHELL", lookup_name.shell() );
+    std::env::set_var("USER", &target );
+    std::env::set_var("LOGNAME", &target );
 
     let mut groups: Vec<nix::unistd::Gid> = vec![];
     for x in lookup_name.groups().unwrap() {
@@ -232,6 +258,7 @@ fn main() {
     }
     setgroups(groups.as_slice()).unwrap();
 
+    setsid();
     setgid(target_gid).unwrap();
     setuid(target_uid).unwrap();
 
