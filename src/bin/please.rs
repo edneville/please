@@ -265,7 +265,6 @@ fn main() {
     }
     setgroups(groups.as_slice()).unwrap();
 
-    setsid().unwrap();
     setgid(target_gid).unwrap();
     setuid(target_uid).unwrap();
 

@@ -80,6 +80,19 @@ This is performed as follows:
 4. if `EDITOR` exits 0 then `/tmp/fstab.pleaseedit.tmp` is copied to `/etc/fstab.pleaseedit.tmp`
 5.  `/etc/fstab.pleaseedit.tmp` is set as root owned and `renamed` to `/etc/fstab`
 
+# examples
+
+Members of the `audio` group may remove temporary users that an application may not have cleaned up in the form of `username_tmp.<10 random alphanumerics>` using `userdel`:
+
+```
+[user_remove_tmp_user]
+name = audio
+group = true
+permit = true
+require_pass = false
+regex = /usr/sbin/userdel -f -r %{USER}_tmp\.[a-zA-Z0-9]{10}
+```
+
 # FILES
 
 /etc/please.ini
