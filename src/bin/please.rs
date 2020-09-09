@@ -16,7 +16,7 @@
 
 use chrono::Utc;
 use pleaser::util::{
-    can_list, can_run, challenge_password, group_hash, list_edit, list_run, log_action,
+    can_list, can_run, challenge_password, group_hash, list_edit, list_list, list_run, log_action,
     read_ini_config_file, search_path, update_token, valid_token, EnvOptions,
 };
 
@@ -36,6 +36,7 @@ fn print_usage(program: &str) {
     println!(" -l <-t users permissions> <-v>: list permissions");
     println!(" -t [user]: become target user");
     println!(" -c [file]: check config file");
+    println!(" -d [dir]: change to dir before execution");
     println!("version: 0.3.3");
 }
 
@@ -43,10 +44,10 @@ fn main() {
     let mut args: Vec<String> = std::env::args().collect();
     let original_command = args.clone();
     let program = args[0].clone();
-    let mut opts = Parser::new(&args, "c:hlt:");
+    let mut opts = Parser::new(&args, "c:d:hlt:");
     let service = String::from("please");
-
     let mut target = String::from("");
+    let mut directory = String::from("");
     let mut list = false;
 
     let original_uid = get_current_uid();
@@ -75,6 +76,7 @@ fn main() {
                             read_ini_config_file(&string, &mut vec_eo, &user, true) as i32
                         )
                     }
+                    Opt('d', Some(string)) => directory = string,
                     _ => unreachable!(),
                 },
             },
@@ -127,6 +129,8 @@ fn main() {
             list_run(&vec_eo, &user, &date, &hostname, &target, &groups);
             println!("You may edit the following:");
             list_edit(&vec_eo, &user, &date, &hostname, &target, &groups);
+            println!("You may list the following:");
+            list_list(&vec_eo, &user, &date, &hostname, &target, &groups);
         }
         return;
     }
@@ -212,6 +216,15 @@ fn main() {
         );
         println!("Keyboard not present or not functioning, press F1 to continue.");
         return;
+    }
+
+    match std::env::set_current_dir(&directory) {
+        Err(x) => {
+            println!("Cannot cd to {}: {}", &directory, x );
+            std::process::exit(1);
+        },
+        Ok(_) => {
+        }
     }
 
     log_action(

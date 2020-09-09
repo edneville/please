@@ -420,7 +420,7 @@ pub fn list_edit(
     target: &str,
     group_list: &HashMap<String, u32>,
 ) {
-    list(vec_eo, &user, &date, &hostname, true, &target, &group_list);
+    list(vec_eo, &user, &date, &hostname, true, false, &target, &group_list);
 }
 
 pub fn list_run(
@@ -431,7 +431,18 @@ pub fn list_run(
     target: &str,
     group_list: &HashMap<String, u32>,
 ) {
-    list(vec_eo, &user, &date, &hostname, false, &target, &group_list);
+    list(vec_eo, &user, &date, &hostname, false, false, &target, &group_list);
+}
+
+pub fn list_list(
+    vec_eo: &Vec<EnvOptions>,
+    user: &str,
+    date: &NaiveDateTime,
+    hostname: &str,
+    target: &str,
+    group_list: &HashMap<String, u32>,
+) {
+    list(vec_eo, &user, &date, &hostname, false, true, &target, &group_list);
 }
 
 pub fn list(
@@ -440,6 +451,7 @@ pub fn list(
     date: &NaiveDateTime,
     hostname: &str,
     edit: bool,
+    list: bool,
     target: &str,
     group_list: &HashMap<String, u32>,
 ) {
@@ -482,6 +494,10 @@ pub fn list(
             continue;
         }
 
+        if item.list != list {
+            continue;
+        }
+
         if !item.permit {
             prefixes.push(String::from("not permitted"));
         }
@@ -501,17 +517,17 @@ pub fn list(
             }
         }
         if last_file != item.file_name {
-            println!("file: {}", item.file_name);
+            println!("  file: {}", item.file_name);
             last_file = &item.file_name;
         }
 
         if item.list {
-            println!("  {}:{}list: {}", item.section, prefix, item.rule);
+            println!("    {}:{}list: {}", item.section, prefix, item.rule);
             continue;
         }
 
         println!(
-            "  {}:{}{}: {}",
+            "    {}:{}{}: {}",
             item.section, prefix, item.target, item.rule
         );
     }

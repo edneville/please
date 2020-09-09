@@ -30,19 +30,20 @@ regex = .*
 require_pass=false
 ```
 
-The ini format is as follows, multiple arguments are separated by `:`:
+The options are as follows:
 
 | part           | effect       |
 |----------------|--------------|
 | [section-name] | section name, naming sections may help you later |
-| user=regex     | mandatory, apply configuration to this person |
+| name=regex     | mandatory, apply configuration to this entity |
 | target=regex   | mandatory in run and edit, become this user   |
 | require_pass=[true/false]   | defaults to true, mandatory in run and edit, become this user   |
 | regex=rule     | mandatory, this is the regex for the section |
-| notbefore     | the date, in YYYYmmdd or YYYYmmddHHMMSS when this rule becomes effective |
-| notafter     | the date, in YYYYmmdd or YYYYmmddHHMMSS when this rule expires |
+| notbefore      | the date, in YYYYmmdd or YYYYmmddHHMMSS when this rule becomes effective |
+| notafter       | the date, in YYYYmmdd or YYYYmmddHHMMSS when this rule expires |
 | list=[true/false] | permit listing of users matching the regex rule |
 | edit=[true/false] | permit editing of files matching the regex rule as the target user |
+| group=[true/false] | true to signify that name= refers to a group rather than a user |
 
 Using a greedy `.*` for the regex field will be as good as saying the rule should match any command. In previous releases there was no anchor (`^` and `$`) however, it seems more sensible to follow `find`'s approach and insist that there are anchors around the regex. This avoids `/bin/bash` matching `/home/user/bin/bash` unless the rule permits something like `/home/%{USER}/bin/bash`.
 
@@ -93,13 +94,42 @@ require_pass = false
 regex = /usr/sbin/userdel -f -r %{USER}_tmp\.[a-zA-Z0-9]{10}
 ```
 
-# FILES
+How about, for the purpose of housekeeping, some users may be permitted to destroy zfs snapshots that look roughly like they're date stamped:
+
+```
+[user_remove_snapshots]
+name = data
+group = true
+permit = true
+require_pass = false
+regex = /usr/sbin/zfs destroy storage/photos@\d{8}T\d{6}
+```
+
+To list what you may or may not do:
+
+```
+$ please -l
+You may run the following:
+  file: /etc/please.ini
+    ed_root_list:root: ^.*$
+You may edit the following:
+  file: /etc/please.ini
+    ed_edit_ini:root: ^/etc/please.ini$
+```
+
+The above output shows that I may run anything and may edit the `please.ini` configuration. 
+
+# files
 
 /etc/please.ini
 
 # contributions
 
 I welcome pull requests with open arms.
+
+# locations
+
+The source code for this project is currently hosted on [gitlab](https://gitlab.com/edneville/please) and mirrored to [github](https://github.com/edneville/please). There is a [crate on crates.io](https://crates.io/crates/pleaser). It also has a [homepage](https://www.usenix.org.uk/content/please.html) where other project information is kept.
 
 # todo
 
