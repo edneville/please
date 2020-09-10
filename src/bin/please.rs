@@ -14,10 +14,12 @@
 //    You should have received a copy of the GNU General Public License
 //    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+//! please.rs a sudo-like clone that implements regex all over the place
+
 use chrono::Utc;
 use pleaser::util::{
     can_list, can_run, challenge_password, group_hash, list_edit, list_list, list_run, log_action,
-    read_ini_config_file, search_path, update_token, valid_token, EnvOptions,
+    read_ini_config_file, search_path, EnvOptions,
 };
 
 use std::os::unix::process::CommandExt;
@@ -25,7 +27,7 @@ use std::process::Command;
 
 use getopt::prelude::*;
 
-use nix::unistd::{gethostname, setgid, setgroups, setsid, setuid};
+use nix::unistd::{gethostname, setgid, setgroups, setuid};
 
 use users::os::unix::UserExt;
 use users::*;
@@ -218,12 +220,10 @@ fn main() {
         return;
     }
 
-    match std::env::set_current_dir(&directory) {
-        Err(x) => {
-            println!("Cannot cd to {}: {}", &directory, x );
+    if directory != "" {
+        if let Err(x) = std::env::set_current_dir(&directory) {
+            println!("Cannot cd into {}: {}", &directory, x );
             std::process::exit(1);
-        },
-        Ok(_) => {
         }
     }
 
