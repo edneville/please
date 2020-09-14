@@ -49,7 +49,7 @@ fn main() {
     let mut opts = Parser::new(&args, "c:d:hlt:");
     let service = String::from("please");
     let mut target = String::from("");
-    let mut directory = String::from("");
+    let mut directory = String::from(".");
     let mut list = false;
 
     let original_uid = get_current_uid();
@@ -164,6 +164,7 @@ fn main() {
         &hostname,
         &new_args.join(" "),
         &groups,
+        &directory,
     );
 
     match &entry {
@@ -222,7 +223,7 @@ fn main() {
 
     if directory != "" {
         if let Err(x) = std::env::set_current_dir(&directory) {
-            println!("Cannot cd into {}: {}", &directory, x );
+            println!("Cannot cd into {}: {}", &directory, x);
             std::process::exit(1);
         }
     }

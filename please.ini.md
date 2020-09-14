@@ -30,7 +30,8 @@ The properties in ini permitted are as follows:
  * notbefore=[YYYYmmdd|YYYYmmddHHMMSS], defaults to never
  * notafter=[YYYYmmdd|YYYYmmddHHMMSS], defaults to never
  * group=[true|false] user, when true name refers to a group rather than a user
- * hostname
+ * hostname=regex, permitted hostnames where this may apply
+ * dir=regex, permitted regex for switchable directories
 
 `regex` is a regular expression.
 

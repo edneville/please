@@ -44,6 +44,8 @@ The options are as follows:
 | list=[true/false] | permit listing of users matching the regex rule |
 | edit=[true/false] | permit editing of files matching the regex rule as the target user |
 | group=[true/false] | true to signify that name= refers to a group rather than a user |
+| hostname=regex | hosts where this applies |
+| dir=regex | permit switching to regex defined directory prior to execution |
 
 Using a greedy `.*` for the regex field will be as good as saying the rule should match any command. In previous releases there was no anchor (`^` and `$`) however, it seems more sensible to follow `find`'s approach and insist that there are anchors around the regex. This avoids `/bin/bash` matching `/home/user/bin/bash` unless the rule permits something like `/home/%{USER}/bin/bash`.
 
@@ -130,6 +132,10 @@ I welcome pull requests with open arms.
 # locations
 
 The source code for this project is currently hosted on [gitlab](https://gitlab.com/edneville/please) and mirrored to [github](https://github.com/edneville/please). There is a [crate on crates.io](https://crates.io/crates/pleaser). It also has a [homepage](https://www.usenix.org.uk/content/please.html) where other project information is kept.
+
+# why pleaser in some circles?
+
+This project is named "please". In some places that project name was used by others for other things. Some packages will be named pleaser, some will be named please. The only important thing is if you wish someone to make you a sandwich, just say "please" first.
 
 # todo
 

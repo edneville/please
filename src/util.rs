@@ -3,14 +3,15 @@ use regex::Regex;
 use std::collections::HashMap;
 use std::env;
 use std::ffi::CStr;
-use std::fs;
 use std::path::Path;
 use std::process;
 use std::time::SystemTime;
 use syslog::{Facility, Formatter3164};
 
 use chrono::{NaiveDate, NaiveDateTime};
-use ini::Ini;
+use std::fs;
+use std::fs::File;
+use std::io::prelude::*;
 use users::*;
 
 #[derive(Clone)]
@@ -29,6 +30,8 @@ pub struct EnvOptions {
     pub section: String,
     pub list: bool,
     pub group: bool,
+    pub configured: bool,
+    pub dir: Regex,
 }
 
 impl EnvOptions {
@@ -52,6 +55,8 @@ impl EnvOptions {
             edit: false,
             list: false,
             group: false,
+            configured: false,
+            dir: Regex::new(&"^$").unwrap(),
         }
     }
     fn new_deny() -> EnvOptions {
@@ -79,7 +84,7 @@ fn regex_build(v: &str, user: &str, config_path: &str, section: &str) -> Option<
 }
 
 pub fn read_ini(
-    conf: &ini::ini::Ini,
+    conf: &str,
     vec_eo: &mut Vec<EnvOptions>,
     user: &str,
     fail_error: bool,
@@ -89,91 +94,131 @@ pub fn read_ini(
     let parse_date_from_str = NaiveDate::parse_from_str;
     let mut faulty = false;
     let mut section = String::from("no section defined");
+    let mut in_section = false;
+    let section_re = Regex::new(r"^\[(?P<section_name>[^\]]+)\]\s*$").unwrap();
+    let definition = Regex::new(r"^(?P<key>[^=]+)\s*=\s*(?P<value>.*)\s*$").unwrap();
+    let mut opt = EnvOptions::new();
 
-    for (sec, prop) in conf.iter() {
-        let mut opt = EnvOptions::new();
-        match sec {
-            Some(x) => section = x.to_string(),
-            None => {}
+    for l in conf.split('\n') {
+        if l.trim() == "" || l.starts_with('#') {
+            continue;
         }
-        opt.file_name = String::from(config_path);
-        opt.section = section.clone();
-        for (k, v) in prop.iter() {
-            match k.as_ref() {
-                "name" | "user" => match regex_build(v, user, config_path, &section) {
-                    Some(check) => {
-                        opt.name = check;
-                    }
-                    None => {
-                        faulty = true;
-                    }
-                },
-                "hostname" => match regex_build(v, user, config_path, &section) {
-                    Some(check) => {
-                        opt.hostname = check;
-                    }
-                    None => {
-                        faulty = true;
-                    }
-                },
-                "target" => match regex_build(v, user, config_path, &section) {
-                    Some(check) => {
-                        opt.target = check;
-                    }
-                    None => {
-                        faulty = true;
-                    }
-                },
-                "permit" => opt.permit = v == "true",
-                "require_pass" => opt.require_pass = v != "false",
-                "edit" => opt.edit = v == "true",
-                "list" => opt.list = v == "true",
-                "group" => opt.group = v == "true",
-                "regex" => match regex_build(v, user, config_path, &section) {
-                    Some(check) => {
-                        opt.rule = check;
-                    }
-                    None => {
-                        faulty = true;
-                    }
-                },
 
-                "notbefore" if v.len() == 8 => {
-                    opt.notbefore = Some(
-                        parse_date_from_str(&v.to_string(), "%Y%m%d")
-                            .unwrap()
-                            .and_hms(0, 0, 0),
-                    )
-                }
-                "notafter" if v.len() == 8 => {
-                    opt.notafter = Some(
-                        parse_date_from_str(&v.to_string(), "%Y%m%d")
-                            .unwrap()
-                            .and_hms(23, 59, 59),
-                    )
-                }
-                "notbefore" if v.len() == 14 => {
-                    opt.notbefore =
-                        Some(parse_datetime_from_str(&v.to_string(), "%Y%m%d%H%M%S").unwrap())
-                }
-                "notafter" if v.len() == 14 => {
-                    opt.notafter =
-                        Some(parse_datetime_from_str(&v.to_string(), "%Y%m%d%H%M%S").unwrap())
-                }
+        if let Some(m) = section_re.captures(l) {
+            in_section = true;
+            section = m["section_name"].trim().to_string();
+            if opt.configured {
+                vec_eo.push(opt);
+            }
+            opt = EnvOptions::new();
+            opt.section = section.clone();
+            opt.file_name = String::from(config_path);
+            continue;
+        }
 
-                &_ => {
-                    println!("{}: unknown attribute \"{}\": {}", config_path, k, v);
+        match definition.captures(l) {
+            Some(m) => {
+                if !in_section {
+                    println!("Error parsing {}:{}", config_path, l);
                     faulty = true;
+                    continue;
                 }
+                let k = m["key"].trim();
+                let v = m["value"].trim();
+
+                match k {
+                    "name" | "user" => match regex_build(v, user, config_path, &section) {
+                        Some(check) => {
+                            opt.name = check;
+                            opt.configured = true;
+                        }
+                        None => {
+                            faulty = true;
+                        }
+                    },
+                    "hostname" => match regex_build(v, user, config_path, &section) {
+                        Some(check) => {
+                            opt.hostname = check;
+                        }
+                        None => {
+                            faulty = true;
+                        }
+                    },
+                    "target" => match regex_build(v, user, config_path, &section) {
+                        Some(check) => {
+                            opt.target = check;
+                        }
+                        None => {
+                            faulty = true;
+                        }
+                    },
+                    "permit" => opt.permit = v == "true",
+                    "require_pass" => opt.require_pass = v != "false",
+                    "edit" => opt.edit = v == "true",
+                    "list" => opt.list = v == "true",
+                    "group" => opt.group = v == "true",
+                    "regex" => match regex_build(v, user, config_path, &section) {
+                        Some(check) => {
+                            opt.rule = check;
+                        }
+                        None => {
+                            faulty = true;
+                        }
+                    },
+
+                    "notbefore" if v.len() == 8 => {
+                        opt.notbefore = Some(
+                            parse_date_from_str(&v.to_string(), "%Y%m%d")
+                                .unwrap()
+                                .and_hms(0, 0, 0),
+                        )
+                    }
+                    "notafter" if v.len() == 8 => {
+                        opt.notafter = Some(
+                            parse_date_from_str(&v.to_string(), "%Y%m%d")
+                                .unwrap()
+                                .and_hms(23, 59, 59),
+                        )
+                    }
+                    "notbefore" if v.len() == 14 => {
+                        opt.notbefore =
+                            Some(parse_datetime_from_str(&v.to_string(), "%Y%m%d%H%M%S").unwrap())
+                    }
+                    "notafter" if v.len() == 14 => {
+                        opt.notafter =
+                            Some(parse_datetime_from_str(&v.to_string(), "%Y%m%d%H%M%S").unwrap())
+                    }
+                    "dir" => match regex_build(v, user, config_path, &section) {
+                        Some(r) => {
+                            opt.dir = r;
+                        }
+                        None => {
+                            faulty = true;
+                        }
+                    },
+
+                    &_ => {
+                        println!("{}: unknown attribute \"{}\": {}", config_path, k, v);
+                        faulty = true;
+                    }
+                }
+                /*
+                println!("Name: {}", opt.name);
+                println!("Target: {}", opt.target);
+                println!("Hostname: {}", opt.hostname);
+                println!("Rule: {}", opt.rule);
+                println!("Permit: {}", opt.permit);
+                */
+            }
+            None => {
+                println!("Error parsing {}:{}", config_path, l);
+                faulty = true;
+                continue;
             }
         }
-        /*
-        println!("Name: {}", opt.name);
-        println!("Target: {}", opt.target);
-        println!("Hostname: {}", opt.hostname);
-        println!("Rule: {}", opt.rule);
-        println!("Permit: {}", opt.permit);
-        */
+    }
+
+    if opt.configured {
         vec_eo.push(opt);
     }
 
@@ -186,30 +231,28 @@ pub fn read_ini_config_file(
     user: &str,
     fail_error: bool,
 ) -> bool {
-    let conf = Ini::load_from_file(config_path);
-    match conf {
-        Err(x) => {
-            println!("cannot open {}:{}", config_path, x);
-            std::process::exit(1);
-        }
-        Ok(x) => read_ini(&x, vec_eo, &user, fail_error, config_path),
+    let path = Path::new(config_path);
+    let display = path.display();
+
+    let mut file = match File::open(&path) {
+        Err(why) => panic!("couldn't open {}: {}", display, why),
+        Ok(file) => file,
+    };
+
+    let mut s = String::new();
+    match file.read_to_string(&mut s) {
+        Err(why) => panic!("couldn't read {}: {}", display, why),
+        Ok(_) => read_ini(&s, vec_eo, &user, fail_error, config_path),
     }
 }
 
 pub fn read_ini_config_str(
-    config_path: &str,
+    config: &str,
     vec_eo: &mut Vec<EnvOptions>,
     user: &str,
     fail_error: bool,
 ) -> bool {
-    let conf = Ini::load_from_str(&config_path);
-    match conf {
-        Err(x) => {
-            println!("cannot open {}:{}", config_path, x);
-            std::process::exit(1);
-        }
-        Ok(x) => read_ini(&x, vec_eo, &user, fail_error, "static"),
-    }
+    read_ini(&config, vec_eo, &user, fail_error, "static")
 }
 
 pub fn can_run(
@@ -220,6 +263,7 @@ pub fn can_run(
     hostname: &str,
     command: &str,
     group_list: &HashMap<String, u32>,
+    dir: &str,
 ) -> Result<EnvOptions, ()> {
     can(
         vec_eo,
@@ -231,6 +275,7 @@ pub fn can_run(
         false,
         false,
         &group_list,
+        &dir,
     )
 }
 
@@ -253,6 +298,7 @@ pub fn can_edit(
         true,
         false,
         &group_list,
+        &"",
     )
 }
 
@@ -275,6 +321,7 @@ pub fn can_list(
         false,
         true,
         &group_list,
+        &"",
     )
 }
 
@@ -288,6 +335,7 @@ pub fn can(
     edit: bool,
     command_list: bool,
     group_list: &HashMap<String, u32>,
+    dir: &str,
 ) -> Result<EnvOptions, ()> {
     let mut opt = EnvOptions::new_deny();
 
@@ -337,6 +385,10 @@ pub fn can(
             && !item.hostname.is_match("localhost")
         {
             //println!("{}: hostname mismatch", item.section);
+            continue;
+        }
+
+        if !item.dir.is_match(dir) && dir != "." {
             continue;
         }
 
@@ -420,7 +472,16 @@ pub fn list_edit(
     target: &str,
     group_list: &HashMap<String, u32>,
 ) {
-    list(vec_eo, &user, &date, &hostname, true, false, &target, &group_list);
+    list(
+        vec_eo,
+        &user,
+        &date,
+        &hostname,
+        true,
+        false,
+        &target,
+        &group_list,
+    );
 }
 
 pub fn list_run(
@@ -431,7 +492,16 @@ pub fn list_run(
     target: &str,
     group_list: &HashMap<String, u32>,
 ) {
-    list(vec_eo, &user, &date, &hostname, false, false, &target, &group_list);
+    list(
+        vec_eo,
+        &user,
+        &date,
+        &hostname,
+        false,
+        false,
+        &target,
+        &group_list,
+    );
 }
 
 pub fn list_list(
@@ -442,7 +512,16 @@ pub fn list_list(
     target: &str,
     group_list: &HashMap<String, u32>,
 ) {
-    list(vec_eo, &user, &date, &hostname, false, true, &target, &group_list);
+    list(
+        vec_eo,
+        &user,
+        &date,
+        &hostname,
+        false,
+        true,
+        &target,
+        &group_list,
+    );
 }
 
 pub fn list(
@@ -715,7 +794,8 @@ regex=^ "
                 &date,
                 "localhost",
                 "/bin/bash",
-                &group_hash
+                &group_hash,
+                "",
             )
             .unwrap()
             .permit,
@@ -759,7 +839,8 @@ regex=^/bin/bash"
                 &date,
                 "localhost",
                 "/bin/bash",
-                &group_hash
+                &group_hash,
+                "",
             )
             .unwrap()
             .permit,
@@ -773,7 +854,8 @@ regex=^/bin/bash"
                 &date,
                 "localhost",
                 "/bin/bash",
-                &group_hash
+                &group_hash,
+                "",
             )
             .unwrap()
             .permit,
@@ -816,7 +898,8 @@ target=^ "
                 &NaiveDate::from_ymd(2019, 12, 31).and_hms(0, 0, 0),
                 "localhost",
                 "/bin/bash",
-                &group_hash
+                &group_hash,
+                "",
             )
             .unwrap()
             .permit,
@@ -830,7 +913,8 @@ target=^ "
                 &NaiveDate::from_ymd(2020, 12, 25).and_hms(0, 0, 0),
                 "localhost",
                 "/bin/bash",
-                &group_hash
+                &group_hash,
+                "",
             )
             .unwrap()
             .permit,
@@ -844,7 +928,8 @@ target=^ "
                 &NaiveDate::from_ymd(2020, 12, 25).and_hms(1, 0, 0),
                 "localhost",
                 "/bin/bash",
-                &group_hash
+                &group_hash,
+                "",
             )
             .unwrap()
             .permit,
@@ -876,7 +961,8 @@ regex=^.*
                 &NaiveDate::from_ymd(2020, 8, 8).and_hms(0, 0, 0),
                 "localhost",
                 "/bin/bash",
-                &group_hash
+                &group_hash,
+                "",
             )
             .unwrap()
             .permit,
@@ -890,7 +976,8 @@ regex=^.*
                 &NaiveDate::from_ymd(2020, 8, 10).and_hms(0, 0, 0),
                 "localhost",
                 "/bin/bash",
-                &group_hash
+                &group_hash,
+                "",
             )
             .unwrap()
             .permit,
@@ -904,7 +991,8 @@ regex=^.*
                 &NaiveDate::from_ymd(2020, 8, 10).and_hms(23, 59, 59),
                 "localhost",
                 "/bin/bash",
-                &group_hash
+                &group_hash,
+                "",
             )
             .unwrap()
             .permit,
@@ -918,7 +1006,8 @@ regex=^.*
                 &NaiveDate::from_ymd(2020, 8, 11).and_hms(0, 0, 0),
                 "localhost",
                 "/bin/bash",
-                &group_hash
+                &group_hash,
+                "",
             )
             .unwrap()
             .permit,
@@ -932,7 +1021,8 @@ regex=^.*
                 &NaiveDate::from_ymd(2020, 8, 7).and_hms(0, 0, 0),
                 "localhost",
                 "/bin/bash",
-                &group_hash
+                &group_hash,
+                "",
             )
             .unwrap()
             .permit,
@@ -972,7 +1062,8 @@ regex=^/bin/bash .*$
                 &date,
                 "localhost",
                 "/bin/bash /usr/local/oracle/backup_script",
-                &group_hash
+                &group_hash,
+                "",
             )
             .unwrap()
             .permit,
@@ -986,7 +1077,8 @@ regex=^/bin/bash .*$
                 &date,
                 "localhost",
                 "/bin/sh /usr/local/oracle/backup_script",
-                &group_hash
+                &group_hash,
+                "",
             )
             .unwrap()
             .permit,
@@ -1000,7 +1092,8 @@ regex=^/bin/bash .*$
                 &date,
                 "web1",
                 "/bin/sh /usr/local/oracle/backup_script",
-                &group_hash
+                &group_hash,
+                "",
             )
             .unwrap()
             .permit,
@@ -1014,7 +1107,8 @@ regex=^/bin/bash .*$
                 &date,
                 "",
                 "/bin/sh /usr/local/oracle/backup_script",
-                &group_hash
+                &group_hash,
+                "",
             )
             .unwrap()
             .permit,
@@ -1028,7 +1122,8 @@ regex=^/bin/bash .*$
                 &date,
                 "",
                 "/bin/bash /usr/local/oracle/backup_script",
-                &group_hash
+                &group_hash,
+                "",
             )
             .unwrap()
             .permit,
@@ -1042,7 +1137,8 @@ regex=^/bin/bash .*$
                 &date,
                 "",
                 "/bin/bash /usr/local/oracle/backup_script",
-                &group_hash
+                &group_hash,
+                "",
             )
             .unwrap()
             .permit,
@@ -1074,7 +1170,8 @@ regex=^/bin/bash.*$
                 &date,
                 "localhost",
                 "/bin/bash /usr/local/oracle/backup_script",
-                &group_hash
+                &group_hash,
+                "",
             )
             .unwrap()
             .permit,
@@ -1088,7 +1185,8 @@ regex=^/bin/bash.*$
                 &date,
                 "localhost",
                 "/bin/sh /usr/local/oracle/backup_script",
-                &group_hash
+                &group_hash,
+                "",
             )
             .unwrap()
             .permit,
@@ -1102,7 +1200,8 @@ regex=^/bin/bash.*$
                 &date,
                 "web1",
                 "/bin/sh /usr/local/oracle/backup_script",
-                &group_hash
+                &group_hash,
+                "",
             )
             .unwrap()
             .permit,
@@ -1116,7 +1215,8 @@ regex=^/bin/bash.*$
                 &date,
                 "",
                 "/bin/sh /usr/local/oracle/backup_script",
-                &group_hash
+                &group_hash,
+                "",
             )
             .unwrap()
             .permit,
@@ -1130,7 +1230,8 @@ regex=^/bin/bash.*$
                 &date,
                 "",
                 "/bin/bash /usr/local/oracle/backup_script",
-                &group_hash
+                &group_hash,
+                "",
             )
             .unwrap()
             .permit,
@@ -1144,7 +1245,8 @@ regex=^/bin/bash.*$
                 &date,
                 "",
                 "/bin/bash /usr/local/oracle/backup_script",
-                &group_hash
+                &group_hash,
+                "",
             )
             .unwrap()
             .permit,
@@ -1182,7 +1284,8 @@ regex=^/bin/sh.*$
                 &date,
                 "localhost",
                 "/bin/bash /usr/local/oracle/backup_script",
-                &group_hash
+                &group_hash,
+                "",
             )
             .unwrap()
             .permit,
@@ -1196,7 +1299,8 @@ regex=^/bin/sh.*$
                 &date,
                 "web1",
                 "/bin/bash /usr/local/oracle/backup_script",
-                &group_hash
+                &group_hash,
+                "",
             )
             .unwrap()
             .permit,
@@ -1210,7 +1314,8 @@ regex=^/bin/sh.*$
                 &date,
                 "web2",
                 "/bin/bash /usr/local/oracle/backup_script",
-                &group_hash
+                &group_hash,
+                "",
             )
             .unwrap()
             .permit,
@@ -1225,7 +1330,8 @@ regex=^/bin/sh.*$
                 &date,
                 "localhost",
                 "/bin/sh /usr/local/oracle/backup_script",
-                &group_hash
+                &group_hash,
+                "",
             )
             .unwrap()
             .permit,
@@ -1239,7 +1345,8 @@ regex=^/bin/sh.*$
                 &date,
                 "web1",
                 "/bin/sh /usr/local/oracle/backup_script",
-                &group_hash
+                &group_hash,
+                "",
             )
             .unwrap()
             .permit,
@@ -1253,7 +1360,8 @@ regex=^/bin/sh.*$
                 &date,
                 "web2",
                 "/bin/sh /usr/local/oracle/backup_script",
-                &group_hash
+                &group_hash,
+                "",
             )
             .unwrap()
             .permit,
@@ -1284,7 +1392,8 @@ regex=/bin/sh\\b.*
                 &date,
                 "localhost",
                 "/bin/sh /usr/local/oracle/backup_script",
-                &group_hash
+                &group_hash,
+                "",
             )
             .unwrap()
             .permit,
@@ -1317,7 +1426,8 @@ regex=.*
                 &date,
                 "localhost",
                 "/bin/bash",
-                &group_hash
+                &group_hash,
+                "",
             )
             .unwrap()
             .permit,
@@ -1400,7 +1510,8 @@ regex =^/bin/cat /etc/%{USER}"
                 &date,
                 "localhost",
                 "/bin/cat /etc/ed",
-                &group_hash
+                &group_hash,
+                "",
             )
             .unwrap()
             .permit,
@@ -1414,7 +1525,8 @@ regex =^/bin/cat /etc/%{USER}"
                 &date,
                 "localhost",
                 "/bin/cat /etc/ed",
-                &group_hash
+                &group_hash,
+                "",
             )
             .unwrap()
             .permit,
@@ -1466,18 +1578,36 @@ regex = ^.*$"
         let mut group_hash: HashMap<String, u32> = HashMap::new();
         group_hash.insert(String::from("users"), 1);
         assert_eq!(
-            can_run(&vec_eo, "ed", "root", &date, "localhost", "", &group_hash)
-                .unwrap()
-                .permit,
+            can_run(
+                &vec_eo,
+                "ed",
+                "root",
+                &date,
+                "localhost",
+                "",
+                &group_hash,
+                "",
+            )
+            .unwrap()
+            .permit,
             true
         );
 
         let mut group_hash: HashMap<String, u32> = HashMap::new();
         group_hash.insert(String::from("wwwadm"), 1);
         assert_eq!(
-            can_run(&vec_eo, "ed", "root", &date, "localhost", "", &group_hash)
-                .unwrap()
-                .permit,
+            can_run(
+                &vec_eo,
+                "ed",
+                "root",
+                &date,
+                "localhost",
+                "",
+                &group_hash,
+                "",
+            )
+            .unwrap()
+            .permit,
             false
         );
     }
@@ -1719,7 +1849,7 @@ group = true
 permit = true
 edit = true
 require_pass = false
-regex = ^/var/www/html/%\\{USER\\}.html$"
+regex = ^/var/www/html/%{USER}.html$"
             .to_string();
         let mut vec_eo: Vec<EnvOptions> = vec![];
         read_ini_config_str(&config, &mut vec_eo, "ed", false);
@@ -1795,7 +1925,7 @@ group = true
 permit = true
 edit = true
 require_pass = false
-regex = ^/var/www/html/%{USER\\}.html$"
+regex = ^/var/www/html/%{USER}.html$"
             .to_string();
         let mut vec_eo: Vec<EnvOptions> = vec![];
         read_ini_config_str(&config, &mut vec_eo, "ed", false);
@@ -1851,7 +1981,8 @@ regex = /bin/bash"
                 &date,
                 "localhost",
                 "/bin/bash",
-                &group_hash
+                &group_hash,
+                "",
             )
             .unwrap()
             .permit,
@@ -1865,7 +1996,8 @@ regex = /bin/bash"
                 &date,
                 "localhost",
                 "/bin/bash",
-                &group_hash
+                &group_hash,
+                "",
             )
             .unwrap()
             .permit,
@@ -1879,7 +2011,8 @@ regex = /bin/bash"
                 &date,
                 "localhost",
                 "/bin/bash",
-                &group_hash
+                &group_hash,
+                "",
             )
             .unwrap()
             .permit,
@@ -1908,6 +2041,118 @@ regex = /bin/bash"
             .unwrap()
             .permit,
             false
+        );
+    }
+
+    #[test]
+    fn test_dir_change() {
+        let config = "
+[regex_anchor]
+user=ed
+target=oracle
+hostname=localhost
+regex=.*
+dir=.*
+    "
+        .to_string();
+
+        let date: NaiveDateTime = NaiveDate::from_ymd(2019, 12, 31).and_hms(0, 0, 0);
+
+        let mut vec_eo: Vec<EnvOptions> = vec![];
+        read_ini_config_str(&config, &mut vec_eo, "ed", false);
+        let group_hash: HashMap<String, u32> = HashMap::new();
+
+        assert_eq!(
+            can_run(
+                &vec_eo,
+                "ed",
+                "oracle",
+                &date,
+                "localhost",
+                "/bin/bash",
+                &group_hash,
+                "",
+            )
+            .unwrap()
+            .permit,
+            true
+        );
+        assert_eq!(
+            can_run(
+                &vec_eo,
+                "ed",
+                "oracle",
+                &date,
+                "localhost",
+                "/bin/bash",
+                &group_hash,
+                "/",
+            )
+            .unwrap()
+            .permit,
+            true,
+        );
+
+        let config = "
+[regex_anchor]
+user=ed
+target=oracle
+hostname=localhost
+regex=.*
+dir=/var/www
+    "
+        .to_string();
+
+        let mut vec_eo: Vec<EnvOptions> = vec![];
+        read_ini_config_str(&config, &mut vec_eo, "ed", false);
+
+        assert_eq!(
+            can_run(
+                &vec_eo,
+                "ed",
+                "oracle",
+                &date,
+                "localhost",
+                "/bin/bash",
+                &group_hash,
+                "/",
+            )
+            .unwrap()
+            .permit,
+            false,
+            "change outside permitted",
+        );
+        assert_eq!(
+            can_run(
+                &vec_eo,
+                "ed",
+                "oracle",
+                &date,
+                "localhost",
+                "/bin/bash",
+                &group_hash,
+                "/var/www",
+            )
+            .unwrap()
+            .permit,
+            true,
+            "change to permitted",
+        );
+        assert_eq!(
+            can_run(
+                &vec_eo,
+                "ed",
+                "oracle",
+                &date,
+                "localhost",
+                "/bin/bash",
+                &group_hash,
+                ".",
+            )
+            .unwrap()
+            .permit,
+            true,
+            "no directory given",
         );
     }
 }
