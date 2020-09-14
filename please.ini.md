@@ -94,7 +94,7 @@ Many enterprises may wish to permit access to a user for a limited time only, ev
 
 # FILES
 
-/etc/please.conf
+/etc/please.ini
 
 # CONTRIBUTIONS
 
