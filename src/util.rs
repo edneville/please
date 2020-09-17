@@ -35,15 +35,11 @@ pub struct EnvOptions {
 }
 
 impl EnvOptions {
-    fn new() -> EnvOptions {
+    pub fn new() -> EnvOptions {
         EnvOptions {
             name: Regex::new(&"^$").unwrap(),
             rule: Regex::new(&"^$").unwrap(),
             target: Regex::new(&"root").unwrap(),
-            /*
-            notbefore: Option::Some(NaiveDate::from_ymd(1970, 1, 1).and_hms(0, 0, 0)),
-            notafter: Option::Some(NaiveDate::from_ymd(2038, 1, 19).and_hms(3, 14, 7)),
-            */
             notbefore: None,
             notafter: None,
             hostname: Regex::new(&"localhost").unwrap(),
@@ -83,6 +79,19 @@ fn regex_build(v: &str, user: &str, config_path: &str, section: &str) -> Option<
     Some(rule.unwrap())
 }
 
+pub fn can_dir_include(file: &str) -> bool {
+    let dir_pattern = Regex::new(r".*\.ini$").unwrap();
+
+    if dir_pattern.is_match(file) {
+        let p = Path::new(file);
+        if p.is_file() {
+            return true;
+        }
+    }
+
+    false
+}
+
 pub fn read_ini(
     conf: &str,
     vec_eo: &mut Vec<EnvOptions>,
@@ -99,14 +108,14 @@ pub fn read_ini(
     let definition = Regex::new(r"^(?P<key>[^=]+)\s*=\s*(?P<value>.*)\s*$").unwrap();
     let mut opt = EnvOptions::new();
 
-    for l in conf.split('\n') {
-        if l.trim() == "" || l.starts_with('#') {
+    for line in conf.split('\n') {
+        if line.trim() == "" || line.starts_with('#') {
             continue;
         }
 
-        if let Some(m) = section_re.captures(l) {
+        if let Some(cap) = section_re.captures(line) {
             in_section = true;
-            section = m["section_name"].trim().to_string();
+            section = cap["section_name"].trim().to_string();
             if opt.configured {
                 vec_eo.push(opt);
             }
@@ -116,18 +125,57 @@ pub fn read_ini(
             continue;
         }
 
-        match definition.captures(l) {
-            Some(m) => {
+        match definition.captures(line) {
+            Some(cap) => {
                 if !in_section {
-                    println!("Error parsing {}:{}", config_path, l);
+                    println!("Error parsing {}:{}", config_path, line);
                     faulty = true;
                     continue;
                 }
-                let k = m["key"].trim();
-                let v = m["value"].trim();
+                let key = cap["key"].trim();
+                let value = cap["value"].trim();
 
-                match k {
-                    "name" | "user" => match regex_build(v, user, config_path, &section) {
+                match key {
+                    "include" => {
+                        if read_ini_config_file(&value, vec_eo, &user, fail_error) {
+                            println!("Couldn't read {}", value);
+                            return false;
+                        }
+                        continue;
+                    }
+                    "includedir" => {
+                        match fs::read_dir(value) {
+                            Err(_x) => {
+                                faulty = true;
+                            }
+                            Ok(inc) => {
+                                let mut collect = vec![];
+                                for file in inc {
+                                    let entry = file.unwrap().path();
+                                    collect.push(entry.to_str().unwrap().to_string());
+                                }
+                                collect.sort();
+                                for file in collect {
+                                    let incf = file;
+                                    if !can_dir_include(&incf) {
+                                        continue;
+                                    }
+                                    if read_ini_config_file(
+                                        &incf,
+                                        vec_eo,
+                                        &user,
+                                        fail_error,
+                                    ) {
+                                        println!("Could not read {}", value);
+                                        return false;
+                                    }
+                                }
+                            }
+                        }
+
+                        continue;
+                    }
+                    "name" | "user" => match regex_build(value, user, config_path, &section) {
                         Some(check) => {
                             opt.name = check;
                             opt.configured = true;
@@ -136,7 +184,7 @@ pub fn read_ini(
                             faulty = true;
                         }
                     },
-                    "hostname" => match regex_build(v, user, config_path, &section) {
+                    "hostname" => match regex_build(value, user, config_path, &section) {
                         Some(check) => {
                             opt.hostname = check;
                         }
@@ -144,7 +192,7 @@ pub fn read_ini(
                             faulty = true;
                         }
                     },
-                    "target" => match regex_build(v, user, config_path, &section) {
+                    "target" => match regex_build(value, user, config_path, &section) {
                         Some(check) => {
                             opt.target = check;
                         }
@@ -152,12 +200,12 @@ pub fn read_ini(
                             faulty = true;
                         }
                     },
-                    "permit" => opt.permit = v == "true",
-                    "require_pass" => opt.require_pass = v != "false",
-                    "edit" => opt.edit = v == "true",
-                    "list" => opt.list = v == "true",
-                    "group" => opt.group = v == "true",
-                    "regex" => match regex_build(v, user, config_path, &section) {
+                    "permit" => opt.permit = value == "true",
+                    "require_pass" => opt.require_pass = value != "false",
+                    "edit" => opt.edit = value == "true",
+                    "list" => opt.list = value == "true",
+                    "group" => opt.group = value == "true",
+                    "regex" => match regex_build(value, user, config_path, &section) {
                         Some(check) => {
                             opt.rule = check;
                         }
@@ -166,31 +214,31 @@ pub fn read_ini(
                         }
                     },
 
-                    "notbefore" if v.len() == 8 => {
+                    "notbefore" if value.len() == 8 => {
                         opt.notbefore = Some(
-                            parse_date_from_str(&v.to_string(), "%Y%m%d")
+                            parse_date_from_str(&value.to_string(), "%Y%m%d")
                                 .unwrap()
                                 .and_hms(0, 0, 0),
                         )
                     }
-                    "notafter" if v.len() == 8 => {
+                    "notafter" if value.len() == 8 => {
                         opt.notafter = Some(
-                            parse_date_from_str(&v.to_string(), "%Y%m%d")
+                            parse_date_from_str(&value.to_string(), "%Y%m%d")
                                 .unwrap()
                                 .and_hms(23, 59, 59),
                         )
                     }
-                    "notbefore" if v.len() == 14 => {
+                    "notbefore" if value.len() == 14 => {
                         opt.notbefore =
-                            Some(parse_datetime_from_str(&v.to_string(), "%Y%m%d%H%M%S").unwrap())
+                            Some(parse_datetime_from_str(&value.to_string(), "%Y%m%d%H%M%S").unwrap())
                     }
-                    "notafter" if v.len() == 14 => {
+                    "notafter" if value.len() == 14 => {
                         opt.notafter =
-                            Some(parse_datetime_from_str(&v.to_string(), "%Y%m%d%H%M%S").unwrap())
+                            Some(parse_datetime_from_str(&value.to_string(), "%Y%m%d%H%M%S").unwrap())
                     }
-                    "dir" => match regex_build(v, user, config_path, &section) {
-                        Some(r) => {
-                            opt.dir = r;
+                    "dir" => match regex_build(value, user, config_path, &section) {
+                        Some(dir) => {
+                            opt.dir = dir;
                         }
                         None => {
                             faulty = true;
@@ -198,7 +246,7 @@ pub fn read_ini(
                     },
 
                     &_ => {
-                        println!("{}: unknown attribute \"{}\": {}", config_path, k, v);
+                        println!("{}: unknown attribute \"{}\": {}", config_path, key, value);
                         faulty = true;
                     }
                 }
@@ -211,7 +259,7 @@ pub fn read_ini(
                 */
             }
             None => {
-                println!("Error parsing {}:{}", config_path, l);
+                println!("Error parsing {}:{}", config_path, line);
                 faulty = true;
                 continue;
             }
@@ -435,12 +483,16 @@ pub fn get_editor() -> String {
     editor.to_string()
 }
 
-pub fn challenge_password(user: String, entry: EnvOptions, service: &str) -> bool {
+pub fn challenge_password(user: String, entry: EnvOptions, service: &str, prompt: bool) -> bool {
     if entry.require_pass {
         let mut retry_counter = 0;
         if valid_token(&user) {
             update_token(&user);
             return true;
+        }
+
+        if !prompt {
+            return false;
         }
 
         loop {
@@ -587,6 +639,13 @@ pub fn list(
         {
             continue;
         }
+        if item.require_pass {
+            prefixes.push(String::from("req_pass"));
+        }
+        else {
+            prefixes.push(String::from("no_pass"));
+        }
+
         let mut prefix = prefixes.join(", ");
         if !prefix.is_empty() {
             if !item.list {
@@ -737,9 +796,13 @@ pub fn remove_token(user: &str) {
         return;
     }
 
-    match fs::remove_file(token_path(&user)) {
-        Ok(_x) => {}
-        Err(x) => println!("Error removing token: {}", x),
+    let token_location = token_path(&user);
+    let p = Path::new(&token_location);
+    if p.is_file() {
+        match fs::remove_file(p) {
+            Ok(_x) => {}
+            Err(x) => println!("Error removing token {}: {}", p.to_str().unwrap(), x),
+        }
     }
 }
 
