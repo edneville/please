@@ -20,18 +20,20 @@ Rules are read and applied in the order they are presented in the configuration 
 
 The properties in ini permitted are as follows:
 
- * name=regex, or user, mandatory
- * target=regex user, defaults to ^root$
+ * name=[regex], or user, mandatory
+ * target=[regex] user to execute as, defaults to ^root$
  * permit=[true|false] defaults to true
  * require_pass=[true|false], defaults to true
- * rule=regex, mandatory, is the regular expression that applies to this section
- * list=[true|false], defaults to false
- * edit=[true|false], defaults to false
+ * regex=[regex], mandatory, is the regular expression that the command matches against
  * notbefore=[YYYYmmdd|YYYYmmddHHMMSS], defaults to never
  * notafter=[YYYYmmdd|YYYYmmddHHMMSS], defaults to never
+ * list=[true|false], defaults to false
+ * edit=[true|false], defaults to false
  * group=[true|false] user, when true name refers to a group rather than a user
- * hostname=regex, permitted hostnames where this may apply
- * dir=regex, permitted regex for switchable directories
+ * hostname=[regex], permitted hostnames where this may apply
+ * dir=[regex], permitted regex for switchable directories
+ * include=[file], read ini file, and continue to next section
+ * includedir=[directory], read .ini files in directory, and continue to next section
 
 `regex` is a regular expression.
 

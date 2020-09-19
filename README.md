@@ -21,47 +21,66 @@ A simple install:
 
 Next, configure your `/etc/please.ini` similar to this, replace user names with appropriate values. One of the simplest, that does not require password authentication can be defined as follows, assuming the user is `ed`:
 
-```
-[ed_root_any]
-user=ed
-target=root
-permit=true
-regex = .*
-require_pass=false
-```
-
 The options are as follows:
 
-| part           | effect       |
-|----------------|--------------|
-| [section-name] | section name, naming sections may help you later |
-| name=regex     | mandatory, apply configuration to this entity |
-| target=regex   | mandatory in run and edit, become this user   |
-| require_pass=[true/false]   | defaults to true, mandatory in run and edit, become this user   |
-| regex=rule     | mandatory, this is the regex for the section |
-| notbefore      | the date, in YYYYmmdd or YYYYmmddHHMMSS when this rule becomes effective |
-| notafter       | the date, in YYYYmmdd or YYYYmmddHHMMSS when this rule expires |
-| list=[true/false] | permit listing of users matching the regex rule |
-| edit=[true/false] | permit editing of files matching the regex rule as the target user |
-| group=[true/false] | true to signify that name= refers to a group rather than a user |
-| hostname=regex | hosts where this applies |
-| dir=regex | permit switching to regex defined directory prior to execution |
+| part                        | effect       |
+|-----------------------------|--------------|
+| [section-name]              | Section name, naming sections may help you later. |
+| name=regex                  | Mandatory, apply configuration to this entity. |
+| target=regex                | May become these users. |
+| permit=[true|false]         | Defaults to true |
+| require_pass=[true/false]   | Defaults to true, mandatory in run and edit, become this user.   |
+| regex=rule                  | Mandatory, this is the regex for the section. |
+| notbefore                   | The date, in YYYYmmdd or YYYYmmddHHMMSS when this rule becomes effective. |
+| notafter                    | The date, in YYYYmmdd or YYYYmmddHHMMSS when this rule expires. |
+| list=[true/false]           | Permit listing of users matching the regex rule. |
+| edit=[true/false]           | Permit editing of files matching the regex rule as the target user. |
+| group=[true/false]          | True to signify that name= refers to a group rather than a user. |
+| hostname=regex              | Hosts where this applies. Defaults to 'localhost'. |
+| dir=regex                   | Permit switching to regex defined directory prior to execution. |
+| include=file                | Include file as another ini source, other options will be skipped in this section. |
+| includedir=dir              | Include dir of `.ini` files as other sources, in ascii sort order other options will be skipped in this section. Files not matching `.ini` will be ignored to allow for editor tmp files. |
+
+`include` and `includedir` will override mandatory arguments.
 
 Using a greedy `.*` for the regex field will be as good as saying the rule should match any command. In previous releases there was no anchor (`^` and `$`) however, it seems more sensible to follow `find`'s approach and insist that there are anchors around the regex. This avoids `/bin/bash` matching `/home/user/bin/bash` unless the rule permits something like `/home/%{USER}/bin/bash`.
 
+If a `include` directive is met, no other enties in the section will be processed. The same goes for `includedir`.
+
+The ordering of rules matters. The last match will win. Set `permit=false` if you wish to exclude something, but this should be very rare as the permit should be against a regex rather than using a positive and then a negative match. A rule of best practice is to avoid a fail open and then try and exclude most of the universe.
+
+For example, using the two entries below:
+
 ```
-$ please /bin/bash
-root#
+[ed_root_du]
+user=ed
+target=root
+permit=true
+regex = ^(/usr)?/bin/du\s.*
+require_pass=false
 ```
 
-Or to execute as a user other than `root`, such as `postgres`:
+```
+[ed_postgres]
+user=ed
+target=postgres
+permit=true
+regex = /bin/bash
+require_pass=false
+```
+
+Would permit running `du`, as `/usr/bin/du` or `/bin/du` as `root`:
+
+```
+$ please du /home/*
+```
+
+And would also permit running a bash shell as `postgres`:
 
 ```
 $ please -t postgres /bin/bash
 postgres$
 ```
-
-The ordering of rules matters. The last match will win. Set `permit=false` if you wish to exclude something, but this should be very rare as the permit should be against a regex rather than using a positive and then a negative match. A rule of best practice is to avoid a fail open and then try and exclude most of the universe.
 
 # dated ranges
 
@@ -83,7 +102,7 @@ This is performed as follows:
 4. if `EDITOR` exits 0 then `/tmp/fstab.pleaseedit.tmp` is copied to `/etc/fstab.pleaseedit.tmp`
 5.  `/etc/fstab.pleaseedit.tmp` is set as root owned and `renamed` to `/etc/fstab`
 
-# examples
+# other examples
 
 Members of the `audio` group may remove temporary users that an application may not have cleaned up in the form of `username_tmp.<10 random alphanumerics>` using `userdel`:
 
@@ -120,6 +139,16 @@ You may edit the following:
 ```
 
 The above output shows that I may run anything and may edit the `please.ini` configuration. 
+
+Or, perhaps any user who's name starts `admin` may execute `useradd` and `userdel`:
+
+```
+[admin_users]
+name = admin_\S+
+permit = true
+require_pass = false
+regex = /usr/sbin/user(add|del)\s.*
+```
 
 # files
 

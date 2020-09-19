@@ -19,7 +19,7 @@
 use chrono::Utc;
 use pleaser::util::{
     can_list, can_run, challenge_password, group_hash, list_edit, list_list, list_run, log_action,
-    read_ini_config_file, search_path, EnvOptions,
+    read_ini_config_file, search_path, EnvOptions, remove_token,
 };
 
 use std::os::unix::process::CommandExt;
@@ -39,6 +39,9 @@ fn print_usage(program: &str) {
     println!(" -t [user]: become target user");
     println!(" -c [file]: check config file");
     println!(" -d [dir]: change to dir before execution");
+    println!(" -n: rather than prompt for password, exit non-zero");
+    println!(" -p: purge valid tokens");
+    println!(" -w: warm token cache");
     println!("version: 0.3.3");
 }
 
@@ -46,11 +49,14 @@ fn main() {
     let mut args: Vec<String> = std::env::args().collect();
     let original_command = args.clone();
     let program = args[0].clone();
-    let mut opts = Parser::new(&args, "c:d:hlt:");
+    let mut opts = Parser::new(&args, "c:d:hlwpnt:");
     let service = String::from("please");
     let mut target = String::from("");
     let mut directory = String::from(".");
     let mut list = false;
+    let mut prompt = true;
+    let mut purge_token = false;
+    let mut warm_token = false;
 
     let original_uid = get_current_uid();
     let original_user = get_user_by_uid(original_uid).unwrap();
@@ -79,6 +85,9 @@ fn main() {
                         )
                     }
                     Opt('d', Some(string)) => directory = string,
+                    Opt('n', None) => prompt = false,
+                    Opt('p', None) => purge_token = true,
+                    Opt('w', None) => warm_token = true,
                     _ => unreachable!(),
                 },
             },
@@ -87,6 +96,18 @@ fn main() {
 
     let mut new_args = args.split_off(opts.index());
     let groups = group_hash(original_user.groups().unwrap());
+
+    if purge_token {
+        remove_token(&user.to_string());
+        return;
+    }
+
+    if warm_token {
+        if prompt {
+            challenge_password(user.to_string(), EnvOptions::new(), &service, prompt);
+        }
+        return;
+    }
 
     if read_ini_config_file("/etc/please.ini", &mut vec_eo, &user, true) {
         println!("Exiting due to error");
@@ -143,7 +164,7 @@ fn main() {
 
     if new_args.is_empty() {
         println!("No command given.");
-        return;
+        std::process::exit(1);
     }
 
     match search_path(&new_args[0]) {
@@ -182,7 +203,7 @@ fn main() {
                 &hostname,
                 &target
             );
-            return;
+            std::process::exit(1);
         }
         Ok(x) => {
             if !x.permit {
@@ -199,7 +220,7 @@ fn main() {
                     &hostname,
                     &target
                 );
-                return;
+                std::process::exit(1);
             }
         }
     }
@@ -209,7 +230,7 @@ fn main() {
         return;
     }
 
-    if !challenge_password(user.to_string(), entry.unwrap(), &service) {
+    if !challenge_password(user.to_string(), entry.unwrap(), &service, prompt) {
         log_action(
             &service,
             "deny",
@@ -218,7 +239,7 @@ fn main() {
             &original_command.join(" "),
         );
         println!("Keyboard not present or not functioning, press F1 to continue.");
-        return;
+        std::process::exit(1);
     }
 
     if directory != "" {
