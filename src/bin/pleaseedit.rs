@@ -23,6 +23,7 @@ use std::fs::*;
 use std::os::unix::process::CommandExt;
 use std::path::Path;
 use std::process::Command;
+use std::io::{self, Write};
 
 use getopt::prelude::*;
 
@@ -198,7 +199,7 @@ fn main() {
         }
     }
 
-    if !challenge_password(user.to_string(), entry.unwrap(), &service, prompt) {
+    if !challenge_password(user.to_string(), entry.clone().unwrap(), &service, prompt) {
         log_action(
             &service,
             "deny",
@@ -214,6 +215,11 @@ fn main() {
 
     let edit_file = &setup_temp_edit_file(&service, source_file, original_uid, original_gid, &user);
 
+    std::env::set_var("PLEASE_USER", original_user.name());
+    std::env::set_var("PLEASE_UID", original_uid.to_string());
+    std::env::set_var("PLEASE_EDIT_FILE", edit_file.to_string());
+    std::env::set_var("PLEASE_SOURCE_FILE", source_file.to_str().unwrap());
+
     let mut good_edit = false;
     match fork() {
         Ok(ForkResult::Parent { .. }) => match nix::sys::wait::wait() {
@@ -226,9 +232,6 @@ fn main() {
         Ok(ForkResult::Child) => {
             // drop privileges and execute editor
             let editor = get_editor();
-
-            std::env::set_var("PLEASE_USER", original_user.name());
-            std::env::set_var("PLEASE_UID", original_uid.to_string());
 
             let mut groups: Vec<nix::unistd::Gid> = vec![];
             for x in lookup_name.groups().unwrap() {
@@ -257,6 +260,17 @@ fn main() {
         &target,
         &original_command.join(" "),
     );
+
+    if entry.clone().unwrap().exitcmd.is_some().clone() {
+        let out = Command::new( entry.unwrap().exitcmd.unwrap().as_str() ).arg(&source_file).arg(&edit_file).output().expect("could not execute");
+        io::stdout().write_all(&out.clone().stdout).unwrap();
+        io::stderr().write_all(&out.clone().stderr).unwrap();
+        if !out.status.success() {
+            println!("Aborting as exitcmd was non-zero");
+            std::process::exit(out.status.code().unwrap());
+        }
+    }
+
     let dir_parent_tmp = format!("{}.{}.{}", source_file.to_str().unwrap(), service, user);
     std::fs::copy(edit_file, dir_parent_tmp.as_str()).unwrap();
 
