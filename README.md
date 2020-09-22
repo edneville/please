@@ -97,10 +97,16 @@ Many enterprises may wish to permit access to a user for a limited time only, ev
 This is performed as follows:
 
 1. user runs edit as `pleaseedit -u root /etc/fstab`
-2. `/etc/fstab` is copied to `/tmp/fstab.pleaseedit.tmp`
-3. user's `EDITOR` is executed against `/tmp/fstab.pleaseedit.tmp`
-4. if `EDITOR` exits 0 then `/tmp/fstab.pleaseedit.tmp` is copied to `/etc/fstab.pleaseedit.tmp`
-5.  `/etc/fstab.pleaseedit.tmp` is set as root owned and `renamed` to `/etc/fstab`
+2. `/etc/fstab` is copied to `/tmp/fstab.pleaseedit.$USER`
+3. user's `EDITOR` is executed against `/tmp/fstab.pleaseedit.$USER`
+4. if `EDITOR` exits 0, and `editcmd` exits 0, then `/tmp/fstab.pleaseedit.$USER` is copied to `/etc/fstab.pleaseedit.$USER`
+5.  `/etc/fstab.pleaseedit.$USER` is set as root owned and `renamed` to `/etc/fstab`
+
+# editcmd
+
+editcmd can be used prior to the tmp edit file move to the source location. This can be used to test configuration files are valid prior to renaming in place.
+
+For something similar to apache, consider copying the config tree to a tmp directory before running the test to accommodate includes.
 
 # other examples
 

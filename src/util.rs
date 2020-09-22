@@ -32,6 +32,7 @@ pub struct EnvOptions {
     pub group: bool,
     pub configured: bool,
     pub dir: Regex,
+    pub exitcmd: Option<String>,
 }
 
 impl EnvOptions {
@@ -53,6 +54,7 @@ impl EnvOptions {
             group: false,
             configured: false,
             dir: Regex::new(&"^$").unwrap(),
+            exitcmd: None,
         }
     }
     fn new_deny() -> EnvOptions {
@@ -244,7 +246,9 @@ pub fn read_ini(
                             faulty = true;
                         }
                     },
-
+                    "exitcmd" => if value.len() > 0 {
+                        opt.exitcmd = Some(value.to_string());
+                    },
                     &_ => {
                         println!("{}: unknown attribute \"{}\": {}", config_path, key, value);
                         faulty = true;
