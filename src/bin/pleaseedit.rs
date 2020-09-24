@@ -261,7 +261,7 @@ fn main() {
         &original_command.join(" "),
     );
 
-    if entry.clone().unwrap().exitcmd.is_some().clone() {
+    if entry.clone().unwrap().exitcmd.is_some() {
         let out = Command::new( entry.unwrap().exitcmd.unwrap().as_str() ).arg(&source_file).arg(&edit_file).output().expect("could not execute");
         io::stdout().write_all(&out.clone().stdout).unwrap();
         io::stderr().write_all(&out.clone().stderr).unwrap();
