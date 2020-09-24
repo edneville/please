@@ -67,6 +67,12 @@ impl EnvOptions {
     }
 }
 
+impl Default for EnvOptions {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 fn regex_build(v: &str, user: &str, config_path: &str, section: &str) -> Option<Regex> {
     let rule = Regex::new(&format!("^{}$", &v.to_string().replace("%{USER}", &user)));
     if rule.is_err() {
@@ -153,8 +159,7 @@ pub fn read_ini(
                             Ok(inc) => {
                                 let mut collect = vec![];
                                 for file in inc {
-                                    let entry = file.unwrap().path();
-                                    collect.push(entry.to_str().unwrap().to_string());
+                                    collect.push(file.unwrap().path().to_str().unwrap().to_string());
                                 }
                                 collect.sort();
                                 for file in collect {
@@ -246,7 +251,7 @@ pub fn read_ini(
                             faulty = true;
                         }
                     },
-                    "exitcmd" => if value.len() > 0 {
+                    "exitcmd" => if !value.is_empty() {
                         opt.exitcmd = Some(value.to_string());
                     },
                     &_ => {
@@ -307,14 +312,14 @@ pub fn read_ini_config_str(
     read_ini(&config, vec_eo, &user, fail_error, "static")
 }
 
-pub fn can_run(
-    vec_eo: &Vec<EnvOptions>,
+pub fn can_run<S: ::std::hash::BuildHasher>(
+    vec_eo: &[EnvOptions],
     user: &str,
     target: &str,
     date: &NaiveDateTime,
     hostname: &str,
     command: &str,
-    group_list: &HashMap<String, u32>,
+    group_list: &HashMap<String, u32, S>,
     dir: &str,
 ) -> Result<EnvOptions, ()> {
     can(
@@ -326,19 +331,19 @@ pub fn can_run(
         &command,
         false,
         false,
-        &group_list,
+        group_list,
         &dir,
     )
 }
 
-pub fn can_edit(
-    vec_eo: &Vec<EnvOptions>,
+pub fn can_edit<S: ::std::hash::BuildHasher>(
+    vec_eo: &[EnvOptions],
     user: &str,
     target: &str,
     date: &NaiveDateTime,
     hostname: &str,
     command: &str,
-    group_list: &HashMap<String, u32>,
+    group_list: &HashMap<String, u32, S>,
 ) -> Result<EnvOptions, ()> {
     can(
         vec_eo,
@@ -349,19 +354,19 @@ pub fn can_edit(
         &command,
         true,
         false,
-        &group_list,
+        group_list,
         &"",
     )
 }
 
-pub fn can_list(
-    vec_eo: &Vec<EnvOptions>,
+pub fn can_list<S: ::std::hash::BuildHasher>(
+    vec_eo: &[EnvOptions],
     user: &str,
     target: &str,
     date: &NaiveDateTime,
     hostname: &str,
     command: &str,
-    group_list: &HashMap<String, u32>,
+    group_list: &HashMap<String, u32, S>,
 ) -> Result<EnvOptions, ()> {
     can(
         vec_eo,
@@ -372,13 +377,13 @@ pub fn can_list(
         &command,
         false,
         true,
-        &group_list,
+        group_list,
         &"",
     )
 }
 
-pub fn can(
-    vec_eo: &Vec<EnvOptions>,
+pub fn can<S: ::std::hash::BuildHasher>(
+    vec_eo: &[EnvOptions],
     user: &str,
     target: &str,
     date: &NaiveDateTime,
@@ -386,7 +391,7 @@ pub fn can(
     command: &str,
     edit: bool,
     command_list: bool,
-    group_list: &HashMap<String, u32>,
+    group_list: &HashMap<String, u32, S>,
     dir: &str,
 ) -> Result<EnvOptions, ()> {
     let mut opt = EnvOptions::new_deny();
@@ -520,13 +525,13 @@ pub fn challenge_password(user: String, entry: EnvOptions, service: &str, prompt
     true
 }
 
-pub fn list_edit(
-    vec_eo: &Vec<EnvOptions>,
+pub fn list_edit<S: ::std::hash::BuildHasher>(
+    vec_eo: &[EnvOptions],
     user: &str,
     date: &NaiveDateTime,
     hostname: &str,
     target: &str,
-    group_list: &HashMap<String, u32>,
+    group_list: &HashMap<String, u32, S>,
 ) {
     list(
         vec_eo,
@@ -536,17 +541,17 @@ pub fn list_edit(
         true,
         false,
         &target,
-        &group_list,
+        group_list,
     );
 }
 
-pub fn list_run(
-    vec_eo: &Vec<EnvOptions>,
+pub fn list_run<S: ::std::hash::BuildHasher>(
+    vec_eo: &[EnvOptions],
     user: &str,
     date: &NaiveDateTime,
     hostname: &str,
     target: &str,
-    group_list: &HashMap<String, u32>,
+    group_list: &HashMap<String, u32, S>,
 ) {
     list(
         vec_eo,
@@ -556,17 +561,17 @@ pub fn list_run(
         false,
         false,
         &target,
-        &group_list,
+        group_list,
     );
 }
 
-pub fn list_list(
-    vec_eo: &Vec<EnvOptions>,
+pub fn list_list<S: ::std::hash::BuildHasher>(
+    vec_eo: &[EnvOptions],
     user: &str,
     date: &NaiveDateTime,
     hostname: &str,
     target: &str,
-    group_list: &HashMap<String, u32>,
+    group_list: &HashMap<String, u32, S>,
 ) {
     list(
         vec_eo,
@@ -576,19 +581,19 @@ pub fn list_list(
         false,
         true,
         &target,
-        &group_list,
+        group_list,
     );
 }
 
-pub fn list(
-    vec_eo: &Vec<EnvOptions>,
+pub fn list<S: ::std::hash::BuildHasher>(
+    vec_eo: &[EnvOptions],
     user: &str,
     date: &NaiveDateTime,
     hostname: &str,
     edit: bool,
     list: bool,
     target: &str,
-    group_list: &HashMap<String, u32>,
+    group_list: &HashMap<String, u32, S>,
 ) {
     let search_user = if target != "" {
         String::from(target)

@@ -1,10 +1,10 @@
-# please, a sudo clone with regex support
+# Please, a sudo clone with regex support
 
 Great! This is what I needed.
 
 The aim is to allow admins to delegate accurate least privilege access with ease. There are times when what is intended to be executed can be expressed easily with a regex to expose only what is needed and nothing more.
 
-# how do i install it
+# How do I install it
 
 A simple install:
 
@@ -17,7 +17,7 @@ A simple install:
   && chmod 4755 /usr/local/bin/please /usr/local/bin/pleaseedit
 ```
 
-# how do i set it up
+# How do I set it up
 
 Next, configure your `/etc/please.ini` similar to this, replace user names with appropriate values. One of the simplest, that does not require password authentication can be defined as follows, assuming the user is `ed`:
 
@@ -82,7 +82,7 @@ $ please -t postgres /bin/bash
 postgres$
 ```
 
-# dated ranges
+# Date ranges
 
 For large environments it is not unusual for a third party to require access during a short time frame for debugging. To accommodate this there are the `notbefore` and `notafter` time brackets. These can be either `YYYYMMDD` or `YYYYMMDDHHMMSS`.
 
@@ -108,7 +108,7 @@ editcmd can be used prior to the tmp edit file move to the source location. This
 
 For something similar to apache, consider copying the config tree to a tmp directory before running the test to accommodate includes.
 
-# other examples
+# Other examples
 
 Members of the `audio` group may remove temporary users that an application may not have cleaned up in the form of `username_tmp.<10 random alphanumerics>` using `userdel`:
 
@@ -156,29 +156,28 @@ require_pass = false
 regex = /usr/sbin/user(add|del)\s.*
 ```
 
-# files
+# Files
 
 /etc/please.ini
 
-# contributions
+# Contributions
 
 I welcome pull requests with open arms.
 
-# locations
+# Locations
 
 The source code for this project is currently hosted on [gitlab](https://gitlab.com/edneville/please) and mirrored to [github](https://github.com/edneville/please). There is a [crate on crates.io](https://crates.io/crates/pleaser). It also has a [homepage](https://www.usenix.org.uk/content/please.html) where other project information is kept.
 
-# why pleaser in some circles?
+# Why pleaser in some circles?
 
 This project is named "please". In some places that project name was used by others for other things. Some packages will be named pleaser, some will be named please. The only important thing is if you wish someone to make you a sandwich, just say "please" first.
 
-# todo
+# Todo
 
 ```
 [ ] read links on source of edits and don't stray outside of permitted rule
 [ ] docker image for testing
 [ ] plugins/modules
-[ ] include readpart .d files
 [ ] packages
 ```
 
