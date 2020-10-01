@@ -14,16 +14,16 @@
 //    You should have received a copy of the GNU General Public License
 //    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-use chrono::Utc;
 use pleaser::util::{
-    can_edit, challenge_password, get_editor, group_hash, log_action, read_ini_config_file, EnvOptions, remove_token,
+    can, challenge_password, get_editor, log_action, read_ini_config_file, remove_token,
+    EnvOptions, RunOptions, ACLTYPE,
 };
 
 use std::fs::*;
+use std::io::{self, Write};
 use std::os::unix::process::CommandExt;
 use std::path::Path;
 use std::process::Command;
-use std::io::{self, Write};
 
 use getopt::prelude::*;
 
@@ -87,16 +87,15 @@ fn main() {
     let program = args[0].clone();
     let mut opts = Parser::new(&args, "t:hnpw");
     let service = String::from("pleaseedit");
+    let mut ro = RunOptions::new();
     let mut prompt = true;
-    let mut target = String::from("root");
     let mut purge_token = false;
     let mut warm_token = false;
-
     let original_uid = get_current_uid();
     let original_user = get_user_by_uid(original_uid).unwrap();
     let original_gid = original_user.primary_group_id();
-    let user = original_user.name().to_string_lossy();
-    let group_hash = group_hash(original_user.groups().unwrap());
+    ro.name = original_user.name().to_string_lossy().to_string();
+    ro.acl_type = ACLTYPE::EDIT;
     let mut vec_eo: Vec<EnvOptions> = vec![];
 
     loop {
@@ -112,7 +111,7 @@ fn main() {
                         print_usage(&program);
                         return;
                     }
-                    Opt('t', Some(string)) => target = string,
+                    Opt('t', Some(string)) => ro.target = string,
                     Opt('n', None) => prompt = false,
                     Opt('p', None) => purge_token = true,
                     Opt('w', None) => warm_token = true,
@@ -122,60 +121,57 @@ fn main() {
         }
     }
 
+    let new_args = args.split_off(opts.index());
+    ro.command = new_args.join(" ");
+
     if purge_token {
-        remove_token(&user.to_string());
+        remove_token(&ro.name);
         return;
     }
 
     if warm_token {
         if prompt {
-            challenge_password(user.to_string(), EnvOptions::new(), &service, prompt);
+            challenge_password(ro.name, EnvOptions::new(), &service, prompt);
         }
         return;
     }
 
-    let new_args = args.split_off(opts.index());
+    if ro.target == "" {
+        ro.target = "root".to_string();
+    }
 
     if new_args.is_empty() || new_args.len() > 1 {
         print_usage(&program);
         return;
     }
 
-    if read_ini_config_file("/etc/please.ini", &mut vec_eo, &user, true) {
+    if read_ini_config_file("/etc/please.ini", &mut vec_eo, &ro.name, true) {
         println!("Exiting due to error");
         std::process::exit(1);
     }
 
-    let date = Utc::now().naive_utc();
     let mut buf = [0u8; 64];
-    let hostname = gethostname(&mut buf)
+    ro.hostname = gethostname(&mut buf)
         .expect("Failed getting hostname")
         .to_str()
-        .expect("Hostname wasn't valid UTF-8");
-    let entry = can_edit(
-        &vec_eo,
-        &user,
-        &target,
-        &date,
-        &hostname,
-        &new_args.join(" "),
-        &group_hash,
-    );
+        .expect("Hostname wasn't valid UTF-8")
+        .to_string();
+    let entry = can(&vec_eo, &ro);
 
     match &entry {
         Err(_) => {
             log_action(
                 &service,
                 "deny",
-                &user,
-                &target,
+                &ro.name,
+                &ro.target,
                 &original_command.join(" "),
             );
             println!(
                 "You may not edit \"{}\" on {} as {}",
-                new_args.join(" "),
-                &hostname,
-                &target
+                &ro.command,
+                &ro.hostname,
+                &ro.target
             );
             std::process::exit(1);
         }
@@ -184,36 +180,42 @@ fn main() {
                 log_action(
                     &service,
                     "deny",
-                    &user,
-                    &target,
+                    &ro.name,
+                    &ro.target,
                     &original_command.join(" "),
                 );
                 println!(
                     "You may not edit \"{}\" on {} as {}",
-                    new_args.join(" "),
-                    &hostname,
-                    &target
+                    &ro.command,
+                    &ro.hostname,
+                    &ro.target
                 );
                 std::process::exit(1);
             }
         }
     }
 
-    if !challenge_password(user.to_string(), entry.clone().unwrap(), &service, prompt) {
+    if !challenge_password(
+        ro.name.to_string(),
+        entry.clone().unwrap(),
+        &service,
+        prompt,
+    ) {
         log_action(
             &service,
             "deny",
-            &user,
-            &target,
+            &ro.name,
+            &ro.target,
             &original_command.join(" "),
         );
         std::process::exit(1);
     }
 
-    let lookup_name = users::get_user_by_name(&target).unwrap();
+    let lookup_name = users::get_user_by_name(&ro.target).unwrap();
     let source_file = Path::new(&new_args[0]);
 
-    let edit_file = &setup_temp_edit_file(&service, source_file, original_uid, original_gid, &user);
+    let edit_file =
+        &setup_temp_edit_file(&service, source_file, original_uid, original_gid, &ro.name);
 
     std::env::set_var("PLEASE_USER", original_user.name());
     std::env::set_var("PLEASE_UID", original_uid.to_string());
@@ -256,13 +258,17 @@ fn main() {
     log_action(
         &service,
         "permit",
-        &user,
-        &target,
+        &ro.name,
+        &ro.target,
         &original_command.join(" "),
     );
 
     if entry.clone().unwrap().exitcmd.is_some() {
-        let out = Command::new( entry.unwrap().exitcmd.unwrap().as_str() ).arg(&source_file).arg(&edit_file).output().expect("could not execute");
+        let out = Command::new(entry.unwrap().exitcmd.unwrap().as_str())
+            .arg(&source_file)
+            .arg(&edit_file)
+            .output()
+            .expect("could not execute");
         io::stdout().write_all(&out.clone().stdout).unwrap();
         io::stderr().write_all(&out.clone().stderr).unwrap();
         if !out.status.success() {
@@ -271,7 +277,7 @@ fn main() {
         }
     }
 
-    let dir_parent_tmp = format!("{}.{}.{}", source_file.to_str().unwrap(), service, user);
+    let dir_parent_tmp = format!("{}.{}.{}", source_file.to_str().unwrap(), service, ro.name);
     std::fs::copy(edit_file, dir_parent_tmp.as_str()).unwrap();
 
     nix::unistd::chown(
