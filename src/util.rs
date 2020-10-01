@@ -8,7 +8,7 @@ use std::process;
 use std::time::SystemTime;
 use syslog::{Facility, Formatter3164};
 
-use chrono::{NaiveDate, NaiveDateTime};
+use chrono::{NaiveDate, NaiveDateTime, Utc};
 use std::fs;
 use std::fs::File;
 use std::io::prelude::*;
@@ -25,10 +25,9 @@ pub struct EnvOptions {
     pub permit: bool,
     pub require_pass: bool,
     pub env_list: Vec<String>,
-    pub edit: bool,
+    pub acl_type: ACLTYPE,
     pub file_name: String,
     pub section: String,
-    pub list: bool,
     pub group: bool,
     pub configured: bool,
     pub dir: Regex,
@@ -49,11 +48,10 @@ impl EnvOptions {
             section: "".to_string(),
             permit: true,
             require_pass: true,
-            edit: false,
-            list: false,
+            acl_type: ACLTYPE::RUN,
             group: false,
             configured: false,
-            dir: Regex::new(&"^$").unwrap(),
+            dir: Regex::new(&"^.*$").unwrap(),
             exitcmd: None,
         }
     }
@@ -62,7 +60,7 @@ impl EnvOptions {
         opt.permit = false;
         opt.rule = Regex::new(".").unwrap();
         opt.target = Regex::new("^$").unwrap();
-        opt.edit = true;
+        opt.acl_type = ACLTYPE::LIST;
         opt
     }
 }
@@ -71,6 +69,48 @@ impl Default for EnvOptions {
     fn default() -> Self {
         Self::new()
     }
+}
+
+#[derive(Clone)]
+pub struct RunOptions {
+    pub name: String,
+    pub target: String,
+    pub command: String,
+    pub original_command: Vec<String>,
+    pub hostname: String,
+    pub directory: String,
+    pub groups: HashMap<String, u32>,
+    pub date: NaiveDateTime,
+    pub acl_type: ACLTYPE,
+}
+
+impl RunOptions {
+    pub fn new() -> RunOptions {
+        RunOptions {
+            name: "root".to_string(),
+            target: "".to_string(),
+            command: "".to_string(),
+            original_command: vec![],
+            hostname: "localhost".to_string(),
+            date: Utc::now().naive_utc(),
+            groups: HashMap::new(),
+            directory: ".".to_string(),
+            acl_type: ACLTYPE::RUN,
+        }
+    }
+}
+
+impl Default for RunOptions {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[derive(PartialEq, Eq, Clone, Debug)]
+pub enum ACLTYPE {
+    RUN,
+    LIST,
+    EDIT,
 }
 
 fn regex_build(v: &str, user: &str, config_path: &str, section: &str) -> Option<Regex> {
@@ -159,7 +199,8 @@ pub fn read_ini(
                             Ok(inc) => {
                                 let mut collect = vec![];
                                 for file in inc {
-                                    collect.push(file.unwrap().path().to_str().unwrap().to_string());
+                                    collect
+                                        .push(file.unwrap().path().to_str().unwrap().to_string());
                                 }
                                 collect.sort();
                                 for file in collect {
@@ -167,12 +208,7 @@ pub fn read_ini(
                                     if !can_dir_include(&incf) {
                                         continue;
                                     }
-                                    if read_ini_config_file(
-                                        &incf,
-                                        vec_eo,
-                                        &user,
-                                        fail_error,
-                                    ) {
+                                    if read_ini_config_file(&incf, vec_eo, &user, fail_error) {
                                         println!("Could not read {}", value);
                                         return false;
                                     }
@@ -182,7 +218,7 @@ pub fn read_ini(
 
                         continue;
                     }
-                    "name" | "user" => match regex_build(value, user, config_path, &section) {
+                    "name" => match regex_build(value, user, config_path, &section) {
                         Some(check) => {
                             opt.name = check;
                             opt.configured = true;
@@ -209,8 +245,11 @@ pub fn read_ini(
                     },
                     "permit" => opt.permit = value == "true",
                     "require_pass" => opt.require_pass = value != "false",
-                    "edit" => opt.edit = value == "true",
-                    "list" => opt.list = value == "true",
+                    "type" => match value.to_lowercase().as_str() {
+                        "edit" => opt.acl_type = ACLTYPE::EDIT,
+                        "list" => opt.acl_type = ACLTYPE::LIST,
+                        _ => opt.acl_type = ACLTYPE::RUN,
+                    },
                     "group" => opt.group = value == "true",
                     "regex" => match regex_build(value, user, config_path, &section) {
                         Some(check) => {
@@ -236,12 +275,14 @@ pub fn read_ini(
                         )
                     }
                     "notbefore" if value.len() == 14 => {
-                        opt.notbefore =
-                            Some(parse_datetime_from_str(&value.to_string(), "%Y%m%d%H%M%S").unwrap())
+                        opt.notbefore = Some(
+                            parse_datetime_from_str(&value.to_string(), "%Y%m%d%H%M%S").unwrap(),
+                        )
                     }
                     "notafter" if value.len() == 14 => {
-                        opt.notafter =
-                            Some(parse_datetime_from_str(&value.to_string(), "%Y%m%d%H%M%S").unwrap())
+                        opt.notafter = Some(
+                            parse_datetime_from_str(&value.to_string(), "%Y%m%d%H%M%S").unwrap(),
+                        )
                     }
                     "dir" => match regex_build(value, user, config_path, &section) {
                         Some(dir) => {
@@ -251,21 +292,16 @@ pub fn read_ini(
                             faulty = true;
                         }
                     },
-                    "exitcmd" => if !value.is_empty() {
-                        opt.exitcmd = Some(value.to_string());
-                    },
+                    "exitcmd" => {
+                        if !value.is_empty() {
+                            opt.exitcmd = Some(value.to_string());
+                        }
+                    }
                     &_ => {
                         println!("{}: unknown attribute \"{}\": {}", config_path, key, value);
                         faulty = true;
                     }
                 }
-                /*
-                println!("Name: {}", opt.name);
-                println!("Target: {}", opt.target);
-                println!("Hostname: {}", opt.hostname);
-                println!("Rule: {}", opt.rule);
-                println!("Permit: {}", opt.permit);
-                */
             }
             None => {
                 println!("Error parsing {}:{}", config_path, line);
@@ -312,161 +348,76 @@ pub fn read_ini_config_str(
     read_ini(&config, vec_eo, &user, fail_error, "static")
 }
 
-pub fn can_run<S: ::std::hash::BuildHasher>(
-    vec_eo: &[EnvOptions],
-    user: &str,
-    target: &str,
-    date: &NaiveDateTime,
-    hostname: &str,
-    command: &str,
-    group_list: &HashMap<String, u32, S>,
-    dir: &str,
-) -> Result<EnvOptions, ()> {
-    can(
-        vec_eo,
-        &user,
-        &target,
-        &date,
-        &hostname,
-        &command,
-        false,
-        false,
-        group_list,
-        &dir,
-    )
-}
-
-pub fn can_edit<S: ::std::hash::BuildHasher>(
-    vec_eo: &[EnvOptions],
-    user: &str,
-    target: &str,
-    date: &NaiveDateTime,
-    hostname: &str,
-    command: &str,
-    group_list: &HashMap<String, u32, S>,
-) -> Result<EnvOptions, ()> {
-    can(
-        vec_eo,
-        &user,
-        &target,
-        &date,
-        &hostname,
-        &command,
-        true,
-        false,
-        group_list,
-        &"",
-    )
-}
-
-pub fn can_list<S: ::std::hash::BuildHasher>(
-    vec_eo: &[EnvOptions],
-    user: &str,
-    target: &str,
-    date: &NaiveDateTime,
-    hostname: &str,
-    command: &str,
-    group_list: &HashMap<String, u32, S>,
-) -> Result<EnvOptions, ()> {
-    can(
-        vec_eo,
-        &user,
-        &target,
-        &date,
-        &hostname,
-        &command,
-        false,
-        true,
-        group_list,
-        &"",
-    )
-}
-
-pub fn can<S: ::std::hash::BuildHasher>(
-    vec_eo: &[EnvOptions],
-    user: &str,
-    target: &str,
-    date: &NaiveDateTime,
-    hostname: &str,
-    command: &str,
-    edit: bool,
-    command_list: bool,
-    group_list: &HashMap<String, u32, S>,
-    dir: &str,
-) -> Result<EnvOptions, ()> {
+pub fn can(vec_eo: &[EnvOptions], ro: &RunOptions) -> Result<EnvOptions, ()> {
     let mut opt = EnvOptions::new_deny();
 
     for item in vec_eo {
-        //println!("{}:", item.section);
-        if item.notbefore.is_some() && item.notbefore.unwrap() > *date {
-            //println!("{}: now is before date", item.section);
+        // println!("{}:", item.section);
+        if item.notbefore.is_some() && item.notbefore.unwrap() > ro.date {
+            // println!("{}: now is before date", item.section);
             continue;
         }
 
-        if item.notafter.is_some() && item.notafter.unwrap() < *date {
-            //println!("{}: now is after date", item.section);
+        if item.notafter.is_some() && item.notafter.unwrap() < ro.date {
+            // println!("{}: now is after date", item.section);
             continue;
         }
-        if !item.group && !item.name.is_match(user) {
-            //println!("{}: not name match", item.section);
+        if !item.group && !item.name.is_match(&ro.name) {
+            // println!("{}: skipping as not a name match ({}), group={}", item.section, item.name, item.group);
             continue;
         }
 
         if item.group {
             let mut found = false;
-            for (k, _) in group_list.iter() {
-                if item.name.is_match(&k) {
-                    //println!("{}: {} matches group {}", item.section,item.name, k);
+            for (k, _) in ro.groups.iter() {
+                if item.name.is_match(&k.to_string()) {
+                    // println!("{}: {} matches group {}", item.section,item.name, k);
                     found = true;
                     break;
                 }
             }
             if !found {
-                //println!("{}: did not find a group name match",item.section);
+                // println!("{}: did not find a group name match",item.section);
                 continue;
             }
         }
 
-        if item.list != command_list {
-            //println!("{}: not list, {} != {}", item.section, item.list, command_list);
+        if item.acl_type != ro.acl_type {
+            // println!("{}: not {:?} != {:?}", item.section, item.acl_type, ro.acl_type);
             continue;
         }
 
-        if item.edit != edit {
-            //println!("{}: item is for edit", item.section);
-            continue;
-        }
-
-        if !item.hostname.is_match(hostname)
+        if !item.hostname.is_match(&ro.hostname)
             && !item.hostname.is_match("any")
             && !item.hostname.is_match("localhost")
         {
-            //println!("{}: hostname mismatch", item.section);
+            // println!("{}: hostname mismatch", item.section);
             continue;
         }
 
-        if !item.dir.is_match(dir) && dir != "." {
+        if !item.dir.is_match(&ro.directory) {
+            // && ro.directory != "." {
             continue;
         }
 
-        if command_list {
-            if item.rule.is_match(target) {
-                //println!("{}: is list", item.section);
+        if item.acl_type == ACLTYPE::LIST {
+            if item.rule.is_match(&ro.target) {
+                // println!("{}: is list", item.section);
                 opt = item.clone();
             }
         } else {
-            if !item.target.is_match(target) {
-                //println!("{}: item target {} != target {}", item.section, item.target, target);
+            if !item.target.is_match(&ro.target) {
+                // println!("{}: item target {} != target {}", item.section, item.target, ro.target);
                 continue;
             }
-            if item.rule.is_match(command) {
-                //println!("{}: item rule is match", item.section);
+            if item.rule.is_match(&ro.command) {
+                // println!("{}: item rule is match", item.section);
                 opt = item.clone();
             } else {
-                //println!("{}: item rule ({}) is not a match for {}", item.section, item.rule, command);
+                // println!("{}: item rule ({}) is not a match for {}", item.section, item.rule, ro.command);
             }
         }
-        //println!("didn't match");
+        // println!("didn't match");
     }
     Ok(opt)
 }
@@ -525,80 +476,11 @@ pub fn challenge_password(user: String, entry: EnvOptions, service: &str, prompt
     true
 }
 
-pub fn list_edit<S: ::std::hash::BuildHasher>(
-    vec_eo: &[EnvOptions],
-    user: &str,
-    date: &NaiveDateTime,
-    hostname: &str,
-    target: &str,
-    group_list: &HashMap<String, u32, S>,
-) {
-    list(
-        vec_eo,
-        &user,
-        &date,
-        &hostname,
-        true,
-        false,
-        &target,
-        group_list,
-    );
-}
-
-pub fn list_run<S: ::std::hash::BuildHasher>(
-    vec_eo: &[EnvOptions],
-    user: &str,
-    date: &NaiveDateTime,
-    hostname: &str,
-    target: &str,
-    group_list: &HashMap<String, u32, S>,
-) {
-    list(
-        vec_eo,
-        &user,
-        &date,
-        &hostname,
-        false,
-        false,
-        &target,
-        group_list,
-    );
-}
-
-pub fn list_list<S: ::std::hash::BuildHasher>(
-    vec_eo: &[EnvOptions],
-    user: &str,
-    date: &NaiveDateTime,
-    hostname: &str,
-    target: &str,
-    group_list: &HashMap<String, u32, S>,
-) {
-    list(
-        vec_eo,
-        &user,
-        &date,
-        &hostname,
-        false,
-        true,
-        &target,
-        group_list,
-    );
-}
-
-pub fn list<S: ::std::hash::BuildHasher>(
-    vec_eo: &[EnvOptions],
-    user: &str,
-    date: &NaiveDateTime,
-    hostname: &str,
-    edit: bool,
-    list: bool,
-    target: &str,
-    group_list: &HashMap<String, u32, S>,
-) {
-    let search_user = if target != "" {
-        String::from(target)
+pub fn list(vec_eo: &[EnvOptions], ro: &RunOptions) {
+    let search_user = if ro.target != "" {
+        String::from(&ro.target)
     } else {
-        String::from(user)
+        String::from(&ro.name)
     };
 
     let mut last_file = "";
@@ -610,31 +492,27 @@ pub fn list<S: ::std::hash::BuildHasher>(
 
         if item.group {
             let mut found = false;
-            for (k, _) in group_list.iter() {
+            for (k, _) in ro.groups.iter() {
                 if item.name.is_match(&k) {
                     found = true;
                     break;
                 }
             }
-            if found {
+            if !found {
                 continue;
             }
         }
 
         let mut prefixes = vec![];
-        if item.notbefore.is_some() && item.notbefore.unwrap() > *date {
+        if item.notbefore.is_some() && item.notbefore.unwrap() > ro.date {
             prefixes.push(format!("upcomming({})", item.notbefore.unwrap()));
         }
 
-        if item.notafter.is_some() && item.notafter.unwrap() < *date {
+        if item.notafter.is_some() && item.notafter.unwrap() < ro.date {
             prefixes.push(format!("expired({})", item.notafter.unwrap()));
         }
 
-        if item.edit != edit {
-            continue;
-        }
-
-        if item.list != list {
+        if item.acl_type != ro.acl_type {
             continue;
         }
 
@@ -642,22 +520,16 @@ pub fn list<S: ::std::hash::BuildHasher>(
             prefixes.push(String::from("not permitted"));
         }
 
-        if !item.hostname.is_match(hostname)
+        if !item.hostname.is_match(&ro.hostname)
             && !item.hostname.is_match("any")
             && !item.hostname.is_match("localhost")
         {
             continue;
         }
-        if item.require_pass {
-            prefixes.push(String::from("req_pass"));
-        }
-        else {
-            prefixes.push(String::from("no_pass"));
-        }
 
         let mut prefix = prefixes.join(", ");
         if !prefix.is_empty() {
-            if !item.list {
+            if item.acl_type != ACLTYPE::LIST {
                 prefix = format!(" {} as ", prefix);
             } else {
                 prefix = format!(" {} to ", prefix);
@@ -668,14 +540,14 @@ pub fn list<S: ::std::hash::BuildHasher>(
             last_file = &item.file_name;
         }
 
-        if item.list {
+        if item.acl_type == ACLTYPE::LIST {
             println!("    {}:{}list: {}", item.section, prefix, item.rule);
             continue;
         }
 
         println!(
-            "    {}:{}{}: {}",
-            item.section, prefix, item.target, item.rule
+            "    {}:{}{} (pass={},dirs={}): {}",
+            item.section, prefix, item.target, item.require_pass, item.dir, item.rule
         );
     }
 }
@@ -832,778 +704,450 @@ mod test {
     #[test]
     fn test_execute_config() {
         let config = "[ed_all_dated]
-user=ed
+name=ed
 target=root
 notbefore=20200101
 notafter=20201225
 regex =^.*$
+
 [ed_false_oracle]
-user=ed
+name=ed
 target=oracle
 permit=false
 regex=^/bin/bash .*$
 
 [ed_root_bash_all]
-user=ed
+name=ed
 target=root
 regex=^/bin/bash .*$
-[user_m_all_todo]
-user=m{}
-target=
-regex=^ "
-            .to_string();
+"
+        .to_string();
 
-        let date: NaiveDateTime = NaiveDate::from_ymd(2020, 1, 1).and_hms(0, 0, 0);
         let mut vec_eo: Vec<EnvOptions> = vec![];
         read_ini_config_str(&config, &mut vec_eo, "ed", false);
-        let group_hash: HashMap<String, u32> = HashMap::new();
+        let mut ro = RunOptions::new();
+        ro.date = NaiveDate::from_ymd(2020, 1, 1).and_hms(0, 0, 0);
+        ro.name = "ed".to_string();
+        ro.target = "root".to_string();
+        ro.acl_type = ACLTYPE::RUN;
+        ro.command = "/bin/bash".to_string();
+        assert_eq!(can(&vec_eo, &ro).unwrap().permit, true);
+    }
 
-        assert_eq!(
-            can_run(
-                &vec_eo,
-                "ed",
-                "root",
-                &date,
-                "localhost",
-                "/bin/bash",
-                &group_hash,
-                "",
-            )
-            .unwrap()
-            .permit,
-            true
-        );
+    #[test]
+    fn test_user_bash() {
+        let config = "
+[ed_edn]
+name = ed
+type = list
+target = root
+regex = (edn?)
+
+[ed]
+name = ed
+target = root
+regex = /bin/bash
+        "
+        .to_string();
+
+        let mut vec_eo: Vec<EnvOptions> = vec![];
+        read_ini_config_str(&config, &mut vec_eo, "ed", false);
+        let mut ro = RunOptions::new();
+        ro.name = "ed".to_string();
+        ro.target = "root".to_string();
+        ro.acl_type = ACLTYPE::RUN;
+        ro.command = "/bin/bash".to_string();
+        assert_eq!(can(&vec_eo, &ro).unwrap().permit, true);
     }
 
     #[test]
     fn test_execute_user_does_not_exist() {
         let config = "[ed_root_all]
-user=ed
+name=ed
 target=root
 notbefore=20200101
 notafter=20201225
 regex= ^.*$
+
 [ed_oracle_bash]
-user=ed
+name=ed
 target=oracle
 regex=^/bin/bash .*$
+
 [ed_root_bash]
-user=ed
+name=ed
 target=root
 regex=^/bin/bash .*$
+
 [user_all_todo]
-user=.*
+name=.*
 target=thingy
 regex=^/bin/bash"
             .to_string();
 
-        let date: NaiveDateTime = NaiveDate::from_ymd(2019, 12, 31).and_hms(0, 0, 0);
+        let mut ro = RunOptions::new();
+        ro.date = NaiveDate::from_ymd(2019, 12, 31).and_hms(0, 0, 0);
+        ro.name = "ed".to_string();
+        ro.target = "root".to_string();
+        ro.acl_type = ACLTYPE::RUN;
+        ro.command = "/bin/bash".to_string();
 
         let mut vec_eo: Vec<EnvOptions> = vec![];
-        read_ini_config_str(&config, &mut vec_eo, "ed", false);
-        let group_hash: HashMap<String, u32> = HashMap::new();
+        read_ini_config_str(&config, &mut vec_eo, &ro.name, false);
+        assert_eq!(can(&vec_eo, &ro).unwrap().permit, false);
 
-        assert_eq!(
-            can_run(
-                &vec_eo,
-                "gone",
-                "root",
-                &date,
-                "localhost",
-                "/bin/bash",
-                &group_hash,
-                "",
-            )
-            .unwrap()
-            .permit,
-            false
-        );
-        assert_eq!(
-            can_run(
-                &vec_eo,
-                "gone",
-                "thingy",
-                &date,
-                "localhost",
-                "/bin/bash",
-                &group_hash,
-                "",
-            )
-            .unwrap()
-            .permit,
-            true
-        );
+        ro.name = "other".to_string();
+        ro.target = "thingy".to_string();
+        let mut vec_eo: Vec<EnvOptions> = vec![];
+        read_ini_config_str(&config, &mut vec_eo, &ro.name, false);
+        assert_eq!(can(&vec_eo, &ro).unwrap().permit, true);
+
+        ro.name = "other".to_string();
+        ro.target = "oracle".to_string();
+        let mut vec_eo: Vec<EnvOptions> = vec![];
+        read_ini_config_str(&config, &mut vec_eo, &ro.name, false);
+        assert_eq!(can(&vec_eo, &ro).unwrap().permit, false);
     }
 
     #[test]
     fn test_execute_config_too_early() {
         let config = "
 [ed]
-user=ed
+name=ed
 target=root
 notbefore=20200101
 notafter=20201225
 regex =^.*$
 [ed_oracle]
-user=ed
+name=ed
 target=oracle ^/bin/bash .*$
 [ed_dated]
-user=ed
+name=ed
 target=root
-notafter=20200125
 notbefore=20200101
-regex =^
-[user_all_todo]
-user=m{}
+notafter=20200125
+regex =^.*
+[name_all_todo]
+name=m{}
 target=^ "
             .to_string();
 
+        let mut ro = RunOptions::new();
+        ro.name = "ed".to_string();
+        ro.target = "root".to_string();
+        ro.acl_type = ACLTYPE::RUN;
+        ro.command = "/bin/bash".to_string();
+
         let mut vec_eo: Vec<EnvOptions> = vec![];
         read_ini_config_str(&config, &mut vec_eo, "ed", false);
-        let group_hash: HashMap<String, u32> = HashMap::new();
 
-        assert_eq!(
-            can_run(
-                &vec_eo,
-                "ed",
-                "root",
-                &NaiveDate::from_ymd(2019, 12, 31).and_hms(0, 0, 0),
-                "localhost",
-                "/bin/bash",
-                &group_hash,
-                "",
-            )
-            .unwrap()
-            .permit,
-            false
-        );
-        assert_eq!(
-            can_run(
-                &vec_eo,
-                "ed",
-                "root",
-                &NaiveDate::from_ymd(2020, 12, 25).and_hms(0, 0, 0),
-                "localhost",
-                "/bin/bash",
-                &group_hash,
-                "",
-            )
-            .unwrap()
-            .permit,
-            true
-        );
-        assert_eq!(
-            can_run(
-                &vec_eo,
-                "ed",
-                "root",
-                &NaiveDate::from_ymd(2020, 12, 25).and_hms(1, 0, 0),
-                "localhost",
-                "/bin/bash",
-                &group_hash,
-                "",
-            )
-            .unwrap()
-            .permit,
-            true
-        );
+        ro.date = NaiveDate::from_ymd(2019, 12, 31).and_hms(0, 0, 0);
+        assert_eq!(can(&vec_eo, &ro).unwrap().permit, false);
+
+        ro.date = NaiveDate::from_ymd(2020, 12, 25).and_hms(0, 0, 0);
+        assert_eq!(can(&vec_eo, &ro).unwrap().permit, true);
+
+        ro.date = NaiveDate::from_ymd(2020, 01, 25).and_hms(0, 0, 0);
+        assert_eq!(can(&vec_eo, &ro).unwrap().permit, true);
+
+        ro.date = NaiveDate::from_ymd(2020, 03, 25).and_hms(0, 0, 0);
+        assert_eq!(can(&vec_eo, &ro).unwrap().permit, true);
+    }
+
+    #[test]
+    fn test_list_regex() {
+        let config = "
+[ed_root]
+name = (floppy)
+group = true
+permit = true
+require_pass = false
+regex = ^.*
+
+[ed_list]
+name = (ed)
+type = list
+regex = %{USER}
+require_pass = false
+            "
+        .to_string();
+
+        let mut vec_eo: Vec<EnvOptions> = vec![];
+        read_ini_config_str(&config, &mut vec_eo, "ed", false);
+        let mut ro = RunOptions::new();
+        ro.name = "ed".to_string();
+        ro.acl_type = ACLTYPE::LIST;
+
+        ro.target = "ed".to_string();
+        assert_eq!(can(&vec_eo, &ro).unwrap().permit, true);
+        ro.target = "root".to_string();
+        assert_eq!(can(&vec_eo, &ro).unwrap().permit, false);
     }
 
     #[test]
     fn test_execute_config_too_early_long() {
         let config = "
-[ed_too_early]        
-user=ed
+[ed_too_early]
+name=ed
 target=root
 notbefore=20200808
 notafter=20200810235959
 regex=^.*
-    "
+        "
         .to_string();
 
         let mut vec_eo: Vec<EnvOptions> = vec![];
         read_ini_config_str(&config, &mut vec_eo, "ed", false);
-        let group_hash: HashMap<String, u32> = HashMap::new();
+        let mut ro = RunOptions::new();
+        ro.name = "ed".to_string();
+        ro.target = "root".to_string();
 
-        assert_eq!(
-            can_run(
-                &vec_eo,
-                "ed",
-                "root",
-                &NaiveDate::from_ymd(2020, 8, 8).and_hms(0, 0, 0),
-                "localhost",
-                "/bin/bash",
-                &group_hash,
-                "",
-            )
-            .unwrap()
-            .permit,
-            true
-        );
-        assert_eq!(
-            can_run(
-                &vec_eo,
-                "ed",
-                "root",
-                &NaiveDate::from_ymd(2020, 8, 10).and_hms(0, 0, 0),
-                "localhost",
-                "/bin/bash",
-                &group_hash,
-                "",
-            )
-            .unwrap()
-            .permit,
-            true
-        );
-        assert_eq!(
-            can_run(
-                &vec_eo,
-                "ed",
-                "root",
-                &NaiveDate::from_ymd(2020, 8, 10).and_hms(23, 59, 59),
-                "localhost",
-                "/bin/bash",
-                &group_hash,
-                "",
-            )
-            .unwrap()
-            .permit,
-            true
-        );
-        assert_eq!(
-            can_run(
-                &vec_eo,
-                "ed",
-                "root",
-                &NaiveDate::from_ymd(2020, 8, 11).and_hms(0, 0, 0),
-                "localhost",
-                "/bin/bash",
-                &group_hash,
-                "",
-            )
-            .unwrap()
-            .permit,
-            false
-        );
-        assert_eq!(
-            can_run(
-                &vec_eo,
-                "ed",
-                "root",
-                &NaiveDate::from_ymd(2020, 8, 7).and_hms(0, 0, 0),
-                "localhost",
-                "/bin/bash",
-                &group_hash,
-                "",
-            )
-            .unwrap()
-            .permit,
-            false
-        );
+        let mut vec_eo: Vec<EnvOptions> = vec![];
+        read_ini_config_str(&config, &mut vec_eo, "ed", false);
+
+        ro.date = NaiveDate::from_ymd(2020, 8, 8).and_hms(0, 0, 0);
+        assert_eq!(can(&vec_eo, &ro).unwrap().permit, true);
+
+        ro.date = NaiveDate::from_ymd(2020, 8, 10).and_hms(0, 0, 0);
+        assert_eq!(can(&vec_eo, &ro).unwrap().permit, true);
+
+        ro.date = NaiveDate::from_ymd(2020, 8, 10).and_hms(23, 59, 59);
+        assert_eq!(can(&vec_eo, &ro).unwrap().permit, true);
+
+        ro.date = NaiveDate::from_ymd(2020, 8, 11).and_hms(0, 0, 0);
+        assert_eq!(can(&vec_eo, &ro).unwrap().permit, false);
+
+        ro.date = NaiveDate::from_ymd(2020, 8, 7).and_hms(0, 0, 0);
+        assert_eq!(can(&vec_eo, &ro).unwrap().permit, false);
     }
 
     #[test]
     fn test_execute_config_oracle() {
         let config = "[ed_oracle]
-user=ed
+name=ed
 target=oracle
 notbefore=20200101
 notafter=20201225
 regex=^/bin/bash .*$
+
 [ed_oracle_permit]
-user=ed
+name=ed
 target=oracle
 notbefore=20190101
 notafter=20201225
 permit=true
 regex=^/bin/bash .*$
-    "
+        "
         .to_string();
-
-        let date: NaiveDateTime = NaiveDate::from_ymd(2019, 12, 31).and_hms(0, 0, 0);
 
         let mut vec_eo: Vec<EnvOptions> = vec![];
         read_ini_config_str(&config, &mut vec_eo, "ed", false);
-        let group_hash: HashMap<String, u32> = HashMap::new();
+        let mut ro = RunOptions::new();
+        ro.name = "ed".to_string();
+        ro.target = "oracle".to_string();
+        ro.date = NaiveDate::from_ymd(2019, 12, 31).and_hms(0, 0, 0);
 
-        assert_eq!(
-            can_run(
-                &vec_eo,
-                "ed",
-                "oracle",
-                &date,
-                "localhost",
-                "/bin/bash /usr/local/oracle/backup_script",
-                &group_hash,
-                "",
-            )
-            .unwrap()
-            .permit,
-            true
-        );
-        assert_eq!(
-            can_run(
-                &vec_eo,
-                "ed",
-                "oracle",
-                &date,
-                "localhost",
-                "/bin/sh /usr/local/oracle/backup_script",
-                &group_hash,
-                "",
-            )
-            .unwrap()
-            .permit,
-            false
-        );
-        assert_eq!(
-            can_run(
-                &vec_eo,
-                "ed",
-                "oracle",
-                &date,
-                "web1",
-                "/bin/sh /usr/local/oracle/backup_script",
-                &group_hash,
-                "",
-            )
-            .unwrap()
-            .permit,
-            false
-        );
-        assert_eq!(
-            can_run(
-                &vec_eo,
-                "ed",
-                "oracle",
-                &date,
-                "",
-                "/bin/sh /usr/local/oracle/backup_script",
-                &group_hash,
-                "",
-            )
-            .unwrap()
-            .permit,
-            false
-        );
-        assert_eq!(
-            can_run(
-                &vec_eo,
-                "ed",
-                "grid",
-                &date,
-                "",
-                "/bin/bash /usr/local/oracle/backup_script",
-                &group_hash,
-                "",
-            )
-            .unwrap()
-            .permit,
-            false
-        );
-        assert_eq!(
-            can_run(
-                &vec_eo,
-                "ed",
-                "root",
-                &date,
-                "",
-                "/bin/bash /usr/local/oracle/backup_script",
-                &group_hash,
-                "",
-            )
-            .unwrap()
-            .permit,
-            false
-        );
+        ro.command = "/bin/bash /usr/local/oracle/backup_script".to_string();
+        assert_eq!(can(&vec_eo, &ro).unwrap().permit, true);
+
+        ro.command = "/bin/sh /usr/local/oracle/backup_script".to_string();
+        assert_eq!(can(&vec_eo, &ro).unwrap().permit, false);
+
+        ro.hostname = "web1".to_string();
+        assert_eq!(can(&vec_eo, &ro).unwrap().permit, false);
+
+        ro.hostname = "".to_string();
+        assert_eq!(can(&vec_eo, &ro).unwrap().permit, false);
+
+        ro.hostname = "localhost".to_string();
+        ro.target = "grid".to_string();
+        ro.command = "/bin/bash /usr/local/oracle/backup_script".to_string();
+        assert_eq!(can(&vec_eo, &ro).unwrap().permit, false);
+
+        ro.target = "root".to_string();
+        assert_eq!(can(&vec_eo, &ro).unwrap().permit, false);
     }
 
     #[test]
     fn test_execute_config_hostname_any() {
-        let config = "[ed_config_hostname]
-user=ed
+        let config = "
+[ed_config_hostname]
+name=ed
 target=oracle
 hostname=any
 regex=^/bin/bash.*$
     "
         .to_string();
 
-        let date: NaiveDateTime = NaiveDate::from_ymd(2019, 12, 31).and_hms(0, 0, 0);
-
         let mut vec_eo: Vec<EnvOptions> = vec![];
         read_ini_config_str(&config, &mut vec_eo, "ed", false);
-        let group_hash: HashMap<String, u32> = HashMap::new();
+        let mut ro = RunOptions::new();
+        ro.name = "ed".to_string();
+        ro.target = "oracle".to_string();
 
-        assert_eq!(
-            can_run(
-                &vec_eo,
-                "ed",
-                "oracle",
-                &date,
-                "localhost",
-                "/bin/bash /usr/local/oracle/backup_script",
-                &group_hash,
-                "",
-            )
-            .unwrap()
-            .permit,
-            true
-        );
-        assert_eq!(
-            can_run(
-                &vec_eo,
-                "ed",
-                "oracle",
-                &date,
-                "localhost",
-                "/bin/sh /usr/local/oracle/backup_script",
-                &group_hash,
-                "",
-            )
-            .unwrap()
-            .permit,
-            false
-        );
-        assert_eq!(
-            can_run(
-                &vec_eo,
-                "ed",
-                "oracle",
-                &date,
-                "web1",
-                "/bin/sh /usr/local/oracle/backup_script",
-                &group_hash,
-                "",
-            )
-            .unwrap()
-            .permit,
-            false
-        );
-        assert_eq!(
-            can_run(
-                &vec_eo,
-                "ed",
-                "oracle",
-                &date,
-                "",
-                "/bin/sh /usr/local/oracle/backup_script",
-                &group_hash,
-                "",
-            )
-            .unwrap()
-            .permit,
-            false
-        );
-        assert_eq!(
-            can_run(
-                &vec_eo,
-                "ed",
-                "grid",
-                &date,
-                "",
-                "/bin/bash /usr/local/oracle/backup_script",
-                &group_hash,
-                "",
-            )
-            .unwrap()
-            .permit,
-            false
-        );
-        assert_eq!(
-            can_run(
-                &vec_eo,
-                "ed",
-                "root",
-                &date,
-                "",
-                "/bin/bash /usr/local/oracle/backup_script",
-                &group_hash,
-                "",
-            )
-            .unwrap()
-            .permit,
-            false
-        );
+        ro.command = "/bin/bash /usr/local/oracle/backup_script".to_string();
+        assert_eq!(can(&vec_eo, &ro).unwrap().permit, true);
+
+        ro.command = "/bin/sh /usr/local/oracle/backup_script".to_string();
+        assert_eq!(can(&vec_eo, &ro).unwrap().permit, false);
+
+        ro.hostname = "web1".to_string();
+        assert_eq!(can(&vec_eo, &ro).unwrap().permit, false);
+
+        ro.hostname = "".to_string();
+        assert_eq!(can(&vec_eo, &ro).unwrap().permit, false);
+
+        ro.target = "grid".to_string();
+        assert_eq!(can(&vec_eo, &ro).unwrap().permit, false);
     }
 
     #[test]
     fn test_execute_config_hostname_locahost() {
-        let config = "[ed_oralce_web1]
-user=ed
+        let config = "
+[ed_oralce_web1]
+name=ed
 target=oracle
 hostname=web1
 regex=^/bin/bash .*$
 
 [ed_oracle_localhost]
-user=ed
+name=ed
 target=oracle
 hostname=localhost
 regex=^/bin/sh.*$
     "
         .to_string();
 
-        let date: NaiveDateTime = NaiveDate::from_ymd(2019, 12, 31).and_hms(0, 0, 0);
-
         let mut vec_eo: Vec<EnvOptions> = vec![];
         read_ini_config_str(&config, &mut vec_eo, "ed", false);
-        let group_hash: HashMap<String, u32> = HashMap::new();
+        let mut ro = RunOptions::new();
+        ro.name = "ed".to_string();
+        ro.target = "oracle".to_string();
 
-        assert_eq!(
-            can_run(
-                &vec_eo,
-                "ed",
-                "oracle",
-                &date,
-                "localhost",
-                "/bin/bash /usr/local/oracle/backup_script",
-                &group_hash,
-                "",
-            )
-            .unwrap()
-            .permit,
-            false
-        );
-        assert_eq!(
-            can_run(
-                &vec_eo,
-                "ed",
-                "oracle",
-                &date,
-                "web1",
-                "/bin/bash /usr/local/oracle/backup_script",
-                &group_hash,
-                "",
-            )
-            .unwrap()
-            .permit,
-            true
-        );
-        assert_eq!(
-            can_run(
-                &vec_eo,
-                "ed",
-                "oracle",
-                &date,
-                "web2",
-                "/bin/bash /usr/local/oracle/backup_script",
-                &group_hash,
-                "",
-            )
-            .unwrap()
-            .permit,
-            false
-        );
+        ro.command = "/bin/bash /usr/local/oracle/backup_script".to_string();
+        assert_eq!(can(&vec_eo, &ro).unwrap().permit, false);
 
-        assert_eq!(
-            can_run(
-                &vec_eo,
-                "ed",
-                "oracle",
-                &date,
-                "localhost",
-                "/bin/sh /usr/local/oracle/backup_script",
-                &group_hash,
-                "",
-            )
-            .unwrap()
-            .permit,
-            true
-        );
-        assert_eq!(
-            can_run(
-                &vec_eo,
-                "ed",
-                "oracle",
-                &date,
-                "web1",
-                "/bin/sh /usr/local/oracle/backup_script",
-                &group_hash,
-                "",
-            )
-            .unwrap()
-            .permit,
-            true
-        );
-        assert_eq!(
-            can_run(
-                &vec_eo,
-                "ed",
-                "oracle",
-                &date,
-                "web2",
-                "/bin/sh /usr/local/oracle/backup_script",
-                &group_hash,
-                "",
-            )
-            .unwrap()
-            .permit,
-            true
-        );
+        ro.hostname = "web1".to_string();
+        assert_eq!(can(&vec_eo, &ro).unwrap().permit, true);
+
+        ro.hostname = "web2".to_string();
+        assert_eq!(can(&vec_eo, &ro).unwrap().permit, false);
+
+        ro.hostname = "localhost".to_string();
+        ro.command = "/bin/sh /usr/local/oracle/backup_script".to_string();
+        assert_eq!(can(&vec_eo, &ro).unwrap().permit, true);
+
+        ro.hostname = "web1".to_string();
+        assert_eq!(can(&vec_eo, &ro).unwrap().permit, true);
+
+        ro.hostname = "web2".to_string();
+        assert_eq!(can(&vec_eo, &ro).unwrap().permit, true);
     }
 
     #[test]
     fn test_missing_user() {
-        let config = "[missing_user]
+        let config = "
+[missing_user]
 target=oracle
 hostname=localhost
 regex=/bin/sh\\b.*
-    "
+"
         .to_string();
-
-        let date: NaiveDateTime = NaiveDate::from_ymd(2019, 12, 31).and_hms(0, 0, 0);
 
         let mut vec_eo: Vec<EnvOptions> = vec![];
         read_ini_config_str(&config, &mut vec_eo, "ed", false);
-        let group_hash: HashMap<String, u32> = HashMap::new();
+        let mut ro = RunOptions::new();
+        ro.name = "".to_string();
+        ro.target = "oracle".to_string();
 
-        assert_eq!(
-            can_run(
-                &vec_eo,
-                "",
-                "oracle",
-                &date,
-                "localhost",
-                "/bin/sh /usr/local/oracle/backup_script",
-                &group_hash,
-                "",
-            )
-            .unwrap()
-            .permit,
-            false
-        );
+        assert_eq!(can(&vec_eo, &ro).unwrap().permit, false);
     }
 
     #[test]
     fn test_regex_line_anchor() {
         let config = "
 [regex_anchor]
-user=ed
+name=ed
 target=oracle
 hostname=localhost
 regex=.*
-    "
+"
         .to_string();
-
-        let date: NaiveDateTime = NaiveDate::from_ymd(2019, 12, 31).and_hms(0, 0, 0);
 
         let mut vec_eo: Vec<EnvOptions> = vec![];
         read_ini_config_str(&config, &mut vec_eo, "ed", false);
-        let group_hash: HashMap<String, u32> = HashMap::new();
+        let mut ro = RunOptions::new();
+        ro.name = "ed".to_string();
+        ro.target = "oracle".to_string();
+        ro.command = "/bin/bash".to_string();
 
-        assert_eq!(
-            can_run(
-                &vec_eo,
-                "ed",
-                "oracle",
-                &date,
-                "localhost",
-                "/bin/bash",
-                &group_hash,
-                "",
-            )
-            .unwrap()
-            .permit,
-            true
-        );
+        assert_eq!(can(&vec_eo, &ro).unwrap().permit, true);
     }
 
     #[test]
     fn test_edit_apache() {
         let config = "
 [ed_edit_root]
-user=ed
+name=ed
 target=root
 notbefore=20200101
 notafter=20201225
-edit=true
+type = edit
 regex = .*
 
 [ed_edit_apache]
-user=ed
+name=ed
 target=oracle
 permit=false
-edit=true
+type = edit
 regex = /etc/apache
 
 [ed_edit_hosts]
-user=ed
+name=ed
 target=root
-edit=true /etc/hosts
+regex = /etc/hosts
+type = edit
 
 [user_all_todo]
-user=m{}
+name=m{}
 target=^
-edit=true
+type = edit
 regex = ^"
             .to_string();
 
-        let date: NaiveDateTime = NaiveDate::from_ymd(2020, 1, 1).and_hms(0, 0, 0);
-
         let mut vec_eo: Vec<EnvOptions> = vec![];
         read_ini_config_str(&config, &mut vec_eo, "ed", false);
-        let group_hash: HashMap<String, u32> = HashMap::new();
+        let mut ro = RunOptions::new();
+        ro.date = NaiveDate::from_ymd(2020, 1, 1).and_hms(0, 0, 0);
+        ro.name = "ed".to_string();
+        ro.target = "root".to_string();
+        ro.acl_type = ACLTYPE::EDIT;
+        ro.command = "/etc/apache/httpd2.conf".to_string();
 
-        assert_eq!(
-            can_edit(
-                &vec_eo,
-                "ed",
-                "root",
-                &date,
-                "localhost",
-                "/etc/apache/httpd2.conf",
-                &group_hash
-            )
-            .unwrap()
-            .permit,
-            true
-        );
+        assert_eq!(can(&vec_eo, &ro).unwrap().permit, true);
     }
 
     #[test]
     fn test_edit_user_macro() {
         let config = "
 [ed]
-user=ed
+name=ed
 target=root
 regex =^/bin/cat /etc/%{USER}"
             .to_string();
 
-        let date: NaiveDateTime = NaiveDate::from_ymd(2020, 1, 1).and_hms(0, 0, 0);
-
         let mut vec_eo: Vec<EnvOptions> = vec![];
         read_ini_config_str(&config, &mut vec_eo, "ed", false);
-        let group_hash: HashMap<String, u32> = HashMap::new();
+        let mut ro = RunOptions::new();
+        ro.date = NaiveDate::from_ymd(2020, 1, 1).and_hms(0, 0, 0);
+        ro.name = "ed".to_string();
+        ro.target = "root".to_string();
+        ro.command = "/bin/cat /etc/ed".to_string();
 
-        assert_eq!(
-            can_run(
-                &vec_eo,
-                "ed",
-                "root",
-                &date,
-                "localhost",
-                "/bin/cat /etc/ed",
-                &group_hash,
-                "",
-            )
-            .unwrap()
-            .permit,
-            true
-        );
-        assert_eq!(
-            can_run(
-                &vec_eo,
-                "ned",
-                "root",
-                &date,
-                "localhost",
-                "/bin/cat /etc/ed",
-                &group_hash,
-                "",
-            )
-            .unwrap()
-            .permit,
-            false
-        );
+        assert_eq!(can(&vec_eo, &ro).unwrap().permit, true);
+
+        ro.name = "ned".to_string();
+        assert_eq!(can(&vec_eo, &ro).unwrap().permit, false);
     }
 
     #[test]
@@ -1612,7 +1156,7 @@ regex =^/bin/cat /etc/%{USER}"
 
         let config = "
 [ed]
-user=ed
+name=ed
 target=root
 regex = ^/bin/cat /etc/("
             .to_string();
@@ -1622,10 +1166,11 @@ regex = ^/bin/cat /etc/("
         let mut vec_eo: Vec<EnvOptions> = vec![];
         let config = "
 [ed]
-user=ed
+name=ed
 target=root
-regex = ^/bin/cat /etc/"
-            .to_string();
+regex = ^/bin/cat /etc/
+"
+        .to_string();
 
         assert_eq!(read_ini_config_str(&config, &mut vec_eo, "ed", true), false);
     }
@@ -1639,183 +1184,104 @@ group=true
 target=root
 notbefore=20200101
 notafter=20201225
-regex = ^.*$"
-            .to_string();
-
-        let date: NaiveDateTime = NaiveDate::from_ymd(2020, 1, 1).and_hms(0, 0, 0);
+regex = ^.*$
+"
+        .to_string();
 
         let mut vec_eo: Vec<EnvOptions> = vec![];
         read_ini_config_str(&config, &mut vec_eo, "ed", false);
+        let mut ro = RunOptions::new();
+        ro.date = NaiveDate::from_ymd(2020, 1, 1).and_hms(0, 0, 0);
+        ro.name = "ed".to_string();
+        ro.target = "root".to_string();
+        ro.command = "/bin/cat /etc/ed".to_string();
 
-        let mut group_hash: HashMap<String, u32> = HashMap::new();
-        group_hash.insert(String::from("users"), 1);
-        assert_eq!(
-            can_run(
-                &vec_eo,
-                "ed",
-                "root",
-                &date,
-                "localhost",
-                "",
-                &group_hash,
-                "",
-            )
-            .unwrap()
-            .permit,
-            true
-        );
+        assert_eq!(can(&vec_eo, &ro).unwrap().permit, false);
 
-        let mut group_hash: HashMap<String, u32> = HashMap::new();
-        group_hash.insert(String::from("wwwadm"), 1);
-        assert_eq!(
-            can_run(
-                &vec_eo,
-                "ed",
-                "root",
-                &date,
-                "localhost",
-                "",
-                &group_hash,
-                "",
-            )
-            .unwrap()
-            .permit,
-            false
-        );
+        ro.groups.insert(String::from("users"), 1);
+        assert_eq!(can(&vec_eo, &ro).unwrap().permit, true);
+
+        ro.groups = HashMap::new();
+
+        ro.groups.insert(String::from("wwwadm"), 1);
+        assert_eq!(can(&vec_eo, &ro).unwrap().permit, false);
     }
 
     #[test]
     fn test_list_other_user() {
         let config = "
 [ed_all]
-user=ed
+name=ed
 notbefore=20200101
 notafter=20201225
-list=true
+type = list
 regex = ^.*$
 
 [bob_all]
-user=bob
-list=false
-edit=true
+name=bob
+type=edit
 regex = ^.*$
 
 [bob_all]
-user=bob
-list=true
+name=bob
+type = list
 permit=false
 regex = ^.*$
 
 [meh_ed]
-user=meh
-list=true
+name=meh
+type =list
 regex=^ed$
 
 [root_all]
-user=root
-list=false
+name=root
+type=run
 regex =^.*$
 
 [ben_ops]
-user=ben
+name=ben
 permit=true
-list=true 
+type=list
 regex = ^(eng|dba|net)ops$
 "
         .to_string();
 
-        let date: NaiveDateTime = NaiveDate::from_ymd(2020, 1, 1).and_hms(0, 0, 0);
-
         let mut vec_eo: Vec<EnvOptions> = vec![];
         read_ini_config_str(&config, &mut vec_eo, "ed", false);
-        let group_hash: HashMap<String, u32> = HashMap::new();
+        let mut ro = RunOptions::new();
+        ro.date = NaiveDate::from_ymd(2020, 1, 1).and_hms(0, 0, 0);
+        ro.name = "ed".to_string();
+        ro.target = "root".to_string();
+        ro.command = "/bin/cat /etc/ed".to_string();
+        ro.acl_type = ACLTYPE::LIST;
 
-        assert_eq!(
-            can_list(&vec_eo, "ed", "root", &date, "localhost", "", &group_hash)
-                .unwrap()
-                .permit,
-            true
-        );
-        assert_eq!(
-            can_list(&vec_eo, "meh", "ed", &date, "localhost", "", &group_hash)
-                .unwrap()
-                .permit,
-            true
-        );
-        assert_eq!(
-            can_list(&vec_eo, "meh", "bob", &date, "localhost", "", &group_hash)
-                .unwrap()
-                .permit,
-            false
-        );
-        assert_eq!(
-            can_list(&vec_eo, "meh", "root", &date, "localhost", "", &group_hash)
-                .unwrap()
-                .permit,
-            false
-        );
-        assert_eq!(
-            can_list(&vec_eo, "bob", "ed", &date, "localhost", "", &group_hash)
-                .unwrap()
-                .permit,
-            false
-        );
-        assert_eq!(
-            can_list(
-                &vec_eo,
-                "ben",
-                "dbaops",
-                &date,
-                "localhost",
-                "",
-                &group_hash
-            )
-            .unwrap()
-            .permit,
-            true
-        );
-        assert_eq!(
-            can_list(
-                &vec_eo,
-                "ben",
-                "engops",
-                &date,
-                "localhost",
-                "",
-                &group_hash
-            )
-            .unwrap()
-            .permit,
-            true
-        );
-        assert_eq!(
-            can_list(
-                &vec_eo,
-                "ben",
-                "netops",
-                &date,
-                "localhost",
-                "",
-                &group_hash
-            )
-            .unwrap()
-            .permit,
-            true
-        );
-        assert_eq!(
-            can_list(
-                &vec_eo,
-                "ben",
-                "wwwops",
-                &date,
-                "localhost",
-                "",
-                &group_hash
-            )
-            .unwrap()
-            .permit,
-            false
-        );
+        assert_eq!(can(&vec_eo, &ro).unwrap().permit, true);
+
+        ro.name = "meh".to_string();
+        ro.target = "ed".to_string();
+        assert_eq!(can(&vec_eo, &ro).unwrap().permit, true);
+
+        ro.target = "bob".to_string();
+        assert_eq!(can(&vec_eo, &ro).unwrap().permit, false);
+
+        ro.target = "root".to_string();
+        assert_eq!(can(&vec_eo, &ro).unwrap().permit, false);
+
+        ro.name = "bob".to_string();
+        ro.target = "ed".to_string();
+        assert_eq!(can(&vec_eo, &ro).unwrap().permit, false);
+
+        ro.name = "ben".to_string();
+        ro.target = "dbaops".to_string();
+        assert_eq!(can(&vec_eo, &ro).unwrap().permit, true);
+        ro.target = "engops".to_string();
+        assert_eq!(can(&vec_eo, &ro).unwrap().permit, true);
+
+        ro.target = "netops".to_string();
+        assert_eq!(can(&vec_eo, &ro).unwrap().permit, true);
+
+        ro.target = "wwwops".to_string();
+        assert_eq!(can(&vec_eo, &ro).unwrap().permit, false);
     }
 
     #[test]
@@ -1825,91 +1291,35 @@ regex = ^(eng|dba|net)ops$
 name = root
 group = true
 permit = true
-edit = true
+type = edit
 require_pass = false
-regex = ^/var/www/html/%{USER}.html"
-            .to_string();
-
-        let date: NaiveDateTime = NaiveDate::from_ymd(2020, 1, 1).and_hms(0, 0, 0);
+regex = ^/var/www/html/%{USER}.html
+".to_string();
 
         let mut vec_eo: Vec<EnvOptions> = vec![];
         read_ini_config_str(&config, &mut vec_eo, "ed", false);
-        let group_hash: HashMap<String, u32> = HashMap::new();
 
-        assert_eq!(
-            can_edit(
-                &vec_eo,
-                "ed",
-                "root",
-                &date,
-                "localhost",
-                "/etc/please.ini",
-                &group_hash
-            )
-            .unwrap()
-            .permit,
-            false
-        );
+        let mut ro = RunOptions::new();
+        ro.date = NaiveDate::from_ymd(2020, 1, 1).and_hms(0, 0, 0);
+        ro.name = "ed".to_string();
+        ro.target = "root".to_string();
+        ro.command = "/etc/please.ini".to_string();
+        ro.acl_type = ACLTYPE::EDIT;
 
-        let mut group_hash: HashMap<String, u32> = HashMap::new();
-        group_hash.insert(String::from("root"), 1);
-        assert_eq!(
-            can_edit(
-                &vec_eo,
-                "ed",
-                "root",
-                &date,
-                "localhost",
-                "/etc/please.ini",
-                &group_hash
-            )
-            .unwrap()
-            .permit,
-            false
-        );
+        assert_eq!(can(&vec_eo, &ro).unwrap().permit, false);
+ 
+        ro.groups.insert(String::from("root"), 1);
+        assert_eq!(can(&vec_eo, &ro).unwrap().permit, false);
 
-        let mut group_hash: HashMap<String, u32> = HashMap::new();
-        group_hash.insert(String::from("root"), 1);
-        assert_eq!(
-            can_edit(
-                &vec_eo,
-                "ed",
-                "root",
-                &date,
-                "localhost",
-                "/var/www/html/ed.html",
-                &group_hash
-            )
-            .unwrap()
-            .permit,
-            true
-        );
+        ro.command = "/var/www/html/ed.html".to_string();
+        assert_eq!(can(&vec_eo, &ro).unwrap().permit, true);
 
-        let mut group_hash: HashMap<String, u32> = HashMap::new();
-        group_hash.insert(String::from("root"), 1);
-        assert_eq!(
-            can_edit(
-                &vec_eo,
-                "ed",
-                "root",
-                &date,
-                "localhost",
-                "/var/www/html/%{USER}.html",
-                &group_hash
-            )
-            .unwrap()
-            .permit,
-            false
-        );
+        ro.command = "/var/www/html/%{USER}.html".to_string();
+        assert_eq!(can(&vec_eo, &ro).unwrap().permit, false);
 
-        let mut group_hash: HashMap<String, u32> = HashMap::new();
-        group_hash.insert(String::from("wwwadm"), 1);
-        assert_eq!(
-            can_edit(&vec_eo, "ed", "root", &date, "localhost", "", &group_hash)
-                .unwrap()
-                .permit,
-            false
-        );
+        ro.groups = HashMap::new();
+        ro.groups.insert(String::from("wwwadm"), 1);
+        assert_eq!(can(&vec_eo, &ro).unwrap().permit, false);
     }
 
     #[test]
@@ -1919,35 +1329,28 @@ regex = ^/var/www/html/%{USER}.html"
 name = root
 group = true
 permit = true
-edit = true
+type = edit
 require_pass = false
-regex = ^/var/www/html/%{USER}.html$"
-            .to_string();
+regex = ^/var/www/html/%{USER}.html$
+"
+        .to_string();
+
         let mut vec_eo: Vec<EnvOptions> = vec![];
         read_ini_config_str(&config, &mut vec_eo, "ed", false);
 
-        let date: NaiveDateTime = NaiveDate::from_ymd(2020, 1, 1).and_hms(0, 0, 0);
-        let mut group_hash: HashMap<String, u32> = HashMap::new();
+        let mut ro = RunOptions::new();
+        ro.name = "ed".to_string();
+        ro.target = "root".to_string();
+        ro.command = "/var/www/html/ed.html".to_string();
+        ro.acl_type = ACLTYPE::EDIT;
+        ro.groups.insert(String::from("root"), 1);
+
         assert_eq!(
             vec_eo.iter().next().unwrap().rule.as_str(),
             "^^/var/www/html/ed.html$$"
         );
 
-        group_hash.insert(String::from("root"), 1);
-        assert_eq!(
-            can_edit(
-                &vec_eo,
-                "ed",
-                "root",
-                &date,
-                "localhost",
-                "/var/www/html/ed.html",
-                &group_hash
-            )
-            .unwrap()
-            .permit,
-            true
-        );
+        assert_eq!(can(&vec_eo, &ro).unwrap().permit, true);
     }
 
     #[test]
@@ -1957,139 +1360,89 @@ regex = ^/var/www/html/%{USER}.html$"
 name = root
 group = true
 permit = true
-edit = true
+type = edit
 require_pass = false
-regex = ^/var/www/html/%{USER}.html$"
+regex = ^/var/www/html/%USER.html$"
             .to_string();
         let mut vec_eo: Vec<EnvOptions> = vec![];
         read_ini_config_str(&config, &mut vec_eo, "ed", false);
 
-        let date: NaiveDateTime = NaiveDate::from_ymd(2020, 1, 1).and_hms(0, 0, 0);
-        let mut group_hash: HashMap<String, u32> = HashMap::new();
+        let mut ro = RunOptions::new();
+        ro.name = "ed".to_string();
+        ro.target = "root".to_string();
+        ro.acl_type = ACLTYPE::EDIT;
+        ro.command = "/var/www/html/ed.html".to_string();
+
         assert_eq!(
             vec_eo.iter().next().unwrap().rule.as_str(),
-            "^^/var/www/html/ed.html$$"
+            "^^/var/www/html/%USER.html$$"
         );
 
-        group_hash.insert(String::from("root"), 1);
-        assert_eq!(
-            can_edit(
-                &vec_eo,
-                "ed",
-                "root",
-                &date,
-                "localhost",
-                "/var/www/html/ed.html",
-                &group_hash
-            )
-            .unwrap()
-            .permit,
-            true
-        );
+        ro.groups.insert(String::from("root"), 1);
+        assert_eq!(can(&vec_eo, &ro).unwrap().permit, false);
     }
 
     #[test]
-    fn test_edit_user_expansion_unbalanced_escapes() {
+    fn test_edit_user_expansion_escapes() {
         let config = "
 [www-data-bio]
 name = root
 group = true
 permit = true
-edit = true
+type = edit
 require_pass = false
 regex = ^/var/www/html/%{USER}.html$"
             .to_string();
         let mut vec_eo: Vec<EnvOptions> = vec![];
         read_ini_config_str(&config, &mut vec_eo, "ed", false);
 
-        let date: NaiveDateTime = NaiveDate::from_ymd(2020, 1, 1).and_hms(0, 0, 0);
-        let mut group_hash: HashMap<String, u32> = HashMap::new();
+        let mut ro = RunOptions::new();
+        ro.name = "ed".to_string();
+        ro.target = "root".to_string();
+        ro.acl_type = ACLTYPE::EDIT;
+        ro.command = "/var/www/html/ed.html".to_string();
+
         assert_eq!(
             vec_eo.iter().next().unwrap().rule.as_str(),
             "^^/var/www/html/ed.html$$"
         );
 
-        group_hash.insert(String::from("root"), 1);
-        assert_eq!(
-            can_edit(
-                &vec_eo,
-                "ed",
-                "root",
-                &date,
-                "localhost",
-                "/var/www/html/ed.html",
-                &group_hash
-            )
-            .unwrap()
-            .permit,
-            true
-        );
+        ro.groups.insert(String::from("root"), 1);
+        assert_eq!(can(&vec_eo, &ro).unwrap().permit, true);
     }
 
     #[test]
     fn test_target_regex() {
         let config = "
 [ed_target_ot]
-name = .*ot 
+name = .*ot
 group = true
-target = .*ot 
+target = .*ot
 permit = true
 require_pass = false
 regex = /bin/bash"
             .to_string();
+
         let mut vec_eo: Vec<EnvOptions> = vec![];
         read_ini_config_str(&config, &mut vec_eo, "ed", false);
-
-        let date: NaiveDateTime = NaiveDate::from_ymd(2020, 1, 1).and_hms(0, 0, 0);
-        let mut group_hash: HashMap<String, u32> = HashMap::new();
         assert_eq!(vec_eo.iter().next().unwrap().rule.as_str(), "^/bin/bash$");
 
-        group_hash.insert(String::from("root"), 1);
-        assert_eq!(
-            can_run(
-                &vec_eo,
-                "ed",
-                "root",
-                &date,
-                "localhost",
-                "/bin/bash",
-                &group_hash,
-                "",
-            )
-            .unwrap()
-            .permit,
-            true
-        );
-        assert_eq!(
-            can_run(
-                &vec_eo,
-                "ed",
-                "moot",
-                &date,
-                "localhost",
-                "/bin/bash",
-                &group_hash,
-                "",
-            )
-            .unwrap()
-            .permit,
-            true
-        );
-        assert_eq!(
-            can_run(
-                &vec_eo,
-                "ed",
-                "woot",
-                &date,
-                "localhost",
-                "/bin/bash",
-                &group_hash,
-                "",
-            )
-            .unwrap()
-            .permit,
-            true
-        );
+        let mut ro = RunOptions::new();
+        ro.name = "ed".to_string();
+        ro.target = "root".to_string();
+        ro.acl_type = ACLTYPE::RUN;
+        ro.command = "/bin/bash".to_string();
+        assert_eq!(can(&vec_eo, &ro).unwrap().permit, false);
+
+        ro.groups.insert(String::from("root"), 1);
+        ro.command = "/bin/sh".to_string();
+        assert_eq!(can(&vec_eo, &ro).unwrap().permit, false);
+
+        ro.command = "/bin/bash".to_string();
+        assert_eq!(can(&vec_eo, &ro).unwrap().permit, true);
+
+        ro.target = "woot".to_string();
+        assert_eq!(can(&vec_eo, &ro).unwrap().permit, true);
     }
 
     #[test]
@@ -2097,134 +1450,79 @@ regex = /bin/bash"
         let mut vec_eo: Vec<EnvOptions> = vec![];
         let config = "".to_string();
         read_ini_config_str(&config, &mut vec_eo, "ed", false);
-
-        let date: NaiveDateTime = NaiveDate::from_ymd(2020, 1, 1).and_hms(0, 0, 0);
-        let group_hash: HashMap<String, u32> = HashMap::new();
-        assert_eq!(
-            can_edit(
-                &vec_eo,
-                "ed",
-                "root",
-                &date,
-                "localhost",
-                "/etc/please.ini",
-                &group_hash
-            )
-            .unwrap()
-            .permit,
-            false
-        );
+        let mut ro = RunOptions::new();
+        ro.name = "ed".to_string();
+        ro.target = "root".to_string();
+        ro.acl_type = ACLTYPE::EDIT;
+        ro.command = "/etc/please.ini".to_string();
+        assert_eq!(can(&vec_eo, &ro).unwrap().permit, false);
     }
 
     #[test]
-    fn test_dir_change() {
+    fn test_dir_any() {
         let config = "
 [regex_anchor]
-user=ed
+name=ed
 target=oracle
 hostname=localhost
 regex=.*
 dir=.*
-    "
+        "
         .to_string();
-
-        let date: NaiveDateTime = NaiveDate::from_ymd(2019, 12, 31).and_hms(0, 0, 0);
 
         let mut vec_eo: Vec<EnvOptions> = vec![];
         read_ini_config_str(&config, &mut vec_eo, "ed", false);
-        let group_hash: HashMap<String, u32> = HashMap::new();
+        let mut ro = RunOptions::new();
+        ro.name = "ed".to_string();
+        ro.target = "oracle".to_string();
+        ro.acl_type = ACLTYPE::RUN;
+        ro.command = "/bin/bash".to_string();
 
-        assert_eq!(
-            can_run(
-                &vec_eo,
-                "ed",
-                "oracle",
-                &date,
-                "localhost",
-                "/bin/bash",
-                &group_hash,
-                "",
-            )
-            .unwrap()
-            .permit,
-            true
-        );
-        assert_eq!(
-            can_run(
-                &vec_eo,
-                "ed",
-                "oracle",
-                &date,
-                "localhost",
-                "/bin/bash",
-                &group_hash,
-                "/",
-            )
-            .unwrap()
-            .permit,
-            true,
-        );
+        assert_eq!(can(&vec_eo, &ro).unwrap().permit, true);
 
+        ro.directory = "/".to_string();
+        assert_eq!(can(&vec_eo, &ro).unwrap().permit, true);
+    }
+
+    #[test]
+    fn test_dir_fixed() {
         let config = "
 [regex_anchor]
-user=ed
+name=ed
 target=oracle
 hostname=localhost
 regex=.*
 dir=/var/www
-    "
+        "
         .to_string();
 
         let mut vec_eo: Vec<EnvOptions> = vec![];
         read_ini_config_str(&config, &mut vec_eo, "ed", false);
+        let mut ro = RunOptions::new();
+        ro.date = NaiveDate::from_ymd(2020, 1, 1).and_hms(0, 0, 0);
+        ro.name = "ed".to_string();
+        ro.target = "oracle".to_string();
+        ro.acl_type = ACLTYPE::RUN;
+        ro.command = "/bin/bash".to_string();
 
         assert_eq!(
-            can_run(
-                &vec_eo,
-                "ed",
-                "oracle",
-                &date,
-                "localhost",
-                "/bin/bash",
-                &group_hash,
-                "/",
-            )
-            .unwrap()
-            .permit,
+            can(&vec_eo, &ro).unwrap().permit,
+            false,
+            "no directory given",
+        );
+
+        ro.directory = "/".to_string();
+        assert_eq!(
+            can(&vec_eo, &ro).unwrap().permit,
             false,
             "change outside permitted",
         );
+
+        ro.directory = "/var/www".to_string();
         assert_eq!(
-            can_run(
-                &vec_eo,
-                "ed",
-                "oracle",
-                &date,
-                "localhost",
-                "/bin/bash",
-                &group_hash,
-                "/var/www",
-            )
-            .unwrap()
-            .permit,
+            can(&vec_eo, &ro).unwrap().permit,
             true,
-            "change to permitted",
-        );
-        assert_eq!(
-            can_run(
-                &vec_eo,
-                "ed",
-                "oracle",
-                &date,
-                "localhost",
-                "/bin/bash",
-                &group_hash,
-                ".",
-            )
-            .unwrap()
-            .permit,
-            true,
-            "no directory given",
+            "change to permitted"
         );
     }
 }
