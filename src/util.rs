@@ -20,6 +20,7 @@ pub struct EnvOptions {
     pub rule: Regex,
     pub notbefore: Option<NaiveDateTime>,
     pub notafter: Option<NaiveDateTime>,
+    pub datematch: Option<Regex>,
     pub target: Regex,
     pub hostname: Regex,
     pub permit: bool,
@@ -42,6 +43,7 @@ impl EnvOptions {
             target: Regex::new(&"root").unwrap(),
             notbefore: None,
             notafter: None,
+            datematch: None,
             hostname: Regex::new(&"localhost").unwrap(),
             env_list: vec![],
             file_name: "".to_string(),
@@ -284,6 +286,14 @@ pub fn read_ini(
                             parse_datetime_from_str(&value.to_string(), "%Y%m%d%H%M%S").unwrap(),
                         )
                     }
+                    "datematch" => match regex_build(value, user, config_path, &section ) {
+                        Some(check) => {
+                            opt.datematch = Some(check);
+                        },
+                        None => {
+                            faulty = true;
+                        },
+                    },
                     "dir" => match regex_build(value, user, config_path, &section) {
                         Some(dir) => {
                             opt.dir = dir;
@@ -362,6 +372,12 @@ pub fn can(vec_eo: &[EnvOptions], ro: &RunOptions) -> Result<EnvOptions, ()> {
             // println!("{}: now is after date", item.section);
             continue;
         }
+
+        if item.datematch.is_some() && !item.datematch.as_ref().unwrap().is_match( &ro.date.format( "%a %e %b %T UTC %Y" ).to_string() ) {
+            // println!("{}: skipping as not a datematch {} vs {}", item.section, item.datematch.clone().unwrap(), &ro.date.format( "%a %e %b %T UTC %Y" ).to_string() );
+            continue;
+        }
+
         if !item.group && !item.name.is_match(&ro.name) {
             // println!("{}: skipping as not a name match ({}), group={}", item.section, item.name, item.group);
             continue;
@@ -1524,5 +1540,51 @@ dir=/var/www
             true,
             "change to permitted"
         );
+    }
+
+    #[test]
+    fn test_date_match() {
+        let config = "
+[regex_anchor]
+name=ed
+target=root
+hostname=localhost
+regex=.*
+dir=.*
+datematch=Fri.*UTC.*
+".to_string();
+
+        let mut vec_eo: Vec<EnvOptions> = vec![];
+        read_ini_config_str(&config, &mut vec_eo, "ed", false);
+        let mut ro = RunOptions::new();
+        ro.name = "ed".to_string();
+        ro.date = NaiveDate::from_ymd(2020, 10, 02).and_hms(22, 0, 0);
+        ro.target = "root".to_string();
+        ro.acl_type = ACLTYPE::RUN;
+        ro.command = "/bin/bash".to_string();
+
+        assert_eq!(can(&vec_eo, &ro).unwrap().permit, true);
+
+        ro.date = NaiveDate::from_ymd(2020, 10, 01).and_hms(22, 0, 0);
+        assert_eq!(can(&vec_eo, &ro).unwrap().permit, false);
+
+        let config = "
+[regex_anchor]
+name=ed
+target=root
+hostname=localhost
+regex=.*
+dir=.*
+datematch=Fri.*\\s22:00:00\\s+UTC\\s2020
+".to_string();
+
+        let mut vec_eo: Vec<EnvOptions> = vec![];
+        read_ini_config_str(&config, &mut vec_eo, "ed", false);
+        ro.date = NaiveDate::from_ymd(2020, 10, 02).and_hms(21, 0, 0);
+        assert_eq!(can(&vec_eo, &ro).unwrap().permit, false);
+        ro.date = NaiveDate::from_ymd(2020, 10, 02).and_hms(23, 0, 0);
+        assert_eq!(can(&vec_eo, &ro).unwrap().permit, false);
+        ro.date = NaiveDate::from_ymd(2020, 10, 02).and_hms(22, 0, 0);
+        assert_eq!(can(&vec_eo, &ro).unwrap().permit, true);
     }
 }
