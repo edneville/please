@@ -27,6 +27,7 @@ The properties in ini permitted are as follows:
  * regex=[regex], mandatory, is the regular expression that the command matches against
  * notbefore=[YYYYmmdd|YYYYmmddHHMMSS], defaults to never
  * notafter=[YYYYmmdd|YYYYmmddHHMMSS], defaults to never
+ * datematch=[Day Mon dd HH:MM:SS UTC YYYY], regex to match against a date string
  * list=[true|false], defaults to false
  * edit=[true|false], defaults to false
  * group=[true|false] user, when true name refers to a group rather than a user
@@ -47,7 +48,7 @@ User `ed` may only start or stop a docker container:
 
 ```
 [user_ed_root]
-user=ed
+name=ed
 target=root
 permit=true
 regex=^/usr/bin/docker (start|stop) \S+
@@ -57,30 +58,18 @@ User `ben` may only edit `/etc/fstab`:
 
 ```
 [ben_fstab]
-user=ben
+name=ben
 target=root
 permit=true
 edit=true
 regex=^/etc/fstab$
 ```
 
-User joker can do what they want as root on `1st April 2021`:
-
-```
-[joker_april_first]
-user=joker
-target=root
-permit=true
-notbefore=20210401
-notafter=20210401
-regex=^/bin/bash
-```
-
 User `ben` may list only users `eng`, `net` and `dba` operators:
 
 ```
 [ben_ops]
-user=ben
+name=ben
 permit=true
 list=true
 regex=^(eng|net|dba)ops$
@@ -93,6 +82,34 @@ For large environments it is not unusual for a third party to require access dur
 The whole day is considered when using the shorter date form of `YYYYMMDD`.
 
 Many enterprises may wish to permit access to a user for a limited time only, even if that individual is in the role permanently.
+
+User joker can do what they want as root on `1st April 2021`:
+
+```
+[joker_april_first]
+name=joker
+target=root
+permit=true
+notbefore=20210401
+notafter=20210401
+regex=^/bin/bash
+```
+
+# DATEMATCHES
+
+Another date type is the `datematch` item, this constrains sections to a regex match against the date string `Day Mon dd HH:MM:SS UTC Year`.
+
+You can permit some a group of users to perform some house keeping on a Monday:
+
+```
+[l2_housekeeping]
+name=l2users
+group=true
+target=root
+permit=true
+regex = /usr/local/housekeeping/.*
+datematch = ^Mon.*
+```
 
 # FILES
 
