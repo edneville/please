@@ -34,13 +34,14 @@ The options are as follows:
 | notbefore                   | The date, in YYYYmmdd or YYYYmmddHHMMSS when this rule becomes effective. |
 | notafter                    | The date, in YYYYmmdd or YYYYmmddHHMMSS when this rule expires. |
 | datematch=[Day Mon dd HH:MM:SS UTC YYYY] | regex to match against a date string |
-| list=[true/false]           | Permit listing of users matching the regex rule. |
-| edit=[true/false]           | Permit editing of files matching the regex rule as the target user. |
+| type=[edit/run/list]        | Set the entry type. Run = execution, edit = pleaseedit, list is show user rights |
 | group=[true/false]          | True to signify that name= refers to a group rather than a user. |
 | hostname=regex              | Hosts where this applies. Defaults to 'localhost'. |
 | dir=regex                   | Permit switching to regex defined directory prior to execution. |
 | include=file                | Include file as another ini source, other options will be skipped in this section. |
 | includedir=dir              | Include dir of `.ini` files as other sources, in ascii sort order other options will be skipped in this section. Files not matching `.ini` will be ignored to allow for editor tmp files. |
+| editcmd=[program]           | (edit) continue with file replacement if `program` exits 0 |
+| editmode=[octal mode]       | (edit) set destination file mode to `octal mode` |
 
 `include` and `includedir` will override mandatory arguments.
 

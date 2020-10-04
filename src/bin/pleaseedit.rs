@@ -264,7 +264,7 @@ fn main() {
     );
 
     if entry.clone().unwrap().exitcmd.is_some() {
-        let out = Command::new(entry.unwrap().exitcmd.unwrap().as_str())
+        let out = Command::new(entry.clone().unwrap().exitcmd.unwrap().as_str())
             .arg(&source_file)
             .arg(&edit_file)
             .output()
@@ -290,7 +290,7 @@ fn main() {
     nix::sys::stat::fchmodat(
         None,
         dir_parent_tmp.as_str(),
-        nix::sys::stat::Mode::S_IRUSR | nix::sys::stat::Mode::S_IWUSR,
+        if entry.clone().unwrap().edit_mode.is_some() { nix::sys::stat::Mode::from_bits( entry.unwrap().edit_mode.unwrap() as u32 ).unwrap() } else { nix::sys::stat::Mode::S_IRUSR | nix::sys::stat::Mode::S_IWUSR },
         nix::sys::stat::FchmodatFlags::FollowSymlink,
     )
     .unwrap();

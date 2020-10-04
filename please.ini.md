@@ -28,13 +28,14 @@ The properties in ini permitted are as follows:
  * notbefore=[YYYYmmdd|YYYYmmddHHMMSS], defaults to never
  * notafter=[YYYYmmdd|YYYYmmddHHMMSS], defaults to never
  * datematch=[Day Mon dd HH:MM:SS UTC YYYY], regex to match against a date string
- * list=[true|false], defaults to false
- * edit=[true|false], defaults to false
+ * type=[edit/run/list], defaults to run, edit = pleaseedit entry, list = user access rights listing
  * group=[true|false] user, when true name refers to a group rather than a user
  * hostname=[regex], permitted hostnames where this may apply
  * dir=[regex], permitted regex for switchable directories
  * include=[file], read ini file, and continue to next section
  * includedir=[directory], read .ini files in directory, and continue to next section
+ * editcmd=[program], run program after editor exits, if exit is zero, continue with file replacement
+ * editmode=[octal mode], set replacement file to octal mode
 
 `regex` is a regular expression.
 
@@ -61,7 +62,7 @@ User `ben` may only edit `/etc/fstab`:
 name=ben
 target=root
 permit=true
-edit=true
+type=edit
 regex=^/etc/fstab$
 ```
 
