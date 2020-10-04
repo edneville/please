@@ -33,6 +33,7 @@ pub struct EnvOptions {
     pub configured: bool,
     pub dir: Regex,
     pub exitcmd: Option<String>,
+    pub edit_mode: Option<i32>,
 }
 
 impl EnvOptions {
@@ -55,6 +56,7 @@ impl EnvOptions {
             configured: false,
             dir: Regex::new(&"^.*$").unwrap(),
             exitcmd: None,
+            edit_mode: None,
         }
     }
     fn new_deny() -> EnvOptions {
@@ -306,7 +308,19 @@ pub fn read_ini(
                         if !value.is_empty() {
                             opt.exitcmd = Some(value.to_string());
                         }
-                    }
+                    },
+                    "editmode" => {
+                        if !value.is_empty() {
+                            if value.parse::<i16>().is_ok() {
+                                opt.edit_mode = Some( i32::from_str_radix(value.trim_start_matches('0'), 8).expect("unable to parse editmode") );
+                            }
+                            else {
+                                println!("Could not convert {} to numerical file mode", value);
+                                faulty = true;
+
+                            }
+                        }
+                    },
                     &_ => {
                         println!("{}: unknown attribute \"{}\": {}", config_path, key, value);
                         faulty = true;
@@ -1586,5 +1600,29 @@ datematch=Fri.*\\s22:00:00\\s+UTC\\s2020
         assert_eq!(can(&vec_eo, &ro).unwrap().permit, false);
         ro.date = NaiveDate::from_ymd(2020, 10, 02).and_hms(22, 0, 0);
         assert_eq!(can(&vec_eo, &ro).unwrap().permit, true);
+    }
+
+    #[test]
+    fn test_edit_mode() {
+        let config = "
+[edit_filemode]
+name=ed
+target=root
+regex=/etc/please.ini.*
+type=edit
+editmode=0644
+".to_string();
+
+        let mut vec_eo: Vec<EnvOptions> = vec![];
+        read_ini_config_str(&config, &mut vec_eo, "ed", false);
+        let mut ro = RunOptions::new();
+        ro.name = "ed".to_string();
+        ro.target = "root".to_string();
+        ro.acl_type = ACLTYPE::EDIT;
+        ro.command = "/etc/please.ini".to_string();
+
+        let entry = can(&vec_eo, &ro).unwrap();
+
+        assert_eq!(entry.edit_mode,Some(420));
     }
 }
