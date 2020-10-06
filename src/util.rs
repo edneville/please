@@ -288,13 +288,13 @@ pub fn read_ini(
                             parse_datetime_from_str(&value.to_string(), "%Y%m%d%H%M%S").unwrap(),
                         )
                     }
-                    "datematch" => match regex_build(value, user, config_path, &section ) {
+                    "datematch" => match regex_build(value, user, config_path, &section) {
                         Some(check) => {
                             opt.datematch = Some(check);
-                        },
+                        }
                         None => {
                             faulty = true;
-                        },
+                        }
                     },
                     "dir" => match regex_build(value, user, config_path, &section) {
                         Some(dir) => {
@@ -308,19 +308,20 @@ pub fn read_ini(
                         if !value.is_empty() {
                             opt.exitcmd = Some(value.to_string());
                         }
-                    },
+                    }
                     "editmode" => {
                         if !value.is_empty() {
                             if value.parse::<i16>().is_ok() {
-                                opt.edit_mode = Some( i32::from_str_radix(value.trim_start_matches('0'), 8).expect("unable to parse editmode") );
-                            }
-                            else {
+                                opt.edit_mode = Some(
+                                    i32::from_str_radix(value.trim_start_matches('0'), 8)
+                                        .expect("unable to parse editmode"),
+                                );
+                            } else {
                                 println!("Could not convert {} to numerical file mode", value);
                                 faulty = true;
-
                             }
                         }
-                    },
+                    }
                     &_ => {
                         println!("{}: unknown attribute \"{}\": {}", config_path, key, value);
                         faulty = true;
@@ -387,7 +388,13 @@ pub fn can(vec_eo: &[EnvOptions], ro: &RunOptions) -> Result<EnvOptions, ()> {
             continue;
         }
 
-        if item.datematch.is_some() && !item.datematch.as_ref().unwrap().is_match( &ro.date.format( "%a %e %b %T UTC %Y" ).to_string() ) {
+        if item.datematch.is_some()
+            && !item
+                .datematch
+                .as_ref()
+                .unwrap()
+                .is_match(&ro.date.format("%a %e %b %T UTC %Y").to_string())
+        {
             // println!("{}: skipping as not a datematch {} vs {}", item.section, item.datematch.clone().unwrap(), &ro.date.format( "%a %e %b %T UTC %Y" ).to_string() );
             continue;
         }
@@ -1324,7 +1331,8 @@ permit = true
 type = edit
 require_pass = false
 regex = ^/var/www/html/%{USER}.html
-".to_string();
+"
+        .to_string();
 
         let mut vec_eo: Vec<EnvOptions> = vec![];
         read_ini_config_str(&config, &mut vec_eo, "ed", false);
@@ -1337,7 +1345,7 @@ regex = ^/var/www/html/%{USER}.html
         ro.acl_type = ACLTYPE::EDIT;
 
         assert_eq!(can(&vec_eo, &ro).unwrap().permit, false);
- 
+
         ro.groups.insert(String::from("root"), 1);
         assert_eq!(can(&vec_eo, &ro).unwrap().permit, false);
 
@@ -1566,7 +1574,8 @@ hostname=localhost
 regex=.*
 dir=.*
 datematch=Fri.*UTC.*
-".to_string();
+"
+        .to_string();
 
         let mut vec_eo: Vec<EnvOptions> = vec![];
         read_ini_config_str(&config, &mut vec_eo, "ed", false);
@@ -1590,7 +1599,8 @@ hostname=localhost
 regex=.*
 dir=.*
 datematch=Fri.*\\s22:00:00\\s+UTC\\s2020
-".to_string();
+"
+        .to_string();
 
         let mut vec_eo: Vec<EnvOptions> = vec![];
         read_ini_config_str(&config, &mut vec_eo, "ed", false);
@@ -1611,7 +1621,8 @@ target=root
 regex=/etc/please.ini.*
 type=edit
 editmode=0644
-".to_string();
+"
+        .to_string();
 
         let mut vec_eo: Vec<EnvOptions> = vec![];
         read_ini_config_str(&config, &mut vec_eo, "ed", false);
@@ -1623,6 +1634,6 @@ editmode=0644
 
         let entry = can(&vec_eo, &ro).unwrap();
 
-        assert_eq!(entry.edit_mode,Some(420));
+        assert_eq!(entry.edit_mode, Some(420));
     }
 }
