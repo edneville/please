@@ -25,7 +25,7 @@ use std::os::unix::process::CommandExt;
 use std::path::Path;
 use std::process::Command;
 
-use getopt::prelude::*;
+use getopts::Options;
 
 use nix::sys::wait::WaitStatus::Exited;
 use nix::unistd::{fork, gethostname, setgid, setgroups, setuid, ForkResult};
@@ -35,10 +35,10 @@ use users::*;
 fn print_usage(program: &str) {
     println!("usage:");
     println!("{} /path/to/file", program);
-    println!(" -t [user]: edit as target user");
-    println!(" -n: rather than prompt for password, exit non-zero");
-    println!(" -p: purge valid tokens");
-    println!(" -w: warm token cache");
+    println!(" -t, --target[user]: edit as target user");
+    println!(" -n, --noprompt: rather than prompt for password, exit non-zero");
+    println!(" -p, --purge: purge valid tokens");
+    println!(" -w, --warm: warm token cache");
     println!("version: 0.3.3");
 }
 
@@ -82,10 +82,9 @@ fn setup_temp_edit_file(
 }
 
 fn main() {
-    let mut args: Vec<String> = std::env::args().collect();
+    let args: Vec<String> = std::env::args().collect();
     let original_command = args.clone();
     let program = args[0].clone();
-    let mut opts = Parser::new(&args, "t:hnpw");
     let service = String::from("pleaseedit");
     let mut ro = RunOptions::new();
     let mut prompt = true;
@@ -98,30 +97,37 @@ fn main() {
     ro.acl_type = ACLTYPE::EDIT;
     let mut vec_eo: Vec<EnvOptions> = vec![];
 
-    loop {
-        match opts.next().transpose() {
-            Err(_x) => {
-                print_usage(&program);
-                std::process::exit(1);
-            }
-            Ok(a) => match a {
-                None => break,
-                Some(opt) => match opt {
-                    Opt('h', None) => {
-                        print_usage(&program);
-                        return;
-                    }
-                    Opt('t', Some(string)) => ro.target = string,
-                    Opt('n', None) => prompt = false,
-                    Opt('p', None) => purge_token = true,
-                    Opt('w', None) => warm_token = true,
-                    _ => unreachable!(),
-                },
-            },
-        }
+    let mut opts = Options::new();
+    opts.parsing_style(getopts::ParsingStyle::StopAtFirstFree);
+    opts.optflag("h", "help", "print usage help");
+    opts.optopt("t", "target", "edit as target user", "TARGET");
+    opts.optflag("p", "purge", "purge access token");
+    opts.optflag("w", "warm", "warm access token and exit");
+    opts.optflag("n", "noprompt", "do nothing if a password is required");
+
+    let matches = match opts.parse(&args[1..]) {
+        Ok(m) => m,
+        Err(f) => panic!(f.to_string()),
+    };
+    if matches.opt_present("h") {
+        print_usage(&program);
+        return;
+    }
+    if matches.opt_present("t") {
+        ro.target = matches.opt_str("t").unwrap();
+    }
+    if matches.opt_present("p") {
+        purge_token = true;
+    }
+    if matches.opt_present("w") {
+        warm_token = true;
     }
 
-    let new_args = args.split_off(opts.index());
+    if matches.opt_present("n") {
+        prompt = false;
+    }
+
+    let new_args = matches.free;
     ro.command = new_args.join(" ");
 
     if purge_token {
@@ -169,9 +175,7 @@ fn main() {
             );
             println!(
                 "You may not edit \"{}\" on {} as {}",
-                &ro.command,
-                &ro.hostname,
-                &ro.target
+                &ro.command, &ro.hostname, &ro.target
             );
             std::process::exit(1);
         }
@@ -186,9 +190,7 @@ fn main() {
                 );
                 println!(
                     "You may not edit \"{}\" on {} as {}",
-                    &ro.command,
-                    &ro.hostname,
-                    &ro.target
+                    &ro.command, &ro.hostname, &ro.target
                 );
                 std::process::exit(1);
             }
@@ -290,7 +292,11 @@ fn main() {
     nix::sys::stat::fchmodat(
         None,
         dir_parent_tmp.as_str(),
-        if entry.clone().unwrap().edit_mode.is_some() { nix::sys::stat::Mode::from_bits( entry.unwrap().edit_mode.unwrap() as u32 ).unwrap() } else { nix::sys::stat::Mode::S_IRUSR | nix::sys::stat::Mode::S_IWUSR },
+        if entry.clone().unwrap().edit_mode.is_some() {
+            nix::sys::stat::Mode::from_bits(entry.unwrap().edit_mode.unwrap() as u32).unwrap()
+        } else {
+            nix::sys::stat::Mode::S_IRUSR | nix::sys::stat::Mode::S_IWUSR
+        },
         nix::sys::stat::FchmodatFlags::FollowSymlink,
     )
     .unwrap();

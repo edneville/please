@@ -24,7 +24,7 @@ use pleaser::util::{
 use std::os::unix::process::CommandExt;
 use std::process::Command;
 
-use getopt::prelude::*;
+use getopts::Options;
 
 use nix::unistd::{gethostname, setgid, setgroups, setuid};
 
@@ -34,20 +34,93 @@ use users::*;
 fn print_usage(program: &str) {
     println!("usage:");
     println!("{} [arguments] <path/to/executable>", program);
-    println!(" -l <-t users permissions> <-v>: list permissions");
-    println!(" -t [user]: become target user");
-    println!(" -c [file]: check config file");
-    println!(" -d [dir]: change to dir before execution");
-    println!(" -n: rather than prompt for password, exit non-zero");
-    println!(" -p: purge valid tokens");
-    println!(" -w: warm token cache");
+    println!(" -l, --list, <-t users permissions> <-v>: list permissions");
+    println!(" -t, --target, [user]: become target user");
+    println!(" -c, --check, [file]: check config file");
+    println!(" -d, --dir, [dir]: change to dir before execution");
+    println!(" -n, --noprompt: rather than prompt for password, exit non-zero");
+    println!(" -p, --purge: purge valid tokens");
+    println!(" -w, --warm: warm token cache");
+}
+
+fn do_list(ro: &mut RunOptions, vec_eo: &[EnvOptions], service: &str) {
+    let name = if ro.target != "" { &ro.target } else { "You" };
+
+    let can_do = can(&vec_eo, &ro);
+    if can_do.is_ok() && can_do.unwrap().permit {
+        println!("{} may run the following:", name);
+        ro.acl_type = ACLTYPE::RUN;
+        list(&vec_eo, &ro);
+        println!("{} may edit the following:", name);
+        ro.acl_type = ACLTYPE::EDIT;
+        list(&vec_eo, &ro);
+        println!("{} may list the following:", name);
+        ro.acl_type = ACLTYPE::LIST;
+        list(&vec_eo, &ro);
+    } else {
+        let dest = format!("{}'s", &ro.target);
+        log_action(&service, "deny", &ro.name, &ro.target, &ro.command);
+        println!(
+            "You may not view {} command list",
+            if ro.target == "" { "your" } else { &dest }
+        );
+    }
+}
+
+fn do_dir_changes(ro: &RunOptions) {
+    if ro.directory != "" {
+        if let Err(x) = std::env::set_current_dir(&ro.directory) {
+            println!("Cannot cd into {}: {}", &ro.directory, x);
+            std::process::exit(1);
+        }
+    }
+}
+
+fn do_environment(
+    ro: &mut RunOptions,
+    original_user: &User,
+    original_uid: u32,
+    lookup_name: &User,
+) {
+    for (key, _) in std::env::vars() {
+        if key == "LANGUAGE"
+            || key == "XAUTHORITY"
+            || key == "LANG"
+            || key == "LS_COLORS"
+            || key == "TERM"
+            || key == "DISPLAY"
+            || key == "LOGNAME"
+        {
+            continue;
+        }
+        std::env::remove_var(key);
+    }
+
+    std::env::set_var("PLEASE_USER", original_user.name());
+    std::env::set_var("PLEASE_UID", original_uid.to_string());
+    std::env::set_var("PLEASE_GID", original_user.primary_group_id().to_string());
+    std::env::set_var("PLEASE_COMMAND", &ro.command);
+
+    std::env::set_var("SUDO_USER", original_user.name());
+    std::env::set_var("SUDO_UID", original_uid.to_string());
+    std::env::set_var("SUDO_GID", original_user.primary_group_id().to_string());
+    std::env::set_var("SUDO_COMMAND", &ro.command);
+
+    std::env::set_var(
+        "PATH",
+        "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin".to_string(),
+    );
+    std::env::set_var("HOME", lookup_name.home_dir().as_os_str());
+    std::env::set_var("MAIL", format!("/var/mail/{}", ro.target));
+    std::env::set_var("SHELL", lookup_name.shell());
+    std::env::set_var("USER", &ro.target);
+    std::env::set_var("LOGNAME", &ro.target);
 }
 
 fn main() {
-    let mut args: Vec<String> = std::env::args().collect();
+    let args: Vec<String> = std::env::args().collect();
     let original_command = args.clone();
     let program = args[0].clone();
-    let mut opts = Parser::new(&args, "c:d:hlwpnt:");
     let service = String::from("please");
     let mut ro = RunOptions::new();
     let mut prompt = true;
@@ -58,39 +131,59 @@ fn main() {
     ro.name = original_user.name().to_string_lossy().to_string();
     let mut vec_eo: Vec<EnvOptions> = vec![];
 
-    loop {
-        match opts.next().transpose() {
-            Err(_x) => {
-                println!("Cannot parse arguments");
-                print_usage(&program);
-                std::process::exit(1);
-            }
-            Ok(a) => match a {
-                None => break,
-                Some(opt) => match opt {
-                    Opt('h', None) => {
-                        print_usage(&program);
-                        return;
-                    }
-                    Opt('t', Some(string)) => ro.target = string,
-                    Opt('l', None) => ro.acl_type = ACLTYPE::LIST,
-                    Opt('c', Some(config_file)) => std::process::exit(read_ini_config_file(
-                        &config_file,
-                        &mut vec_eo,
-                        &ro.name,
-                        true,
-                    ) as i32),
-                    Opt('d', Some(string)) => ro.directory = string,
-                    Opt('n', None) => prompt = false,
-                    Opt('p', None) => purge_token = true,
-                    Opt('w', None) => warm_token = true,
-                    _ => unreachable!(),
-                },
-            },
-        }
+    let mut opts = Options::new();
+    opts.parsing_style(getopts::ParsingStyle::StopAtFirstFree);
+    opts.optopt("c", "check", "check config file", "CHECK");
+    opts.optopt("d", "dir", "change to directory prior to execution", "DIR");
+    opts.optflag("h", "help", "print usage help");
+    opts.optflag("l", "list", "list effective rules");
+    opts.optflag("n", "noprompt", "do nothing if a password is required");
+    opts.optflag("p", "purge", "purge access token");
+    opts.optopt("t", "target", "edit as target user", "TARGET");
+    opts.optflag("w", "warm", "warm access token and exit");
+
+    let matches = match opts.parse(&args[1..]) {
+        Ok(m) => m,
+        Err(f) => panic!(f.to_string()),
+    };
+
+    if matches.opt_present("h") {
+        print_usage(&program);
+        return;
     }
 
-    let mut new_args = args.split_off(opts.index());
+    if matches.opt_present("c") {
+        std::process::exit(read_ini_config_file(
+            &matches.opt_str("c").unwrap(),
+            &mut vec_eo,
+            &ro.name,
+            true,
+        ) as i32);
+    }
+
+    if matches.opt_present("d") {
+        ro.directory = matches.opt_str("d").unwrap();
+    }
+
+    if matches.opt_present("l") {
+        ro.acl_type = ACLTYPE::LIST;
+    }
+    if matches.opt_present("t") {
+        ro.target = matches.opt_str("t").unwrap();
+    }
+    if matches.opt_present("p") {
+        purge_token = true;
+    }
+    if matches.opt_present("w") {
+        warm_token = true;
+    }
+
+    if matches.opt_present("n") {
+        prompt = false;
+    }
+
+    let mut new_args = matches.free;
+
     ro.groups = group_hash(original_user.groups().unwrap());
 
     if purge_token {
@@ -118,28 +211,7 @@ fn main() {
         .to_string();
 
     if ro.acl_type == ACLTYPE::LIST {
-        let name = if ro.target != "" { &ro.target } else { "You" };
-
-        let can_do = can(&vec_eo, &ro);
-        if can_do.is_ok() && can_do.unwrap().permit {
-            println!("{} may run the following:", name);
-            ro.acl_type = ACLTYPE::RUN;
-            list(&vec_eo, &ro);
-            println!("{} may edit the following:", name);
-            ro.acl_type = ACLTYPE::EDIT;
-            list(&vec_eo, &ro);
-            println!("{} may list the following:", name);
-            ro.acl_type = ACLTYPE::LIST;
-            list(&vec_eo, &ro);
-        } else {
-            // let dest = if ro.target == "" { "your" } else { format!("{}'s", &ro.target).as_str() };
-            let dest = format!("{}'s", &ro.target);
-            log_action(&service, "deny", &ro.name, &ro.target, &ro.command);
-            println!(
-                "You may not view {} command list",
-                if ro.target == "" { "your" } else { &dest }
-            );
-        }
+        do_list(&mut ro, &vec_eo, &service);
         return;
     }
 
@@ -176,9 +248,7 @@ fn main() {
             );
             println!(
                 "You may not execute \"{}\" on {} as {}",
-                &ro.command,
-                &ro.hostname,
-                &ro.target
+                &ro.command, &ro.hostname, &ro.target
             );
             std::process::exit(1);
         }
@@ -193,18 +263,11 @@ fn main() {
                 );
                 println!(
                     "You may not execute \"{}\" on {} as {}",
-                    &ro.command,
-                    &ro.hostname,
-                    &ro.target
+                    &ro.command, &ro.hostname, &ro.target
                 );
                 std::process::exit(1);
             }
         }
-    }
-
-    if new_args.is_empty() {
-        print_usage(&program);
-        return;
     }
 
     if !challenge_password(ro.name.to_string(), entry.unwrap(), &service, prompt) {
@@ -219,12 +282,7 @@ fn main() {
         std::process::exit(1);
     }
 
-    if ro.directory != "" {
-        if let Err(x) = std::env::set_current_dir(&ro.directory) {
-            println!("Cannot cd into {}: {}", &ro.directory, x);
-            std::process::exit(1);
-        }
-    }
+    do_dir_changes(&ro);
 
     log_action(
         &service,
@@ -237,39 +295,7 @@ fn main() {
     let target_uid = nix::unistd::Uid::from_raw(lookup_name.uid());
     let target_gid = nix::unistd::Gid::from_raw(lookup_name.primary_group_id());
 
-    for (key, _) in std::env::vars() {
-        if key == "LANGUAGE"
-            || key == "XAUTHORITY"
-            || key == "LANG"
-            || key == "LS_COLORS"
-            || key == "TERM"
-            || key == "DISPLAY"
-            || key == "LOGNAME"
-        {
-            continue;
-        }
-        std::env::remove_var(key);
-    }
-
-    std::env::set_var("PLEASE_USER", original_user.name());
-    std::env::set_var("PLEASE_UID", original_uid.to_string());
-    std::env::set_var("PLEASE_GID", original_user.primary_group_id().to_string());
-    std::env::set_var("PLEASE_COMMAND", &ro.command);
-
-    std::env::set_var("SUDO_USER", original_user.name());
-    std::env::set_var("SUDO_UID", original_uid.to_string());
-    std::env::set_var("SUDO_GID", original_user.primary_group_id().to_string());
-    std::env::set_var("SUDO_COMMAND", &ro.command);
-
-    std::env::set_var(
-        "PATH",
-        "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin".to_string(),
-    );
-    std::env::set_var("HOME", lookup_name.home_dir().as_os_str());
-    std::env::set_var("MAIL", format!("/var/mail/{}", ro.target));
-    std::env::set_var("SHELL", lookup_name.shell());
-    std::env::set_var("USER", &ro.target);
-    std::env::set_var("LOGNAME", &ro.target);
+    do_environment(&mut ro, &original_user, original_uid, &lookup_name);
 
     let mut groups: Vec<nix::unistd::Gid> = vec![];
     for x in lookup_name.groups().unwrap() {
