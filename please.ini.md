@@ -21,10 +21,10 @@ Rules are read and applied in the order they are presented in the configuration 
 The properties in ini permitted are as follows:
 
  * name=[regex], or user, mandatory
- * target=[regex] user to execute as, defaults to ^root$
+ * target=[regex] user to execute or list as, defaults to root
  * permit=[true|false] defaults to true
  * require_pass=[true|false], defaults to true
- * regex=[regex], mandatory, is the regular expression that the command matches against
+ * regex=[regex], is the regular expression that the command matches against, defaults to ^$
  * notbefore=[YYYYmmdd|YYYYmmddHHMMSS], defaults to never
  * notafter=[YYYYmmdd|YYYYmmddHHMMSS], defaults to never
  * datematch=[Day Mon dd HH:MM:SS UTC YYYY], regex to match against a date string
@@ -41,7 +41,7 @@ The properties in ini permitted are as follows:
 
 Using an anchor (`^`) for the regex field will be as good as saying the rule should match any command.
 
-If you wish to permit a user to view another's command set, then you may do this using the `list` flag (off by default). Users must match the regex.
+If you wish to permit a user to view another's command set, then you may do this using `type=list` (run by default). To list another user, they must match the `target` regex.
 
 # EXAMPLE
 
@@ -73,7 +73,7 @@ User `ben` may list only users `eng`, `net` and `dba` operators:
 name=ben
 permit=true
 list=true
-regex=^(eng|net|dba)ops$
+target=^(eng|net|dba)ops$
 ```
 
 # DATED RANGES

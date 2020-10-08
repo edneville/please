@@ -10,13 +10,14 @@ please - a tool for access elevation.
 
 ```
 please /bin/bash
-please -t backup tar -cvf - /home/data | ...
+please [-t/--target] backup tar -cvf - /home/data | ...
 pleaseedit /etc/fstab
-please -l [-t user]
-please -d [dir] command
-please -n command
-please -p
-please -w
+please [-l/--list]
+please [-l/--list] user
+please [-d/--dir] [dir] command
+please [-n/--noprompt] command
+please [-p/--purge]
+please [-w/--warm]
 ```
 
 # DESCRIPTION
@@ -41,10 +42,10 @@ To list what you may run:
 please -l
 ```
 
-Or with `-t username` to show what another user may run. username must match the regex in a `permit=list` rule.
+Or with `username` to show what another user may run. username must match the regex in a `permit=list` rule.
 
 ```
-please -l -t username`
+please -l username
 ```
 
 # FILES

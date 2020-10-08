@@ -17,6 +17,13 @@ A simple install:
   && chmod 4755 /usr/local/bin/please /usr/local/bin/pleaseedit
 ```
 
+Optionally, set `sudo` as an alias of `please`:
+
+```
+alias sudo="please"
+alias sudoedit="pleaseedit"
+```
+
 # How do I set it up
 
 Next, configure your `/etc/please.ini` similar to this, replace user names with appropriate values. One of the simplest, that does not require password authentication can be defined as follows, assuming the user is `ed`:
@@ -30,11 +37,11 @@ The options are as follows:
 | target=regex                | May become these users. |
 | permit=[true/false]         | Defaults to true |
 | require_pass=[true/false]   | Defaults to true, mandatory in run and edit, become this user.   |
-| regex=rule                  | Mandatory, this is the regex for the section. |
+| regex=rule                  | This is the regex for the section, default is ^$ |
 | notbefore                   | The date, in YYYYmmdd or YYYYmmddHHMMSS when this rule becomes effective. |
 | notafter                    | The date, in YYYYmmdd or YYYYmmddHHMMSS when this rule expires. |
 | datematch=[Day Mon dd HH:MM:SS UTC YYYY] | regex to match against a date string |
-| type=[edit/run/list]        | Set the entry type. Run = execution, edit = pleaseedit, list is show user rights |
+| type=[edit/run/list]        | Set the entry type. Run = execution, edit = pleaseedit, list = show user rights |
 | group=[true/false]          | True to signify that name= refers to a group rather than a user. |
 | hostname=regex              | Hosts where this applies. Defaults to 'localhost'. |
 | dir=regex                   | Permit switching to regex defined directory prior to execution. |

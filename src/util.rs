@@ -1,3 +1,18 @@
+//    please
+//    Copyright (C) 2020  ed neville
+//
+//    This program is free software: you can redistribute it and/or modify
+//    it under the terms of the GNU General Public License as published by
+//    the Free Software Foundation, either version 3 of the License, or
+//    (at your option) any later version.
+//
+//    This program is distributed in the hope that it will be useful,
+//    but WITHOUT ANY WARRANTY; without even the implied warranty of
+//    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//    GNU General Public License for more details.
+//
+//    You should have received a copy of the GNU General Public License
+//    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 use regex::Regex;
 
 use std::collections::HashMap;
@@ -438,7 +453,7 @@ pub fn can(vec_eo: &[EnvOptions], ro: &RunOptions) -> Result<EnvOptions, ()> {
         }
 
         if item.acl_type == ACLTYPE::LIST {
-            if item.rule.is_match(&ro.target) {
+            if item.target.is_match(&ro.target) {
                 // println!("{}: is list", item.section);
                 opt = item.clone();
             }
@@ -899,12 +914,12 @@ name = (floppy)
 group = true
 permit = true
 require_pass = false
-regex = ^.*
+target = ^.*
 
 [ed_list]
 name = (ed)
 type = list
-regex = %{USER}
+target = %{USER}
 require_pass = false
             "
         .to_string();
@@ -1252,23 +1267,23 @@ name=ed
 notbefore=20200101
 notafter=20201225
 type = list
-regex = ^.*$
+target = ^.*$
 
 [bob_all]
 name=bob
 type=edit
-regex = ^.*$
+target = ^.*$
 
 [bob_all]
 name=bob
 type = list
 permit=false
-regex = ^.*$
+target = ^.*$
 
 [meh_ed]
 name=meh
 type =list
-regex=^ed$
+target=^ed$
 
 [root_all]
 name=root
@@ -1279,7 +1294,7 @@ regex =^.*$
 name=ben
 permit=true
 type=list
-regex = ^(eng|dba|net)ops$
+target = ^(eng|dba|net)ops$
 "
         .to_string();
 
