@@ -301,7 +301,10 @@ fn main() {
     for x in lookup_name.groups().unwrap() {
         groups.push(nix::unistd::Gid::from_raw(x.gid()));
     }
-    setgroups(groups.as_slice()).unwrap();
+
+    if !groups.is_empty() {
+        setgroups(groups.as_slice()).unwrap();
+    }
 
     setgid(target_gid).unwrap();
     setuid(target_uid).unwrap();
