@@ -303,7 +303,10 @@ fn main() {
     }
 
     if !groups.is_empty() {
-        setgroups(groups.as_slice()).unwrap();
+        match setgroups(groups.as_slice()) {
+            Ok(_) => {}
+            Err(err) => println!("Error setting groups: {}", err),
+        }
     }
 
     setgid(target_gid).unwrap();
