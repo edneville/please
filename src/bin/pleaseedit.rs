@@ -35,11 +35,11 @@ use users::*;
 fn print_usage(program: &str) {
     println!("usage:");
     println!("{} /path/to/file", program);
-    println!(" -t, --target[user]: edit as target user");
+    println!(" -t, --target, [user]: edit as target user");
     println!(" -n, --noprompt: rather than prompt for password, exit non-zero");
     println!(" -p, --purge: purge valid tokens");
     println!(" -w, --warm: warm token cache");
-    println!("version: 0.3.3");
+    println!("version: {}", env!("CARGO_PKG_VERSION"));
 }
 
 fn setup_temp_edit_file(
@@ -195,6 +195,11 @@ fn main() {
                 std::process::exit(1);
             }
         }
+    }
+
+    if std::fs::read_link(&ro.command).is_ok() {
+        println!("You may not edit \"{}\" as it links elsewhere", &ro.command);
+        std::process::exit(1);
     }
 
     if !challenge_password(

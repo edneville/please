@@ -1625,6 +1625,26 @@ datematch=Fri.*\\s22:00:00\\s+UTC\\s2020
         assert_eq!(can(&vec_eo, &ro).unwrap().permit, false);
         ro.date = NaiveDate::from_ymd(2020, 10, 02).and_hms(22, 0, 0);
         assert_eq!(can(&vec_eo, &ro).unwrap().permit, true);
+
+        let config = "
+[regex_anchor]
+name=ed
+target=root
+hostname=localhost
+regex=.*
+dir=.*
+datematch=Thu\\s+1\\s+Oct\\s+22:00:00\\s+UTC\\s+2020
+"
+        .to_string();
+
+        let mut vec_eo: Vec<EnvOptions> = vec![];
+        read_ini_config_str(&config, &mut vec_eo, "ed", false);
+        ro.date = NaiveDate::from_ymd(2020, 10, 01).and_hms(21, 0, 0);
+        assert_eq!(can(&vec_eo, &ro).unwrap().permit, false);
+        ro.date = NaiveDate::from_ymd(2020, 10, 01).and_hms(23, 0, 0);
+        assert_eq!(can(&vec_eo, &ro).unwrap().permit, false);
+        ro.date = NaiveDate::from_ymd(2020, 10, 01).and_hms(22, 0, 0);
+        assert_eq!(can(&vec_eo, &ro).unwrap().permit, true);
     }
 
     #[test]

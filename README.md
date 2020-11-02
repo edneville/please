@@ -200,7 +200,6 @@ This project is named "please". In some places that project name was used by oth
 # Todo
 
 ```
-[ ] read links on source of edits and don't stray outside of permitted rule
 [ ] docker image for testing
 [ ] plugins/modules
 [ ] packages

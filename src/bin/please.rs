@@ -41,6 +41,7 @@ fn print_usage(program: &str) {
     println!(" -n, --noprompt: rather than prompt for password, exit non-zero");
     println!(" -p, --purge: purge valid tokens");
     println!(" -w, --warm: warm token cache");
+    println!("version: {}", env!("CARGO_PKG_VERSION"));
 }
 
 fn do_list(ro: &mut RunOptions, vec_eo: &[EnvOptions], service: &str) {

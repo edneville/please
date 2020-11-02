@@ -27,7 +27,7 @@ The properties in ini permitted are as follows:
  * regex=[regex], is the regular expression that the command matches against, defaults to ^$
  * notbefore=[YYYYmmdd|YYYYmmddHHMMSS], defaults to never
  * notafter=[YYYYmmdd|YYYYmmddHHMMSS], defaults to never
- * datematch=[Day Mon dd HH:MM:SS UTC YYYY], regex to match against a date string
+ * datematch=[Day dd Mon HH:MM:SS UTC YYYY], regex to match against a date string
  * type=[edit/run/list], defaults to run, edit = pleaseedit entry, list = user access rights listing
  * group=[true|false] user, when true name refers to a group rather than a user
  * hostname=[regex], permitted hostnames where this may apply
@@ -98,7 +98,7 @@ regex=^/bin/bash
 
 # DATEMATCHES
 
-Another date type is the `datematch` item, this constrains sections to a regex match against the date string `Day Mon dd HH:MM:SS UTC Year`.
+Another date type is the `datematch` item, this constrains sections to a regex match against the date string `Day dd mon HH:MM:SS UTC Year`.
 
 You can permit some a group of users to perform some house keeping on a Monday:
 
@@ -109,7 +109,7 @@ group=true
 target=root
 permit=true
 regex = /usr/local/housekeeping/.*
-datematch = ^Mon.*
+datematch = ^Thu\\s+1\\s+Oct\\s+22:00:00\\s+UTC\\s+2020
 ```
 
 # FILES

@@ -45,7 +45,7 @@ notbefore=[YYYYmmdd|YYYYmmddHHMMSS], defaults to never
 .IP \[bu] 2
 notafter=[YYYYmmdd|YYYYmmddHHMMSS], defaults to never
 .IP \[bu] 2
-datematch=[Day Mon dd HH:MM:SS UTC YYYY], regex to match against a date
+datematch=[Day dd Mon HH:MM:SS UTC YYYY], regex to match against a date
 string
 .IP \[bu] 2
 type=[edit/run/list], defaults to run, edit = pleaseedit entry, list =
@@ -146,7 +146,7 @@ regex=^/bin/bash
 .PP
 Another date type is the \f[C]datematch\f[] item, this constrains
 sections to a regex match against the date string
-\f[C]Day\ Mon\ dd\ HH:MM:SS\ UTC\ Year\f[].
+\f[C]Day\ dd\ mon\ HH:MM:SS\ UTC\ Year\f[].
 .PP
 You can permit some a group of users to perform some house keeping on a
 Monday:
@@ -159,7 +159,7 @@ group=true
 target=root
 permit=true
 regex\ =\ /usr/local/housekeeping/.*
-datematch\ =\ ^Mon.*
+datematch\ =\ ^Thu\\\\s+1\\\\s+Oct\\\\s+22:00:00\\\\s+UTC\\\\s+2020
 \f[]
 .fi
 .SH FILES
