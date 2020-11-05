@@ -49,6 +49,7 @@ pub struct EnvOptions {
     pub dir: Regex,
     pub exitcmd: Option<String>,
     pub edit_mode: Option<i32>,
+    pub reason: bool,
 }
 
 impl EnvOptions {
@@ -72,6 +73,7 @@ impl EnvOptions {
             dir: Regex::new(&"^.*$").unwrap(),
             exitcmd: None,
             edit_mode: None,
+            reason: false,
         }
     }
     fn new_deny() -> EnvOptions {
@@ -101,6 +103,7 @@ pub struct RunOptions {
     pub groups: HashMap<String, u32>,
     pub date: NaiveDateTime,
     pub acl_type: ACLTYPE,
+    pub reason: Option<String>,
 }
 
 impl RunOptions {
@@ -115,6 +118,7 @@ impl RunOptions {
             groups: HashMap::new(),
             directory: ".".to_string(),
             acl_type: ACLTYPE::RUN,
+            reason: None,
         }
     }
 }
@@ -206,7 +210,7 @@ pub fn read_ini(
                     "include" => {
                         if read_ini_config_file(&value, vec_eo, &user, fail_error) {
                             println!("Couldn't read {}", value);
-                            return false;
+                            return true;
                         }
                         continue;
                     }
@@ -229,7 +233,7 @@ pub fn read_ini(
                                     }
                                     if read_ini_config_file(&incf, vec_eo, &user, fail_error) {
                                         println!("Could not read {}", value);
-                                        return false;
+                                        return true;
                                     }
                                 }
                             }
@@ -337,6 +341,7 @@ pub fn read_ini(
                             }
                         }
                     }
+                    "reason" => opt.reason = value == "true",
                     &_ => {
                         println!("{}: unknown attribute \"{}\": {}", config_path, key, value);
                         faulty = true;
@@ -368,13 +373,16 @@ pub fn read_ini_config_file(
     let display = path.display();
 
     let mut file = match File::open(&path) {
-        Err(why) => panic!("couldn't open {}: {}", display, why),
+        Err(_why) => return true,
         Ok(file) => file,
     };
 
     let mut s = String::new();
     match file.read_to_string(&mut s) {
-        Err(why) => panic!("couldn't read {}: {}", display, why),
+        Err(why) => {
+            println!("couldn't read {}: {}", display, why);
+            return true;
+        }
         Ok(_) => read_ini(&s, vec_eo, &user, fail_error, config_path),
     }
 }
@@ -564,6 +572,10 @@ pub fn list(vec_eo: &[EnvOptions], ro: &RunOptions) {
             prefixes.push(format!("expired({})", item.notafter.unwrap()));
         }
 
+        if item.reason {
+            prefixes.push(String::from("reason_required"));
+        }
+
         if item.acl_type != ro.acl_type {
             continue;
         }
@@ -651,23 +663,36 @@ pub fn tty_name() -> String {
     ttyname.to_string()
 }
 
-pub fn log_action(service: &str, result: &str, user: &str, target: &str, command: &str) -> bool {
+pub fn log_action(
+    service: &str,
+    result: &str,
+    user: &str,
+    target: &str,
+    reason: &Option<String>,
+    command: &str,
+) -> bool {
     let formatter = Formatter3164 {
         facility: Facility::LOG_USER,
         hostname: None,
         process: service.into(),
         pid: process::id() as i32,
     };
+
     match syslog::unix(formatter) {
         Err(e) => println!("impossible to connect to syslog: {:?}", e),
         Ok(mut writer) => {
             writer
                 .err(format!(
-                    "user={} tty={} action={} target={} command={}",
+                    "user={} tty={} action={} target={} reason={} command={}",
                     user,
                     tty_name(),
                     result,
                     target,
+                    if reason.clone().is_some() {
+                        reason.clone().unwrap()
+                    } else {
+                        String::from("")
+                    },
                     command
                 ))
                 .expect("could not write error message");
@@ -1670,5 +1695,16 @@ editmode=0644
         let entry = can(&vec_eo, &ro).unwrap();
 
         assert_eq!(entry.edit_mode, Some(420));
+    }
+
+    #[test]
+    fn test_read_ini_config_file() {
+        let mut vec_eo: Vec<EnvOptions> = vec![];
+        assert_eq!(read_ini_config_file(".", &mut vec_eo, "ed", true), true);
+        assert_eq!(read_ini_config_file("", &mut vec_eo, "ed", true), true);
+        assert_eq!(
+            read_ini_config_file("./faulty", &mut vec_eo, "ed", true),
+            true
+        );
     }
 }

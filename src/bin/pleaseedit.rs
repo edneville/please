@@ -35,9 +35,10 @@ use users::*;
 fn print_usage(program: &str) {
     println!("usage:");
     println!("{} /path/to/file", program);
-    println!(" -t, --target, [user]: edit as target user");
     println!(" -n, --noprompt: rather than prompt for password, exit non-zero");
     println!(" -p, --purge: purge valid tokens");
+    println!(" -r, --reason, [text]: provide reason for execution");
+    println!(" -t, --target, [user]: edit as target user");
     println!(" -w, --warm: warm token cache");
     println!("version: {}", env!("CARGO_PKG_VERSION"));
 }
@@ -100,10 +101,11 @@ fn main() {
     let mut opts = Options::new();
     opts.parsing_style(getopts::ParsingStyle::StopAtFirstFree);
     opts.optflag("h", "help", "print usage help");
-    opts.optopt("t", "target", "edit as target user", "TARGET");
-    opts.optflag("p", "purge", "purge access token");
-    opts.optflag("w", "warm", "warm access token and exit");
     opts.optflag("n", "noprompt", "do nothing if a password is required");
+    opts.optflag("p", "purge", "purge access token");
+    opts.optopt("r", "reason", "reason for execution", "REASON");
+    opts.optopt("t", "target", "edit as target user", "TARGET");
+    opts.optflag("w", "warm", "warm access token and exit");
 
     let matches = match opts.parse(&args[1..]) {
         Ok(m) => m,
@@ -112,6 +114,9 @@ fn main() {
     if matches.opt_present("h") {
         print_usage(&program);
         return;
+    }
+    if matches.opt_present("r") {
+        ro.reason = Some(matches.opt_str("r").unwrap());
     }
     if matches.opt_present("t") {
         ro.target = matches.opt_str("t").unwrap();
@@ -152,7 +157,7 @@ fn main() {
     }
 
     if read_ini_config_file("/etc/please.ini", &mut vec_eo, &ro.name, true) {
-        println!("Exiting due to error");
+        println!("Exiting due to error, cannot fully process /etc/please.ini");
         std::process::exit(1);
     }
 
@@ -171,6 +176,7 @@ fn main() {
                 "deny",
                 &ro.name,
                 &ro.target,
+                &ro.reason,
                 &original_command.join(" "),
             );
             println!(
@@ -186,10 +192,27 @@ fn main() {
                     "deny",
                     &ro.name,
                     &ro.target,
+                    &ro.reason,
                     &original_command.join(" "),
                 );
                 println!(
                     "You may not edit \"{}\" on {} as {}",
+                    &ro.command, &ro.hostname, &ro.target
+                );
+                std::process::exit(1);
+            }
+            // check if a reason was given
+            if x.permit && x.reason && ro.reason.is_none() {
+                log_action(
+                    &service,
+                    "no_reason",
+                    &ro.name,
+                    &ro.target,
+                    &ro.reason,
+                    &original_command.join(" "),
+                );
+                println!(
+                    "Sorry but no reason was given to edit \"{}\" on {} as {}",
                     &ro.command, &ro.hostname, &ro.target
                 );
                 std::process::exit(1);
@@ -213,6 +236,7 @@ fn main() {
             "deny",
             &ro.name,
             &ro.target,
+            &ro.reason,
             &original_command.join(" "),
         );
         std::process::exit(1);
@@ -267,6 +291,7 @@ fn main() {
         "permit",
         &ro.name,
         &ro.target,
+        &ro.reason,
         &original_command.join(" "),
     );
 

@@ -67,6 +67,8 @@ editcmd=[program], run program after editor exits, if exit is zero,
 continue with file replacement
 .IP \[bu] 2
 editmode=[octal mode], set replacement file to octal mode
+.IP \[bu] 2
+reason=[true|false], require a reason for execution, defaults to false
 .PP
 \f[C]regex\f[] is a regular expression.
 .PP
@@ -160,6 +162,27 @@ target=root
 permit=true
 regex\ =\ /usr/local/housekeeping/.*
 datematch\ =\ ^Thu\\\\s+1\\\\s+Oct\\\\s+22:00:00\\\\s+UTC\\\\s+2020
+\f[]
+.fi
+.SH REASONS
+.PP
+When \f[C]true\f[], require a reason before permitting edits or
+execution with the \f[C]\-r\f[] option.
+Some organisations may prefer a reason to be logged when a command is
+executed.
+This can be helpful for some situations where something such as
+\f[C]mkfs\f[] or \f[C]useradd\f[] might be preferable to be logged
+against a ticket.
+.IP
+.nf
+\f[C]
+[l2_user_admin]
+name=l2users
+group=true
+target=root
+permit=true
+reason=true
+regex\ =\ ^/usr/sbin/useradd\\s+\-m\\s+\\w+$
 \f[]
 .fi
 .SH FILES

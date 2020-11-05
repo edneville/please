@@ -49,6 +49,7 @@ The options are as follows:
 | includedir=dir              | Include dir of `.ini` files as other sources, in ascii sort order other options will be skipped in this section. Files not matching `.ini` will be ignored to allow for editor tmp files. |
 | editcmd=[program]           | (edit) continue with file replacement if `program` exits 0 |
 | editmode=[octal mode]       | (edit) set destination file mode to `octal mode` |
+| reason=[true/false]         | when true, require a reason to be provided by `-r`, defaults to false |
 
 `include` and `includedir` will override mandatory arguments.
 

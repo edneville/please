@@ -12,10 +12,12 @@ please \- a tool for access elevation.
 please\ /bin/bash
 please\ [\-t/\-\-target]\ backup\ tar\ \-cvf\ \-\ /home/data\ |\ ...
 pleaseedit\ /etc/fstab
+pleaseedit\ [\-r/\-\-reason]\ "new\ fs"\ /etc/fstab
 please\ [\-l/\-\-list]
-please\ [\-l/\-\-list]\ user
+please\ [\-l/\-\-list]\ [\-t/\-\-target]\ user
 please\ [\-d/\-\-dir]\ [dir]\ command
 please\ [\-n/\-\-noprompt]\ command
+please\ [\-r/\-\-reason]\ "sshd\ reconfigured,\ ticket\ 24365"\ /etc/init.d/ssh\ restart
 please\ [\-p/\-\-purge]
 please\ [\-w/\-\-warm]
 \f[]

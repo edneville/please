@@ -34,12 +34,13 @@ use users::*;
 fn print_usage(program: &str) {
     println!("usage:");
     println!("{} [arguments] <path/to/executable>", program);
-    println!(" -l, --list, <-t users permissions> <-v>: list permissions");
-    println!(" -t, --target, [user]: become target user");
     println!(" -c, --check, [file]: check config file");
     println!(" -d, --dir, [dir]: change to dir before execution");
+    println!(" -l, --list, <-t users permissions> <-v>: list permissions");
     println!(" -n, --noprompt: rather than prompt for password, exit non-zero");
     println!(" -p, --purge: purge valid tokens");
+    println!(" -r, --reason, [text]: provide reason for execution");
+    println!(" -t, --target, [user]: become target user");
     println!(" -w, --warm: warm token cache");
     println!("version: {}", env!("CARGO_PKG_VERSION"));
 }
@@ -60,7 +61,14 @@ fn do_list(ro: &mut RunOptions, vec_eo: &[EnvOptions], service: &str) {
         list(&vec_eo, &ro);
     } else {
         let dest = format!("{}'s", &ro.target);
-        log_action(&service, "deny", &ro.name, &ro.target, &ro.command);
+        log_action(
+            &service,
+            "deny",
+            &ro.name,
+            &ro.target,
+            &ro.reason,
+            &ro.command,
+        );
         println!(
             "You may not view {} command list",
             if ro.target == "" { "your" } else { &dest }
@@ -140,6 +148,7 @@ fn main() {
     opts.optflag("l", "list", "list effective rules");
     opts.optflag("n", "noprompt", "do nothing if a password is required");
     opts.optflag("p", "purge", "purge access token");
+    opts.optopt("r", "reason", "reason for execution", "REASON");
     opts.optopt("t", "target", "edit as target user", "TARGET");
     opts.optflag("w", "warm", "warm access token and exit");
 
@@ -165,9 +174,11 @@ fn main() {
     if matches.opt_present("d") {
         ro.directory = matches.opt_str("d").unwrap();
     }
-
     if matches.opt_present("l") {
         ro.acl_type = ACLTYPE::LIST;
+    }
+    if matches.opt_present("r") {
+        ro.reason = Some(matches.opt_str("r").unwrap());
     }
     if matches.opt_present("t") {
         ro.target = matches.opt_str("t").unwrap();
@@ -178,7 +189,6 @@ fn main() {
     if matches.opt_present("w") {
         warm_token = true;
     }
-
     if matches.opt_present("n") {
         prompt = false;
     }
@@ -200,7 +210,7 @@ fn main() {
     }
 
     if read_ini_config_file("/etc/please.ini", &mut vec_eo, &ro.name, true) {
-        println!("Exiting due to error");
+        println!("Exiting due to error, cannot fully process /etc/please.ini");
         std::process::exit(1);
     }
 
@@ -245,6 +255,7 @@ fn main() {
                 "deny",
                 &ro.name,
                 &ro.target,
+                &ro.reason,
                 &original_command.join(" "),
             );
             println!(
@@ -260,10 +271,27 @@ fn main() {
                     "deny",
                     &ro.name,
                     &ro.target,
+                    &ro.reason,
                     &original_command.join(" "),
                 );
                 println!(
                     "You may not execute \"{}\" on {} as {}",
+                    &ro.command, &ro.hostname, &ro.target
+                );
+                std::process::exit(1);
+            }
+            // check if a reason was given
+            if x.permit && x.reason && ro.reason.is_none() {
+                log_action(
+                    &service,
+                    "no_reason",
+                    &ro.name,
+                    &ro.target,
+                    &ro.reason,
+                    &original_command.join(" "),
+                );
+                println!(
+                    "Sorry but no reason was given to execute \"{}\" on {} as {}",
                     &ro.command, &ro.hostname, &ro.target
                 );
                 std::process::exit(1);
@@ -277,6 +305,7 @@ fn main() {
             "deny",
             &ro.name,
             &ro.target,
+            &ro.reason,
             &original_command.join(" "),
         );
         println!("Keyboard not present or not functioning, press F1 to continue.");
@@ -290,6 +319,7 @@ fn main() {
         "permit",
         &ro.name,
         &ro.target,
+        &ro.reason,
         &original_command.join(" "),
     );
     let lookup_name = get_user_by_name(&ro.target).unwrap();

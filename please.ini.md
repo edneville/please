@@ -36,6 +36,7 @@ The properties in ini permitted are as follows:
  * includedir=[directory], read .ini files in directory, and continue to next section
  * editcmd=[program], run program after editor exits, if exit is zero, continue with file replacement
  * editmode=[octal mode], set replacement file to octal mode
+ * reason=[true|false], require a reason for execution, defaults to false
 
 `regex` is a regular expression.
 
@@ -110,6 +111,20 @@ target=root
 permit=true
 regex = /usr/local/housekeeping/.*
 datematch = ^Thu\\s+1\\s+Oct\\s+22:00:00\\s+UTC\\s+2020
+```
+
+# REASONS
+
+When `true`, require a reason before permitting edits or execution with the `-r` option. Some organisations may prefer a reason to be logged when a command is executed. This can be helpful for some situations where something such as `mkfs` or `useradd` might be preferable to be logged against a ticket.
+
+```
+[l2_user_admin]
+name=l2users
+group=true
+target=root
+permit=true
+reason=true
+regex = ^/usr/sbin/useradd\s+-m\s+\w+$
 ```
 
 # FILES
