@@ -50,6 +50,7 @@ The options are as follows:
 | editcmd=[program]           | (edit) continue with file replacement if `program` exits 0 |
 | editmode=[octal mode]       | (edit) set destination file mode to `octal mode` |
 | reason=[true/false]         | when true, require a reason to be provided by `-r`, defaults to false |
+| last=[true/false]           | when true, stop processing when matched, defaults to false |
 
 `include` and `includedir` will override mandatory arguments.
 

@@ -69,6 +69,9 @@ continue with file replacement
 editmode=[octal mode], set replacement file to octal mode
 .IP \[bu] 2
 reason=[true|false], require a reason for execution, defaults to false
+.IP \[bu] 2
+last=[true|false], when true, stop processing if matched, defaults to
+false
 .PP
 \f[C]regex\f[] is a regular expression.
 .PP
@@ -185,6 +188,27 @@ reason=true
 regex\ =\ ^/usr/sbin/useradd\\s+\-m\\s+\\w+$
 \f[]
 .fi
+.SH LAST
+.PP
+To stop processing at a match, \f[C]last=true\f[] can be applied:
+.IP
+.nf
+\f[C]
+[mkfs]
+name=l2users
+group=true
+target=root
+permit=true
+reason=true
+regex\ =\ ^/sbin/mkfs.(ext[234]|xfs)\ /dev/sd[bcdefg]\\d?$
+last=true
+\f[]
+.fi
+.PP
+For simplicity, there is no need to process other configured rules if
+certain that the \f[C]l2users\f[] group are safe to execute this.
+\f[C]last\f[] should only be used in situations where there will never
+be something that could contradict the match later.
 .SH FILES
 .PP
 /etc/please.ini

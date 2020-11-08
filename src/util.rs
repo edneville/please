@@ -50,6 +50,7 @@ pub struct EnvOptions {
     pub exitcmd: Option<String>,
     pub edit_mode: Option<i32>,
     pub reason: bool,
+    pub last: bool,
 }
 
 impl EnvOptions {
@@ -74,6 +75,7 @@ impl EnvOptions {
             exitcmd: None,
             edit_mode: None,
             reason: false,
+            last: false,
         }
     }
     fn new_deny() -> EnvOptions {
@@ -342,6 +344,7 @@ pub fn read_ini(
                         }
                     }
                     "reason" => opt.reason = value == "true",
+                    "last" => opt.last = value == "true",
                     &_ => {
                         println!("{}: unknown attribute \"{}\": {}", config_path, key, value);
                         faulty = true;
@@ -381,7 +384,7 @@ pub fn read_ini_config_file(
     match file.read_to_string(&mut s) {
         Err(why) => {
             println!("couldn't read {}: {}", display, why);
-            return true;
+            true
         }
         Ok(_) => read_ini(&s, vec_eo, &user, fail_error, config_path),
     }
@@ -398,6 +401,7 @@ pub fn read_ini_config_str(
 
 pub fn can(vec_eo: &[EnvOptions], ro: &RunOptions) -> Result<EnvOptions, ()> {
     let mut opt = EnvOptions::new_deny();
+    let mut matched = false;
 
     for item in vec_eo {
         // println!("{}:", item.section);
@@ -464,6 +468,7 @@ pub fn can(vec_eo: &[EnvOptions], ro: &RunOptions) -> Result<EnvOptions, ()> {
             if item.target.is_match(&ro.target) {
                 // println!("{}: is list", item.section);
                 opt = item.clone();
+                matched = true;
             }
         } else {
             if !item.target.is_match(&ro.target) {
@@ -473,9 +478,14 @@ pub fn can(vec_eo: &[EnvOptions], ro: &RunOptions) -> Result<EnvOptions, ()> {
             if item.rule.is_match(&ro.command) {
                 // println!("{}: item rule is match", item.section);
                 opt = item.clone();
+                matched = true;
             } else {
                 // println!("{}: item rule ({}) is not a match for {}", item.section, item.rule, ro.command);
             }
+        }
+
+        if opt.last && matched {
+            break;
         }
         // println!("didn't match");
     }
@@ -589,6 +599,10 @@ pub fn list(vec_eo: &[EnvOptions], ro: &RunOptions) {
             && !item.hostname.is_match("localhost")
         {
             continue;
+        }
+
+        if item.last {
+            prefixes.push(String::from("last"));
         }
 
         let mut prefix = prefixes.join(", ");
@@ -1706,5 +1720,59 @@ editmode=0644
             read_ini_config_file("./faulty", &mut vec_eo, "ed", true),
             true
         );
+    }
+
+    #[test]
+    fn test_last() {
+        let config = "
+[first]
+name=ed
+target=root
+regex=/bin/bash
+permit=false
+last=true
+
+[unreachable]
+name=ed
+target=root
+regex=/bin/bash
+permit=true
+"
+        .to_string();
+
+        let mut vec_eo: Vec<EnvOptions> = vec![];
+        read_ini_config_str(&config, &mut vec_eo, "ed", false);
+        let mut ro = RunOptions::new();
+        ro.name = "ed".to_string();
+        ro.target = "root".to_string();
+        ro.command = "/bin/bash".to_string();
+
+        let entry = can(&vec_eo, &ro).unwrap();
+
+        assert_eq!(entry.permit, false);
+    }
+
+    #[test]
+    fn test_reason() {
+        let config = "
+[first]
+name=ed
+target=root
+regex=/bin/bash
+permit=false
+reason=true
+"
+        .to_string();
+
+        let mut vec_eo: Vec<EnvOptions> = vec![];
+        read_ini_config_str(&config, &mut vec_eo, "ed", false);
+        let mut ro = RunOptions::new();
+        ro.name = "ed".to_string();
+        ro.target = "root".to_string();
+        ro.command = "/bin/bash".to_string();
+
+        let entry = can(&vec_eo, &ro).unwrap();
+
+        assert_eq!(entry.reason, true);
     }
 }

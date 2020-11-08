@@ -37,6 +37,7 @@ The properties in ini permitted are as follows:
  * editcmd=[program], run program after editor exits, if exit is zero, continue with file replacement
  * editmode=[octal mode], set replacement file to octal mode
  * reason=[true|false], require a reason for execution, defaults to false
+ * last=[true|false], when true, stop processing if matched, defaults to false
 
 `regex` is a regular expression.
 
@@ -126,6 +127,23 @@ permit=true
 reason=true
 regex = ^/usr/sbin/useradd\s+-m\s+\w+$
 ```
+
+# LAST
+To stop processing at a match, `last=true` can be applied:
+
+```
+[mkfs]
+name=l2users
+group=true
+target=root
+permit=true
+reason=true
+regex = ^/sbin/mkfs.(ext[234]|xfs) /dev/sd[bcdefg]\d?$
+last=true
+```
+
+For simplicity, there is no need to process other configured rules if certain that the `l2users` group are safe to execute this. `last` should only be used in situations where there will never be something that could contradict the match later.
+
 
 # FILES
 
