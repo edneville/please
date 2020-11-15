@@ -22,6 +22,5 @@ test:cargo:
   script:
     - rustc --version && cargo --version  # Print version info for debugging
     - cargo test --workspace --verbose
-    - cargo bench --workspace --verbose # Three times because, well, benchmarks
-    - cargo bench --workspace --verbose
-    - cargo bench --workspace --verbose
+    # only on nightly
+    # - cargo bench --workspace --verbose
