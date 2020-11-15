@@ -187,6 +187,22 @@ regex = /usr/sbin/user(add|del)\s.*
 
 /etc/please.ini
 
+# Big installs
+
+For big installs I suggest consider the following:
+
+## Consolidate
+
+Where you can use groups when all member least privilege matches the set. It is best here to consider that people often perform the same role.
+
+## Central configuration considerations
+
+To avoid single points of failure in a service, `ini` configuration should be generated in a single location and pushed to installs. `ini` files parse very quickly whilst accessing LDAP is not only slower but also error prone.
+
+It could be possible to use caching, but a form of positive (correct match) and negative (incorrect match) would be required. 10,000 computers with hundreds of active users performing lookups against an LDAP server could be problematic.
+
+For these reasons I prefer rsync configuration as the protocol is highly efficient and reduces network transfer overall.
+
 # Contributions
 
 I welcome pull requests with open arms.

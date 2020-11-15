@@ -31,13 +31,13 @@ use users::*;
 
 #[derive(Clone)]
 pub struct EnvOptions {
-    pub name: Regex,
-    pub rule: Regex,
+    pub name: String,
+    pub rule: String,
     pub notbefore: Option<NaiveDateTime>,
     pub notafter: Option<NaiveDateTime>,
-    pub datematch: Option<Regex>,
-    pub target: Regex,
-    pub hostname: Regex,
+    pub datematch: Option<String>,
+    pub target: String,
+    pub hostname: Option<String>,
     pub permit: bool,
     pub require_pass: bool,
     pub env_list: Vec<String>,
@@ -46,7 +46,7 @@ pub struct EnvOptions {
     pub section: String,
     pub group: bool,
     pub configured: bool,
-    pub dir: Regex,
+    pub dir: Option<String>,
     pub exitcmd: Option<String>,
     pub edit_mode: Option<i32>,
     pub reason: bool,
@@ -56,13 +56,13 @@ pub struct EnvOptions {
 impl EnvOptions {
     pub fn new() -> EnvOptions {
         EnvOptions {
-            name: Regex::new(&"^$").unwrap(),
-            rule: Regex::new(&"^$").unwrap(),
-            target: Regex::new(&"root").unwrap(),
+            name: "".to_string(),
+            rule: "^$".to_string(),
+            target: "root".to_string(),
             notbefore: None,
             notafter: None,
             datematch: None,
-            hostname: Regex::new(&"localhost").unwrap(),
+            hostname: None,
             env_list: vec![],
             file_name: "".to_string(),
             section: "".to_string(),
@@ -71,7 +71,7 @@ impl EnvOptions {
             acl_type: ACLTYPE::RUN,
             group: false,
             configured: false,
-            dir: Regex::new(&"^.*$").unwrap(),
+            dir: None,
             exitcmd: None,
             edit_mode: None,
             reason: false,
@@ -81,8 +81,8 @@ impl EnvOptions {
     fn new_deny() -> EnvOptions {
         let mut opt = EnvOptions::new();
         opt.permit = false;
-        opt.rule = Regex::new(".").unwrap();
-        opt.target = Regex::new("^$").unwrap();
+        opt.rule = ".".to_string();
+        opt.target = "^$".to_string();
         opt.acl_type = ACLTYPE::LIST;
         opt
     }
@@ -138,8 +138,8 @@ pub enum ACLTYPE {
     EDIT,
 }
 
-fn regex_build(v: &str, user: &str, config_path: &str, section: &str) -> Option<Regex> {
-    let rule = Regex::new(&format!("^{}$", &v.to_string().replace("%{USER}", &user)));
+pub fn regex_build(v: &str, user: &str, config_path: &str, section: &str) -> Option<Regex> {
+    let rule = Regex::new(&format!("^{}$", &v.replace("%{USER}", &user)));
     if rule.is_err() {
         println!(
             "Error parsing {}:{}, {}",
@@ -177,18 +177,18 @@ pub fn read_ini(
     let mut faulty = false;
     let mut section = String::from("no section defined");
     let mut in_section = false;
-    let section_re = Regex::new(r"^\[(?P<section_name>[^\]]+)\]\s*$").unwrap();
-    let definition = Regex::new(r"^(?P<key>[^=]+)\s*=\s*(?P<value>.*)\s*$").unwrap();
     let mut opt = EnvOptions::new();
 
-    for line in conf.split('\n') {
-        if line.trim() == "" || line.starts_with('#') {
+    for l in conf.split('\n') {
+        let line = l.trim();
+
+        if line == "" || line.starts_with('#') {
             continue;
         }
 
-        if let Some(cap) = section_re.captures(line) {
+        if line.starts_with('[') && line.ends_with(']') {
             in_section = true;
-            section = cap["section_name"].trim().to_string();
+            section = line[1..line.len() - 1].to_string();
             if opt.configured {
                 vec_eo.push(opt);
             }
@@ -198,163 +198,145 @@ pub fn read_ini(
             continue;
         }
 
-        match definition.captures(line) {
-            Some(cap) => {
-                if !in_section {
-                    println!("Error parsing {}:{}", config_path, line);
-                    faulty = true;
-                    continue;
+        let equals_pos = line.find('=');
+        if equals_pos.is_none() {
+            continue;
+        }
+
+        let key = line[0..equals_pos.unwrap()].trim();
+        let value = line[equals_pos.unwrap() + 1..].trim();
+
+        if !in_section {
+            println!("Error parsing {}:{}", config_path, line);
+            faulty = true;
+            continue;
+        }
+
+        match key {
+            "include" => {
+                if read_ini_config_file(&value, vec_eo, &user, fail_error) {
+                    println!("Couldn't read {}", value);
+                    return true;
                 }
-                let key = cap["key"].trim();
-                let value = cap["value"].trim();
-
-                match key {
-                    "include" => {
-                        if read_ini_config_file(&value, vec_eo, &user, fail_error) {
-                            println!("Couldn't read {}", value);
-                            return true;
-                        }
-                        continue;
+                continue;
+            }
+            "includedir" => {
+                match fs::read_dir(value) {
+                    Err(_x) => {
+                        faulty = true;
                     }
-                    "includedir" => {
-                        match fs::read_dir(value) {
-                            Err(_x) => {
-                                faulty = true;
+                    Ok(inc) => {
+                        let mut collect = vec![];
+                        for file in inc {
+                            collect.push(file.unwrap().path().to_str().unwrap().to_string());
+                        }
+                        collect.sort();
+                        for file in collect {
+                            let incf = file;
+                            if !can_dir_include(&incf) {
+                                continue;
                             }
-                            Ok(inc) => {
-                                let mut collect = vec![];
-                                for file in inc {
-                                    collect
-                                        .push(file.unwrap().path().to_str().unwrap().to_string());
-                                }
-                                collect.sort();
-                                for file in collect {
-                                    let incf = file;
-                                    if !can_dir_include(&incf) {
-                                        continue;
-                                    }
-                                    if read_ini_config_file(&incf, vec_eo, &user, fail_error) {
-                                        println!("Could not read {}", value);
-                                        return true;
-                                    }
-                                }
-                            }
-                        }
-
-                        continue;
-                    }
-                    "name" => match regex_build(value, user, config_path, &section) {
-                        Some(check) => {
-                            opt.name = check;
-                            opt.configured = true;
-                        }
-                        None => {
-                            faulty = true;
-                        }
-                    },
-                    "hostname" => match regex_build(value, user, config_path, &section) {
-                        Some(check) => {
-                            opt.hostname = check;
-                        }
-                        None => {
-                            faulty = true;
-                        }
-                    },
-                    "target" => match regex_build(value, user, config_path, &section) {
-                        Some(check) => {
-                            opt.target = check;
-                        }
-                        None => {
-                            faulty = true;
-                        }
-                    },
-                    "permit" => opt.permit = value == "true",
-                    "require_pass" => opt.require_pass = value != "false",
-                    "type" => match value.to_lowercase().as_str() {
-                        "edit" => opt.acl_type = ACLTYPE::EDIT,
-                        "list" => opt.acl_type = ACLTYPE::LIST,
-                        _ => opt.acl_type = ACLTYPE::RUN,
-                    },
-                    "group" => opt.group = value == "true",
-                    "regex" => match regex_build(value, user, config_path, &section) {
-                        Some(check) => {
-                            opt.rule = check;
-                        }
-                        None => {
-                            faulty = true;
-                        }
-                    },
-
-                    "notbefore" if value.len() == 8 => {
-                        opt.notbefore = Some(
-                            parse_date_from_str(&value.to_string(), "%Y%m%d")
-                                .unwrap()
-                                .and_hms(0, 0, 0),
-                        )
-                    }
-                    "notafter" if value.len() == 8 => {
-                        opt.notafter = Some(
-                            parse_date_from_str(&value.to_string(), "%Y%m%d")
-                                .unwrap()
-                                .and_hms(23, 59, 59),
-                        )
-                    }
-                    "notbefore" if value.len() == 14 => {
-                        opt.notbefore = Some(
-                            parse_datetime_from_str(&value.to_string(), "%Y%m%d%H%M%S").unwrap(),
-                        )
-                    }
-                    "notafter" if value.len() == 14 => {
-                        opt.notafter = Some(
-                            parse_datetime_from_str(&value.to_string(), "%Y%m%d%H%M%S").unwrap(),
-                        )
-                    }
-                    "datematch" => match regex_build(value, user, config_path, &section) {
-                        Some(check) => {
-                            opt.datematch = Some(check);
-                        }
-                        None => {
-                            faulty = true;
-                        }
-                    },
-                    "dir" => match regex_build(value, user, config_path, &section) {
-                        Some(dir) => {
-                            opt.dir = dir;
-                        }
-                        None => {
-                            faulty = true;
-                        }
-                    },
-                    "exitcmd" => {
-                        if !value.is_empty() {
-                            opt.exitcmd = Some(value.to_string());
-                        }
-                    }
-                    "editmode" => {
-                        if !value.is_empty() {
-                            if value.parse::<i16>().is_ok() {
-                                opt.edit_mode = Some(
-                                    i32::from_str_radix(value.trim_start_matches('0'), 8)
-                                        .expect("unable to parse editmode"),
-                                );
-                            } else {
-                                println!("Could not convert {} to numerical file mode", value);
-                                faulty = true;
+                            if read_ini_config_file(&incf, vec_eo, &user, fail_error) {
+                                println!("Could not read {}", value);
+                                return true;
                             }
                         }
                     }
-                    "reason" => opt.reason = value == "true",
-                    "last" => opt.last = value == "true",
-                    &_ => {
-                        println!("{}: unknown attribute \"{}\": {}", config_path, key, value);
+                }
+
+                continue;
+            }
+            "name" => {
+                opt.name = value.to_string();
+                opt.configured = true;
+                if fail_error && regex_build(value, user, config_path, &section).is_none() {
+                    faulty = true;
+                }
+            }
+            "hostname" => {
+                opt.hostname = Some(value.to_string());
+                opt.configured = true;
+                if fail_error && regex_build(value, user, config_path, &section).is_none() {
+                    faulty = true;
+                }
+            }
+            "target" => {
+                opt.target = value.to_string();
+                if fail_error && regex_build(value, user, config_path, &section).is_none() {
+                    faulty = true;
+                }
+            }
+            "permit" => opt.permit = value == "true",
+            "require_pass" => opt.require_pass = value != "false",
+            "type" => match value.to_lowercase().as_str() {
+                "edit" => opt.acl_type = ACLTYPE::EDIT,
+                "list" => opt.acl_type = ACLTYPE::LIST,
+                _ => opt.acl_type = ACLTYPE::RUN,
+            },
+            "group" => opt.group = value == "true",
+            "regex" | "rule" => {
+                opt.rule = value.to_string();
+                if fail_error && regex_build(value, user, config_path, &section).is_none() {
+                    faulty = true;
+                }
+            }
+            "notbefore" if value.len() == 8 => {
+                opt.notbefore = Some(
+                    parse_date_from_str(&value.to_string(), "%Y%m%d")
+                        .unwrap()
+                        .and_hms(0, 0, 0),
+                )
+            }
+            "notafter" if value.len() == 8 => {
+                opt.notafter = Some(
+                    parse_date_from_str(&value.to_string(), "%Y%m%d")
+                        .unwrap()
+                        .and_hms(23, 59, 59),
+                )
+            }
+            "notbefore" if value.len() == 14 => {
+                opt.notbefore =
+                    Some(parse_datetime_from_str(&value.to_string(), "%Y%m%d%H%M%S").unwrap())
+            }
+            "notafter" if value.len() == 14 => {
+                opt.notafter =
+                    Some(parse_datetime_from_str(&value.to_string(), "%Y%m%d%H%M%S").unwrap())
+            }
+            "datematch" => {
+                opt.datematch = Some(value.to_string());
+                if fail_error && regex_build(value, user, config_path, &section).is_none() {
+                    faulty = true;
+                }
+            }
+            "dir" => {
+                opt.dir = Some(value.to_string());
+                if fail_error && regex_build(value, user, config_path, &section).is_none() {
+                    faulty = true;
+                }
+            }
+            "exitcmd" => {
+                if !value.is_empty() {
+                    opt.exitcmd = Some(value.to_string());
+                }
+            }
+            "editmode" => {
+                if !value.is_empty() {
+                    if value.parse::<i16>().is_ok() {
+                        opt.edit_mode = Some(
+                            i32::from_str_radix(value.trim_start_matches('0'), 8)
+                                .expect("unable to parse editmode"),
+                        );
+                    } else {
+                        println!("Could not convert {} to numerical file mode", value);
                         faulty = true;
                     }
                 }
             }
-            None => {
-                println!("Error parsing {}:{}", config_path, line);
+            "reason" => opt.reason = value == "true",
+            "last" => opt.last = value == "true",
+            &_ => {
+                println!("{}: unknown attribute \"{}\": {}", config_path, key, value);
                 faulty = true;
-                continue;
             }
         }
     }
@@ -415,18 +397,35 @@ pub fn can(vec_eo: &[EnvOptions], ro: &RunOptions) -> Result<EnvOptions, ()> {
             continue;
         }
 
-        if item.datematch.is_some()
-            && !item
-                .datematch
-                .as_ref()
-                .unwrap()
-                .is_match(&ro.date.format("%a %e %b %T UTC %Y").to_string())
-        {
-            // println!("{}: skipping as not a datematch {} vs {}", item.section, item.datematch.clone().unwrap(), &ro.date.format( "%a %e %b %T UTC %Y" ).to_string() );
-            continue;
+        if item.datematch.is_some() {
+            let datematch_re = match regex_build(
+                &item.datematch.as_ref().unwrap(),
+                &ro.name,
+                &item.file_name,
+                &item.section,
+            ) {
+                Some(check) => check,
+                None => {
+                    println!("Could not compile {}", &item.name);
+                    continue;
+                }
+            };
+
+            if !datematch_re.is_match(&ro.date.format("%a %e %b %T UTC %Y").to_string()) {
+                // println!("{}: skipping as not a datematch {} vs {}", item.section, item.datematch.clone().unwrap(), &ro.date.format( "%a %e %b %T UTC %Y" ).to_string() );
+                continue;
+            }
         }
 
-        if !item.group && !item.name.is_match(&ro.name) {
+        let name_re = match regex_build(&item.name, &ro.name, &item.file_name, &item.section) {
+            Some(check) => check,
+            None => {
+                println!("Could not compile {}", &item.name);
+                continue;
+            }
+        };
+
+        if !item.group && !name_re.is_match(&ro.name) {
             // println!("{}: skipping as not a name match ({}), group={}", item.section, item.name, item.group);
             continue;
         }
@@ -434,7 +433,7 @@ pub fn can(vec_eo: &[EnvOptions], ro: &RunOptions) -> Result<EnvOptions, ()> {
         if item.group {
             let mut found = false;
             for (k, _) in ro.groups.iter() {
-                if item.name.is_match(&k.to_string()) {
+                if name_re.is_match(&k.to_string()) {
                     // println!("{}: {} matches group {}", item.section,item.name, k);
                     found = true;
                     break;
@@ -451,31 +450,78 @@ pub fn can(vec_eo: &[EnvOptions], ro: &RunOptions) -> Result<EnvOptions, ()> {
             continue;
         }
 
-        if !item.hostname.is_match(&ro.hostname)
-            && !item.hostname.is_match("any")
-            && !item.hostname.is_match("localhost")
-        {
-            // println!("{}: hostname mismatch", item.section);
-            continue;
+        if item.hostname.is_some() {
+            let hostname_re = match regex_build(
+                &item.hostname.as_ref().unwrap(),
+                &ro.name,
+                &item.file_name,
+                &item.section,
+            ) {
+                Some(check) => check,
+                None => {
+                    println!("Could not compile {}", &item.name);
+                    continue;
+                }
+            };
+
+            if !hostname_re.is_match(&ro.hostname)
+                && !hostname_re.is_match("any")
+                && !hostname_re.is_match("localhost")
+            {
+                // println!("{}: hostname mismatch", item.section);
+                continue;
+            }
         }
 
-        if !item.dir.is_match(&ro.directory) {
-            // && ro.directory != "." {
-            continue;
+        if item.dir.is_some() {
+            let dir_re = match regex_build(
+                &item.dir.as_ref().unwrap(),
+                &ro.name,
+                &item.file_name,
+                &item.section,
+            ) {
+                Some(check) => check,
+                None => {
+                    println!("Could not compile {}", &item.name);
+                    continue;
+                }
+            };
+
+            if !dir_re.is_match(&ro.directory) {
+                // && ro.directory != "." {
+                continue;
+            }
         }
+
+        let target_re = match regex_build(&item.target, &ro.name, &item.file_name, &item.section) {
+            Some(check) => check,
+            None => {
+                println!("Could not compile {}", &item.name);
+                continue;
+            }
+        };
 
         if item.acl_type == ACLTYPE::LIST {
-            if item.target.is_match(&ro.target) {
+            if target_re.is_match(&ro.target) {
                 // println!("{}: is list", item.section);
                 opt = item.clone();
                 matched = true;
             }
         } else {
-            if !item.target.is_match(&ro.target) {
+            if !target_re.is_match(&ro.target) {
                 // println!("{}: item target {} != target {}", item.section, item.target, ro.target);
                 continue;
             }
-            if item.rule.is_match(&ro.command) {
+
+            let rule_re = match regex_build(&item.rule, &ro.name, &item.file_name, &item.section) {
+                Some(check) => check,
+                None => {
+                    println!("Could not compile {}", &item.name);
+                    continue;
+                }
+            };
+
+            if rule_re.is_match(&ro.command) {
                 // println!("{}: item rule is match", item.section);
                 opt = item.clone();
                 matched = true;
@@ -556,14 +602,22 @@ pub fn list(vec_eo: &[EnvOptions], ro: &RunOptions) {
     let mut last_file = "";
 
     for item in vec_eo {
-        if !item.group && !item.name.is_match(&search_user) {
+        let name_re = match regex_build(&item.name, &ro.name, &item.file_name, &item.section) {
+            Some(check) => check,
+            None => {
+                println!("Could not compile {}", &item.name);
+                continue;
+            }
+        };
+
+        if !item.group && !name_re.is_match(&search_user) {
             continue;
         }
 
         if item.group {
             let mut found = false;
             for (k, _) in ro.groups.iter() {
-                if item.name.is_match(&k) {
+                if name_re.is_match(&k) {
                     found = true;
                     break;
                 }
@@ -594,11 +648,26 @@ pub fn list(vec_eo: &[EnvOptions], ro: &RunOptions) {
             prefixes.push(String::from("not permitted"));
         }
 
-        if !item.hostname.is_match(&ro.hostname)
-            && !item.hostname.is_match("any")
-            && !item.hostname.is_match("localhost")
-        {
-            continue;
+        if item.hostname.is_some() {
+            let hostname_re = match regex_build(
+                &item.hostname.as_ref().unwrap(),
+                &ro.name,
+                &item.file_name,
+                &item.section,
+            ) {
+                Some(check) => check,
+                None => {
+                    println!("Could not compile {}", &item.name);
+                    continue;
+                }
+            };
+
+            if !hostname_re.is_match(&ro.hostname)
+                && !hostname_re.is_match("any")
+                && !hostname_re.is_match("localhost")
+            {
+                continue;
+            }
         }
 
         if item.last {
@@ -625,7 +694,16 @@ pub fn list(vec_eo: &[EnvOptions], ro: &RunOptions) {
 
         println!(
             "    {}:{}{} (pass={},dirs={}): {}",
-            item.section, prefix, item.target, item.require_pass, item.dir, item.rule
+            item.section,
+            prefix,
+            item.target,
+            item.require_pass,
+            if item.dir.is_some() {
+                item.dir.as_ref().unwrap()
+            } else {
+                ""
+            },
+            item.rule
         );
     }
 }
@@ -1437,11 +1515,6 @@ regex = ^/var/www/html/%{USER}.html$
         ro.acl_type = ACLTYPE::EDIT;
         ro.groups.insert(String::from("root"), 1);
 
-        assert_eq!(
-            vec_eo.iter().next().unwrap().rule.as_str(),
-            "^^/var/www/html/ed.html$$"
-        );
-
         assert_eq!(can(&vec_eo, &ro).unwrap().permit, true);
     }
 
@@ -1464,11 +1537,6 @@ regex = ^/var/www/html/%USER.html$"
         ro.target = "root".to_string();
         ro.acl_type = ACLTYPE::EDIT;
         ro.command = "/var/www/html/ed.html".to_string();
-
-        assert_eq!(
-            vec_eo.iter().next().unwrap().rule.as_str(),
-            "^^/var/www/html/%USER.html$$"
-        );
 
         ro.groups.insert(String::from("root"), 1);
         assert_eq!(can(&vec_eo, &ro).unwrap().permit, false);
@@ -1494,11 +1562,6 @@ regex = ^/var/www/html/%{USER}.html$"
         ro.acl_type = ACLTYPE::EDIT;
         ro.command = "/var/www/html/ed.html".to_string();
 
-        assert_eq!(
-            vec_eo.iter().next().unwrap().rule.as_str(),
-            "^^/var/www/html/ed.html$$"
-        );
-
         ro.groups.insert(String::from("root"), 1);
         assert_eq!(can(&vec_eo, &ro).unwrap().permit, true);
     }
@@ -1517,7 +1580,7 @@ regex = /bin/bash"
 
         let mut vec_eo: Vec<EnvOptions> = vec![];
         read_ini_config_str(&config, &mut vec_eo, "ed", false);
-        assert_eq!(vec_eo.iter().next().unwrap().rule.as_str(), "^/bin/bash$");
+        assert_eq!(vec_eo.iter().next().unwrap().rule.as_str(), "/bin/bash");
 
         let mut ro = RunOptions::new();
         ro.name = "ed".to_string();
@@ -1774,5 +1837,36 @@ reason=true
         let entry = can(&vec_eo, &ro).unwrap();
 
         assert_eq!(entry.reason, true);
+    }
+
+    #[test]
+    fn test_regex_build_user_expansion() {
+        let regex_re = regex_build("/var/www/html/%{USER}/page.html", "ed", "/", "none").unwrap();
+
+        assert_eq!(regex_re.as_str(), "^/var/www/html/ed/page.html$");
+    }
+
+    #[test]
+    fn test_section_name() {
+        let config = "
+[first]
+name=ed
+target=root
+regex=/bin/bash
+permit=false
+reason=true
+"
+        .to_string();
+
+        let mut vec_eo: Vec<EnvOptions> = vec![];
+        read_ini_config_str(&config, &mut vec_eo, "ed", false);
+        let mut ro = RunOptions::new();
+        ro.name = "ed".to_string();
+        ro.target = "root".to_string();
+        ro.command = "/bin/bash".to_string();
+
+        let entry = can(&vec_eo, &ro).unwrap();
+
+        assert_eq!(entry.section, "first");
     }
 }
