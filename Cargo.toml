@@ -10,7 +10,7 @@ repository = "https://gitlab.com/edneville/please"
 readme = "README.md"
 categories = ["command-line-utilities"]
 documentation = "https://www.usenix.org.uk/content/please.html"
-keywords = ["please", "access", "elevation", "edit", "regex", "ACL", "su"]
+keywords = ["please", "access", "elevation", "edit", "regex"]
 
 [dependencies]
 regex = "1.3.7"
