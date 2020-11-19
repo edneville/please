@@ -1,6 +1,6 @@
 [package]
 name = "pleaser"
-version = "0.3.15"
+version = "0.3.16"
 authors = ["ed neville <ed@s5h.net>"]
 edition = "2018"
 description = "please, a polite regex-first sudo alternative"

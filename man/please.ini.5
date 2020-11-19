@@ -74,14 +74,48 @@ last=[true|false], when true, stop processing if matched, defaults to
 false
 .PP
 \f[C]regex\f[] is a regular expression.
+.SH EXAMPLE
 .PP
 Using an anchor (\f[C]^\f[]) for the regex field will be as good as
 saying the rule should match any command.
 .PP
 If you wish to permit a user to view another's command set, then you may
-do this using \f[C]type=list\f[] (run by default).
+do this using \f[C]type=list\f[] (\f[C]run\f[] by default).
 To list another user, they must match the \f[C]target\f[] regex.
-.SH EXAMPLE
+\f[C]type\f[] may also be \f[C]edit\f[] if you wish to permit a file
+edit with \f[C]pleaseedit\f[].
+.PP
+\f[C]regex\f[] can include repetitions.
+To permit running \f[C]wc\f[] to count the lines in the log files in
+\f[C]/var/log\f[] you can use the following:
+.IP
+.nf
+\f[C]
+[user_ed_root]
+name=ed
+target=root
+permit=true
+regex=^/usr/bin/wc\ (/var/log/[a\-zA\-Z0\-9\-]+(\\.\\d+)?(\\s)?)+$
+\f[]
+.fi
+.PP
+This sort of regex will allow multiple instances of a \f[C]()\f[] group
+with \f[C]+\f[], which is used to define the character class
+\f[C][a\-zA\-Z0\-9\-]+\f[], the numeric class \f[C]\\d+\f[] and the
+group near the end of the line.
+In other words, multiple instances of files in /var/log that may end in
+common log rotate forms \f[C]\-YYYYMMDD\f[] or \f[C]\&.N\f[].
+.PP
+This will permit commands such as the following, note how for efficiency
+find will combine arguments with \f[C]\\+\f[] into fewer invocations.
+\f[C]xargs\f[] could have been used in place of \f[C]find\f[].
+.IP
+.nf
+\f[C]
+$\ find\ /var/log\ \-type\ f\ \-exec\ please\ /usr/bin/wc\ {}\ \\+
+\f[]
+.fi
+.SH OTHER EXAMPLES
 .PP
 User \f[C]ed\f[] may only start or stop a docker container:
 .IP
@@ -164,7 +198,7 @@ group=true
 target=root
 permit=true
 regex\ =\ /usr/local/housekeeping/.*
-datematch\ =\ ^Thu\\\\s+1\\\\s+Oct\\\\s+22:00:00\\\\s+UTC\\\\s+2020
+datematch\ =\ ^Thu\\s+1\\s+Oct\\s+22:00:00\\s+UTC\\s+2020
 \f[]
 .fi
 .SH REASONS

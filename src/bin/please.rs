@@ -149,7 +149,7 @@ fn main() {
     opts.optflag("n", "noprompt", "do nothing if a password is required");
     opts.optflag("p", "purge", "purge access token");
     opts.optopt("r", "reason", "reason for execution", "REASON");
-    opts.optopt("t", "target", "edit as target user", "TARGET");
+    opts.optopt("t", "target", "target user", "TARGET");
     opts.optflag("w", "warm", "warm access token and exit");
 
     let matches = match opts.parse(&args[1..]) {

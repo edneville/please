@@ -41,11 +41,31 @@ The properties in ini permitted are as follows:
 
 `regex` is a regular expression.
 
+# EXAMPLE
+
 Using an anchor (`^`) for the regex field will be as good as saying the rule should match any command.
 
-If you wish to permit a user to view another's command set, then you may do this using `type=list` (run by default). To list another user, they must match the `target` regex.
+If you wish to permit a user to view another's command set, then you may do this using `type=list` (`run` by default). To list another user, they must match the `target` regex. `type` may also be `edit` if you wish to permit a file edit with `pleaseedit`.
 
-# EXAMPLE
+`regex` can include repetitions. To permit running `wc` to count the lines in the log files in `/var/log` you can use the following:
+
+```
+[user_ed_root]
+name=ed
+target=root
+permit=true
+regex=^/usr/bin/wc (/var/log/[a-zA-Z0-9-]+(\.\d+)?(\s)?)+$
+```
+
+This sort of regex will allow multiple instances of a `()` group with `+`, which is used to define the character class `[a-zA-Z0-9-]+`, the numeric class `\d+` and the group near the end of the line. In other words, multiple instances of files in /var/log that may end in common log rotate forms `-YYYYMMDD` or `.N`.
+
+This will permit commands such as the following, note how for efficiency find will combine arguments with `\+` into fewer invocations. `xargs` could have been used in place of `find`.
+
+```
+$ find /var/log -type f -exec please /usr/bin/wc {} \+
+```
+
+# OTHER EXAMPLES
 
 User `ed` may only start or stop a docker container:
 
@@ -111,7 +131,7 @@ group=true
 target=root
 permit=true
 regex = /usr/local/housekeeping/.*
-datematch = ^Thu\\s+1\\s+Oct\\s+22:00:00\\s+UTC\\s+2020
+datematch = ^Thu\s+1\s+Oct\s+22:00:00\s+UTC\s+2020
 ```
 
 # REASONS

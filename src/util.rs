@@ -40,7 +40,6 @@ pub struct EnvOptions {
     pub hostname: Option<String>,
     pub permit: bool,
     pub require_pass: bool,
-    pub env_list: Vec<String>,
     pub acl_type: ACLTYPE,
     pub file_name: String,
     pub section: String,
@@ -63,7 +62,6 @@ impl EnvOptions {
             notafter: None,
             datematch: None,
             hostname: None,
-            env_list: vec![],
             file_name: "".to_string(),
             section: "".to_string(),
             permit: true,
@@ -381,40 +379,101 @@ pub fn read_ini_config_str(
     read_ini(&config, vec_eo, &user, fail_error, "static")
 }
 
+pub fn hostname_ok(item: &EnvOptions, ro: &RunOptions) -> bool {
+    if item.hostname.is_some() {
+        let hostname_re = match regex_build(
+            &item.hostname.as_ref().unwrap(),
+            &ro.name,
+            &item.file_name,
+            &item.section,
+        ) {
+            Some(check) => check,
+            None => {
+                println!("Could not compile {}", &item.name);
+                return false;
+            }
+        };
+
+        if !hostname_re.is_match(&ro.hostname)
+            && !hostname_re.is_match("any")
+            && !hostname_re.is_match("localhost")
+        {
+            // println!("{}: hostname mismatch", item.section);
+            return false;
+        }
+    }
+    true
+}
+
+pub fn directory_check_ok(item: &EnvOptions, ro: &RunOptions) -> bool {
+    if item.dir.is_some() {
+        let dir_re = match regex_build(
+            &item.dir.as_ref().unwrap(),
+            &ro.name,
+            &item.file_name,
+            &item.section,
+        ) {
+            Some(check) => check,
+            None => {
+                println!("Could not compile {}", &item.name);
+                return false;
+            }
+        };
+
+        if !dir_re.is_match(&ro.directory) {
+            // && ro.directory != "." {
+            return false;
+        }
+    }
+    true
+}
+
+pub fn permitted_dates_ok(item: &EnvOptions, ro: &RunOptions) -> bool {
+    if item.notbefore.is_some() && item.notbefore.unwrap() > ro.date {
+        // println!("{}: now is before date", item.section);
+        return false;
+    }
+
+    if item.notafter.is_some() && item.notafter.unwrap() < ro.date {
+        // println!("{}: now is after date", item.section);
+        return false;
+    }
+
+    if item.datematch.is_some() {
+        let datematch_re = match regex_build(
+            &item.datematch.as_ref().unwrap(),
+            &ro.name,
+            &item.file_name,
+            &item.section,
+        ) {
+            Some(check) => check,
+            None => {
+                println!("Could not compile {}", &item.name);
+                return false;
+            }
+        };
+
+        if !datematch_re.is_match(&ro.date.format("%a %e %b %T UTC %Y").to_string()) {
+            // println!("{}: skipping as not a datematch {} vs {}", item.section, item.datematch.clone().unwrap(), &ro.date.format( "%a %e %b %T UTC %Y" ).to_string() );
+            return false;
+        }
+    }
+    true
+}
+
 pub fn can(vec_eo: &[EnvOptions], ro: &RunOptions) -> Result<EnvOptions, ()> {
     let mut opt = EnvOptions::new_deny();
     let mut matched = false;
 
     for item in vec_eo {
         // println!("{}:", item.section);
-        if item.notbefore.is_some() && item.notbefore.unwrap() > ro.date {
-            // println!("{}: now is before date", item.section);
+        if item.acl_type != ro.acl_type {
+            // println!("{}: not {:?} != {:?}", item.section, item.acl_type, ro.acl_type);
             continue;
         }
 
-        if item.notafter.is_some() && item.notafter.unwrap() < ro.date {
-            // println!("{}: now is after date", item.section);
+        if !permitted_dates_ok(&item, &ro) {
             continue;
-        }
-
-        if item.datematch.is_some() {
-            let datematch_re = match regex_build(
-                &item.datematch.as_ref().unwrap(),
-                &ro.name,
-                &item.file_name,
-                &item.section,
-            ) {
-                Some(check) => check,
-                None => {
-                    println!("Could not compile {}", &item.name);
-                    continue;
-                }
-            };
-
-            if !datematch_re.is_match(&ro.date.format("%a %e %b %T UTC %Y").to_string()) {
-                // println!("{}: skipping as not a datematch {} vs {}", item.section, item.datematch.clone().unwrap(), &ro.date.format( "%a %e %b %T UTC %Y" ).to_string() );
-                continue;
-            }
         }
 
         let name_re = match regex_build(&item.name, &ro.name, &item.file_name, &item.section) {
@@ -445,52 +504,12 @@ pub fn can(vec_eo: &[EnvOptions], ro: &RunOptions) -> Result<EnvOptions, ()> {
             }
         }
 
-        if item.acl_type != ro.acl_type {
-            // println!("{}: not {:?} != {:?}", item.section, item.acl_type, ro.acl_type);
+        if !hostname_ok(&item, &ro) {
             continue;
         }
 
-        if item.hostname.is_some() {
-            let hostname_re = match regex_build(
-                &item.hostname.as_ref().unwrap(),
-                &ro.name,
-                &item.file_name,
-                &item.section,
-            ) {
-                Some(check) => check,
-                None => {
-                    println!("Could not compile {}", &item.name);
-                    continue;
-                }
-            };
-
-            if !hostname_re.is_match(&ro.hostname)
-                && !hostname_re.is_match("any")
-                && !hostname_re.is_match("localhost")
-            {
-                // println!("{}: hostname mismatch", item.section);
-                continue;
-            }
-        }
-
-        if item.dir.is_some() {
-            let dir_re = match regex_build(
-                &item.dir.as_ref().unwrap(),
-                &ro.name,
-                &item.file_name,
-                &item.section,
-            ) {
-                Some(check) => check,
-                None => {
-                    println!("Could not compile {}", &item.name);
-                    continue;
-                }
-            };
-
-            if !dir_re.is_match(&ro.directory) {
-                // && ro.directory != "." {
-                continue;
-            }
+        if !directory_check_ok(&item, &ro) {
+            continue;
         }
 
         let target_re = match regex_build(&item.target, &ro.name, &item.file_name, &item.section) {
@@ -648,26 +667,8 @@ pub fn list(vec_eo: &[EnvOptions], ro: &RunOptions) {
             prefixes.push(String::from("not permitted"));
         }
 
-        if item.hostname.is_some() {
-            let hostname_re = match regex_build(
-                &item.hostname.as_ref().unwrap(),
-                &ro.name,
-                &item.file_name,
-                &item.section,
-            ) {
-                Some(check) => check,
-                None => {
-                    println!("Could not compile {}", &item.name);
-                    continue;
-                }
-            };
-
-            if !hostname_re.is_match(&ro.hostname)
-                && !hostname_re.is_match("any")
-                && !hostname_re.is_match("localhost")
-            {
-                continue;
-            }
+        if !hostname_ok(&item, &ro) {
+            continue;
         }
 
         if item.last {
@@ -688,7 +689,7 @@ pub fn list(vec_eo: &[EnvOptions], ro: &RunOptions) {
         }
 
         if item.acl_type == ACLTYPE::LIST {
-            println!("    {}:{}list: {}", item.section, prefix, item.rule);
+            println!("    {}:{}list: {}", item.section, prefix, item.target);
             continue;
         }
 
@@ -868,7 +869,6 @@ pub fn group_hash(groups: Vec<Group>) -> HashMap<String, u32> {
 #[cfg(test)]
 mod test {
     use super::*;
-    use std::collections::HashMap;
 
     #[test]
     fn test_execute_config() {
@@ -1868,5 +1868,46 @@ reason=true
         let entry = can(&vec_eo, &ro).unwrap();
 
         assert_eq!(entry.section, "first");
+    }
+
+    #[test]
+    fn test_multi_log() {
+        let config = "
+[first]
+name=ed
+target=root
+regex=^/usr/bin/wc (/var/log/[a-zA-Z0-9-]+(\\.\\d+)?(\\s)?)+$
+"
+        .to_string();
+
+        let mut vec_eo: Vec<EnvOptions> = vec![];
+        read_ini_config_str(&config, &mut vec_eo, "ed", false);
+        let mut ro = RunOptions::new();
+        ro.name = "ed".to_string();
+        ro.target = "root".to_string();
+
+        ro.command = "/usr/bin/wc /var/log/messages /var/log/syslog /var/log/maillog".to_string();
+        assert_eq!(can(&vec_eo, &ro).unwrap().permit, true);
+
+        ro.command = "/usr/bin/wc /var/log/messages /var/log/messages.1".to_string();
+        assert_eq!(can(&vec_eo, &ro).unwrap().permit, true);
+
+        ro.command =
+            "/usr/bin/wc /var/log/messages /var/log/syslog /var/log/maillog /var/log/../../shadow"
+                .to_string();
+        assert_eq!(can(&vec_eo, &ro).unwrap().permit, false);
+
+        ro.command = "/usr/bin/wc".to_string();
+        assert_eq!(can(&vec_eo, &ro).unwrap().permit, false);
+
+        ro.command = "/usr/bin/wc /etc/shadow".to_string();
+        assert_eq!(can(&vec_eo, &ro).unwrap().permit, false);
+
+        ro.command = "/usr/bin/wc".to_string();
+        assert_eq!(can(&vec_eo, &ro).unwrap().permit, false);
+
+        ro.command = "/usr/bin/wc /var/log/messages /var/log/messages.1 /var/log/../../etc/shadow"
+            .to_string();
+        assert_eq!(can(&vec_eo, &ro).unwrap().permit, false);
     }
 }
