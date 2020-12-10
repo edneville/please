@@ -12,9 +12,15 @@ A simple install:
   git clone https://gitlab.com/edneville/please.git
   cd please
   cargo test && cargo build --release \
-  && cp target/release/please target/release/pleaseedit /usr/local/bin \
-  && chown root:root /usr/local/bin/please /usr/local/bin/pleaseedit
-  && chmod 4755 /usr/local/bin/please /usr/local/bin/pleaseedit
+  && install -oroot -groot -D -m6755 target/release/please target/release/pleaseedit /usr/local/bin
+```
+
+Arch, BTW:
+
+```
+pacman -Syu git openssh fakeroot devtools make gcc rust
+git clone ssh://aur@aur.archlinux.org/pleaser.git
+cd pleaser && makepkg -isr
 ```
 
 Optionally, set `sudo` as an alias of `please`:
@@ -22,6 +28,12 @@ Optionally, set `sudo` as an alias of `please`:
 ```
 alias sudo="please"
 alias sudoedit="pleaseedit"
+```
+
+Or, if you like, symlink in local:
+
+```
+cd /usr/local/bin && ln -s /usr/local/bin/please sudo && ln -s /usr/local/bin/pleaseedit sudoedit
 ```
 
 # How do I set it up
@@ -56,7 +68,7 @@ The options are as follows:
 
 Using a greedy `.*` for the regex field will be as good as saying the rule should match any command. In previous releases there was no anchor (`^` and `$`) however, it seems more sensible to follow `find`'s approach and insist that there are anchors around the regex. This avoids `/bin/bash` matching `/home/user/bin/bash` unless the rule permits something like `/home/%{USER}/bin/bash`.
 
-If a `include` directive is met, no other enties in the section will be processed. The same goes for `includedir`.
+If a `include` directive is met, no other entries in the section will be processed. The same goes for `includedir`.
 
 The ordering of rules matters. The last match will win. Set `permit=false` if you wish to exclude something, but this should be very rare as the permit should be against a regex rather than using a positive and then a negative match. A rule of best practice is to avoid a fail open and then try and exclude most of the universe.
 
@@ -193,7 +205,7 @@ For big installs I suggest consider the following:
 
 ## Consolidate
 
-Where you can use groups when all member least privilege matches the set. It is best here to consider that people often perform the same role.
+Where you can use groups when all member least privilege matches the set. It is best here to consider that people often perform the same role, so try and organise the rules that way, so use either a group or list accounts in a single `name` regex match.
 
 ## Central configuration considerations
 
@@ -204,6 +216,10 @@ It could be possible to use caching, but a form of positive (correct match) and 
 For these reasons I prefer rsync configuration as the protocol is highly efficient and reduces network transfer overall.
 
 # Contributions
+
+Should you find anything that you feel is missing, regardless of initial design, please feel free to raise an issue with or without a pull request.
+
+Locating bugs and logging issues are very appreciated, and I thank you in advance.
 
 I welcome pull requests with open arms.
 

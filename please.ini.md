@@ -1,10 +1,10 @@
-% PLEASE(1) please user manual
+% PLEASE.INI(5) please user manual
 % Ed Neville (ed-please@s5h.net)
 % 16 August 2020
 
 # NAME
 
-please.ini
+please.ini - configuration file for access
 
 # DESCRIPTION
 
@@ -94,9 +94,24 @@ User `ben` may list only users `eng`, `net` and `dba` operators:
 [ben_ops]
 name=ben
 permit=true
-list=true
+type=list
 target=^(eng|net|dba)ops$
 ```
+
+# EDITCMD
+
+To verify a file edit, `ben`'s entry to check `/etc/hosts` after edit could look like this:
+
+```
+[ben_ops]
+name=ben
+permit=true
+type=edit
+regex=^/etc/hosts$
+editcmd=/usr/local/bin/check_hosts
+```
+
+`/usr/local/bin/check_hosts` would take two arguments, the original file as the first argument and the modify candidate as the second argument. If `check_hosts` terminates zero, then the edit is considered clean and the original file is replaced with the candidate. Otherwise the edit file is not copied and is left, `pleaseedit` will exit with the return value from `check_hosts`.
 
 # DATED RANGES
 

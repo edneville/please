@@ -254,7 +254,7 @@ fn main() {
     std::env::set_var("PLEASE_SOURCE_FILE", source_file.to_str().unwrap());
 
     let mut good_edit = false;
-    match fork() {
+    match unsafe { fork() } {
         Ok(ForkResult::Parent { .. }) => match nix::sys::wait::wait() {
             Ok(Exited(_pid, ret)) if ret == 0 => {
                 good_edit = true;
