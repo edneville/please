@@ -18,7 +18,7 @@
 
 use pleaser::util::{
     can, challenge_password, group_hash, list, log_action, read_ini_config_file, remove_token,
-    search_path, EnvOptions, RunOptions, ACLTYPE,
+    search_path, set_privs, EnvOptions, RunOptions, ACLTYPE,
 };
 
 use std::os::unix::process::CommandExt;
@@ -26,7 +26,7 @@ use std::process::Command;
 
 use getopts::Options;
 
-use nix::unistd::{gethostname, setgid, setgroups, setuid};
+use nix::unistd::gethostname;
 
 use users::os::unix::UserExt;
 use users::*;
@@ -61,14 +61,7 @@ fn do_list(ro: &mut RunOptions, vec_eo: &[EnvOptions], service: &str) {
         list(&vec_eo, &ro);
     } else {
         let dest = format!("{}'s", &ro.target);
-        log_action(
-            &service,
-            "deny",
-            &ro.name,
-            &ro.target,
-            &ro.reason,
-            &ro.command,
-        );
+        log_action(&service, "deny", &ro, &ro.command);
         println!(
             "You may not view {} command list",
             if ro.target == "" { "your" } else { &dest }
@@ -138,7 +131,14 @@ fn main() {
     let original_uid = get_current_uid();
     let original_user = get_user_by_uid(original_uid).unwrap();
     ro.name = original_user.name().to_string_lossy().to_string();
+    ro.syslog = true;
     let mut vec_eo: Vec<EnvOptions> = vec![];
+
+    set_privs(
+        "root",
+        nix::unistd::Uid::from_raw(0),
+        nix::unistd::Gid::from_raw(0),
+    );
 
     let mut opts = Options::new();
     opts.parsing_style(getopts::ParsingStyle::StopAtFirstFree);
@@ -250,14 +250,7 @@ fn main() {
 
     match &entry {
         Err(_) => {
-            log_action(
-                &service,
-                "deny",
-                &ro.name,
-                &ro.target,
-                &ro.reason,
-                &original_command.join(" "),
-            );
+            log_action(&service, "deny", &ro, &original_command.join(" "));
             println!(
                 "You may not execute \"{}\" on {} as {}",
                 &ro.command, &ro.hostname, &ro.target
@@ -265,15 +258,9 @@ fn main() {
             std::process::exit(1);
         }
         Ok(x) => {
+            ro.syslog = x.syslog;
             if !x.permit {
-                log_action(
-                    &service,
-                    "deny",
-                    &ro.name,
-                    &ro.target,
-                    &ro.reason,
-                    &original_command.join(" "),
-                );
+                log_action(&service, "deny", &ro, &original_command.join(" "));
                 println!(
                     "You may not execute \"{}\" on {} as {}",
                     &ro.command, &ro.hostname, &ro.target
@@ -282,14 +269,7 @@ fn main() {
             }
             // check if a reason was given
             if x.permit && x.reason && ro.reason.is_none() {
-                log_action(
-                    &service,
-                    "no_reason",
-                    &ro.name,
-                    &ro.target,
-                    &ro.reason,
-                    &original_command.join(" "),
-                );
+                log_action(&service, "no_reason", &ro, &original_command.join(" "));
                 println!(
                     "Sorry but no reason was given to execute \"{}\" on {} as {}",
                     &ro.command, &ro.hostname, &ro.target
@@ -300,48 +280,21 @@ fn main() {
     }
 
     if !challenge_password(ro.name.to_string(), entry.unwrap(), &service, prompt) {
-        log_action(
-            &service,
-            "deny",
-            &ro.name,
-            &ro.target,
-            &ro.reason,
-            &original_command.join(" "),
-        );
+        log_action(&service, "deny", &ro, &original_command.join(" "));
         println!("Keyboard not present or not functioning, press F1 to continue.");
         std::process::exit(1);
     }
 
     do_dir_changes(&ro);
 
-    log_action(
-        &service,
-        "permit",
-        &ro.name,
-        &ro.target,
-        &ro.reason,
-        &original_command.join(" "),
-    );
+    log_action(&service, "permit", &ro, &original_command.join(" "));
     let lookup_name = get_user_by_name(&ro.target).unwrap();
     let target_uid = nix::unistd::Uid::from_raw(lookup_name.uid());
     let target_gid = nix::unistd::Gid::from_raw(lookup_name.primary_group_id());
 
     do_environment(&mut ro, &original_user, original_uid, &lookup_name);
 
-    let mut groups: Vec<nix::unistd::Gid> = vec![];
-    for x in lookup_name.groups().unwrap() {
-        groups.push(nix::unistd::Gid::from_raw(x.gid()));
-    }
-
-    if !groups.is_empty() {
-        match setgroups(groups.as_slice()) {
-            Ok(_) => {}
-            Err(err) => println!("Error setting groups: {}", err),
-        }
-    }
-
-    setgid(target_gid).unwrap();
-    setuid(target_uid).unwrap();
+    set_privs(&ro.target.to_string(), target_uid, target_gid);
 
     if new_args.len() > 1 {
         Command::new(&new_args[0])

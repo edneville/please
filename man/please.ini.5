@@ -63,8 +63,9 @@ include=[file], read ini file, and continue to next section
 includedir=[directory], read .ini files in directory, and continue to
 next section
 .IP \[bu] 2
-editcmd=[program], run program after editor exits, if exit is zero,
-continue with file replacement
+exitcmd=[program], run program after editor exits, if exit is zero,
+continue with file replacement.
+%{NEW} and %{OLD} expand to new and old edit files
 .IP \[bu] 2
 editmode=[octal mode], set replacement file to octal mode
 .IP \[bu] 2
@@ -72,6 +73,8 @@ reason=[true|false], require a reason for execution, defaults to false
 .IP \[bu] 2
 last=[true|false], when true, stop processing if matched, defaults to
 false
+.IP \[bu] 2
+syslog=[true|false], log this activity to syslog, defaults to true
 .PP
 \f[C]regex\f[] is a regular expression.
 .SH EXAMPLE
@@ -154,7 +157,7 @@ type=list
 target=^(eng|net|dba)ops$
 \f[]
 .fi
-.SH EDITCMD
+.SH EXITCMD
 .PP
 To verify a file edit, \f[C]ben\f[]'s entry to check \f[C]/etc/hosts\f[]
 after edit could look like this:
@@ -166,7 +169,7 @@ name=ben
 permit=true
 type=edit
 regex=^/etc/hosts$
-editcmd=/usr/local/bin/check_hosts
+exitcmd=/usr/local/bin/check_hosts\ %{OLD}\ ${NEW}
 \f[]
 .fi
 .PP

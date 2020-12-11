@@ -34,10 +34,11 @@ The properties in ini permitted are as follows:
  * dir=[regex], permitted regex for switchable directories
  * include=[file], read ini file, and continue to next section
  * includedir=[directory], read .ini files in directory, and continue to next section
- * editcmd=[program], run program after editor exits, if exit is zero, continue with file replacement
+ * exitcmd=[program], run program after editor exits, if exit is zero, continue with file replacement. %{NEW} and %{OLD} expand to new and old edit files
  * editmode=[octal mode], set replacement file to octal mode
  * reason=[true|false], require a reason for execution, defaults to false
  * last=[true|false], when true, stop processing if matched, defaults to false
+ * syslog=[true|false], log this activity to syslog, defaults to true
 
 `regex` is a regular expression.
 
@@ -98,7 +99,7 @@ type=list
 target=^(eng|net|dba)ops$
 ```
 
-# EDITCMD
+# EXITCMD
 
 To verify a file edit, `ben`'s entry to check `/etc/hosts` after edit could look like this:
 
@@ -108,7 +109,7 @@ name=ben
 permit=true
 type=edit
 regex=^/etc/hosts$
-editcmd=/usr/local/bin/check_hosts
+exitcmd=/usr/local/bin/check_hosts %{OLD} ${NEW}
 ```
 
 `/usr/local/bin/check_hosts` would take two arguments, the original file as the first argument and the modify candidate as the second argument. If `check_hosts` terminates zero, then the edit is considered clean and the original file is replaced with the candidate. Otherwise the edit file is not copied and is left, `pleaseedit` will exit with the return value from `check_hosts`.

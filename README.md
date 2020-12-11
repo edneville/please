@@ -59,10 +59,11 @@ The options are as follows:
 | dir=regex                   | Permit switching to regex defined directory prior to execution. |
 | include=file                | Include file as another ini source, other options will be skipped in this section. |
 | includedir=dir              | Include dir of `.ini` files as other sources, in ascii sort order other options will be skipped in this section. Files not matching `.ini` will be ignored to allow for editor tmp files. |
-| editcmd=[program]           | (edit) continue with file replacement if `program` exits 0 |
+| exitcmd=[program]           | (edit) continue with file replacement if `program` exits 0 |
 | editmode=[octal mode]       | (edit) set destination file mode to `octal mode` |
 | reason=[true/false]         | when true, require a reason to be provided by `-r`, defaults to false |
 | last=[true/false]           | when true, stop processing when matched, defaults to false |
+| syslog=[true/false]         | log this activity to syslog, default = true |
 
 `include` and `includedir` will override mandatory arguments.
 
@@ -138,12 +139,12 @@ This is performed as follows:
 1. user runs edit as `pleaseedit -u root /etc/fstab`
 2. `/etc/fstab` is copied to `/tmp/fstab.pleaseedit.$USER`
 3. user's `EDITOR` is executed against `/tmp/fstab.pleaseedit.$USER`
-4. if `EDITOR` exits 0, and `editcmd` exits 0, then `/tmp/fstab.pleaseedit.$USER` is copied to `/etc/fstab.pleaseedit.$USER`
+4. if `EDITOR` exits 0, and `exitcmd` exits 0, then `/tmp/fstab.pleaseedit.$USER` is copied to `/etc/fstab.pleaseedit.$USER`
 5.  `/etc/fstab.pleaseedit.$USER` is set as root owned and `renamed` to `/etc/fstab`
 
-# editcmd
+# exitcmd
 
-editcmd can be used prior to the tmp edit file move to the source location. This can be used to test configuration files are valid prior to renaming in place.
+exitcmd can be used prior to the tmp edit file move to the source location. This can be used to test configuration files are valid prior to renaming in place.
 
 For something similar to apache, consider copying the config tree to a tmp directory before running the test to accommodate includes.
 

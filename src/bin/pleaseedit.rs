@@ -15,7 +15,7 @@
 //    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 use pleaser::util::{
-    can, challenge_password, get_editor, log_action, read_ini_config_file, remove_token,
+    can, challenge_password, get_editor, log_action, read_ini_config_file, remove_token, set_privs,
     EnvOptions, RunOptions, ACLTYPE,
 };
 
@@ -25,10 +25,13 @@ use std::os::unix::process::CommandExt;
 use std::path::Path;
 use std::process::Command;
 
+use regex::Regex;
+
 use getopts::Options;
 
+use nix::sys::stat::fchmodat;
 use nix::sys::wait::WaitStatus::Exited;
-use nix::unistd::{fork, gethostname, setgid, setgroups, setuid, ForkResult};
+use nix::unistd::{chown, fork, gethostname, ForkResult};
 
 use users::*;
 
@@ -64,14 +67,14 @@ fn setup_temp_edit_file(
         File::create(tmp_edit_file_path).unwrap();
     }
 
-    nix::unistd::chown(
+    chown(
         tmp_edit_file_path,
         Some(nix::unistd::Uid::from_raw(original_uid)),
         Some(nix::unistd::Gid::from_raw(original_gid)),
     )
     .unwrap();
 
-    nix::sys::stat::fchmodat(
+    fchmodat(
         None,
         tmp_edit_file_path,
         nix::sys::stat::Mode::S_IRUSR | nix::sys::stat::Mode::S_IWUSR,
@@ -80,6 +83,30 @@ fn setup_temp_edit_file(
     .unwrap();
 
     tmp_edit_file
+}
+
+fn build_exitcmd(entry: &EnvOptions, source_file: &str, edit_file: &str) -> Command {
+    let cmd_re = Regex::new(r"\s+").unwrap();
+
+    let cmd_str = entry.exitcmd.clone().unwrap();
+    let cmd_parts: Vec<&str> = cmd_re.split(&cmd_str).collect();
+
+    if cmd_parts.is_empty() {
+        println!("exitcmd has too few arguments");
+        std::process::exit(1);
+    }
+
+    let mut cmd = Command::new(cmd_parts[0]);
+    for (pos, j) in cmd_parts.iter().enumerate() {
+        if pos > 0 {
+            cmd.arg(
+                j.replace("%{OLD}", &source_file)
+                    .replace("%{NEW}", edit_file),
+            );
+        }
+    }
+
+    cmd
 }
 
 fn main() {
@@ -96,7 +123,14 @@ fn main() {
     let original_gid = original_user.primary_group_id();
     ro.name = original_user.name().to_string_lossy().to_string();
     ro.acl_type = ACLTYPE::EDIT;
+    ro.syslog = true;
     let mut vec_eo: Vec<EnvOptions> = vec![];
+
+    set_privs(
+        "root",
+        nix::unistd::Uid::from_raw(0),
+        nix::unistd::Gid::from_raw(0),
+    );
 
     let mut opts = Options::new();
     opts.parsing_style(getopts::ParsingStyle::StopAtFirstFree);
@@ -171,14 +205,7 @@ fn main() {
 
     match &entry {
         Err(_) => {
-            log_action(
-                &service,
-                "deny",
-                &ro.name,
-                &ro.target,
-                &ro.reason,
-                &original_command.join(" "),
-            );
+            log_action(&service, "deny", &ro, &original_command.join(" "));
             println!(
                 "You may not edit \"{}\" on {} as {}",
                 &ro.command, &ro.hostname, &ro.target
@@ -186,15 +213,9 @@ fn main() {
             std::process::exit(1);
         }
         Ok(x) => {
+            ro.syslog = x.syslog;
             if !x.permit {
-                log_action(
-                    &service,
-                    "deny",
-                    &ro.name,
-                    &ro.target,
-                    &ro.reason,
-                    &original_command.join(" "),
-                );
+                log_action(&service, "deny", &ro, &original_command.join(" "));
                 println!(
                     "You may not edit \"{}\" on {} as {}",
                     &ro.command, &ro.hostname, &ro.target
@@ -203,14 +224,7 @@ fn main() {
             }
             // check if a reason was given
             if x.permit && x.reason && ro.reason.is_none() {
-                log_action(
-                    &service,
-                    "no_reason",
-                    &ro.name,
-                    &ro.target,
-                    &ro.reason,
-                    &original_command.join(" "),
-                );
+                log_action(&service, "no_reason", &ro, &original_command.join(" "));
                 println!(
                     "Sorry but no reason was given to edit \"{}\" on {} as {}",
                     &ro.command, &ro.hostname, &ro.target
@@ -231,14 +245,7 @@ fn main() {
         &service,
         prompt,
     ) {
-        log_action(
-            &service,
-            "deny",
-            &ro.name,
-            &ro.target,
-            &ro.reason,
-            &original_command.join(" "),
-        );
+        log_action(&service, "deny", &ro, &original_command.join(" "));
         std::process::exit(1);
     }
 
@@ -266,14 +273,11 @@ fn main() {
             // drop privileges and execute editor
             let editor = get_editor();
 
-            let mut groups: Vec<nix::unistd::Gid> = vec![];
-            for x in lookup_name.groups().unwrap() {
-                groups.push(nix::unistd::Gid::from_raw(x.gid()));
-            }
-            setgroups(groups.as_slice()).unwrap();
-
-            setgid(nix::unistd::Gid::from_raw(original_gid)).unwrap();
-            setuid(nix::unistd::Uid::from_raw(original_uid)).unwrap();
+            set_privs(
+                &ro.name,
+                nix::unistd::Uid::from_raw(original_uid),
+                nix::unistd::Gid::from_raw(original_gid),
+            );
 
             Command::new(editor.as_str()).arg(&edit_file).exec();
             std::process::exit(1);
@@ -286,21 +290,15 @@ fn main() {
         std::process::exit(1);
     }
 
-    log_action(
-        &service,
-        "permit",
-        &ro.name,
-        &ro.target,
-        &ro.reason,
-        &original_command.join(" "),
-    );
+    log_action(&service, "permit", &ro, &original_command.join(" "));
 
     if entry.clone().unwrap().exitcmd.is_some() {
-        let out = Command::new(entry.clone().unwrap().exitcmd.unwrap().as_str())
-            .arg(&source_file)
-            .arg(&edit_file)
-            .output()
-            .expect("could not execute");
+        let mut cmd = build_exitcmd(
+            &entry.clone().unwrap(),
+            &source_file.to_str().unwrap(),
+            &edit_file,
+        );
+        let out = cmd.output().expect("could not execute");
         io::stdout().write_all(&out.clone().stdout).unwrap();
         io::stderr().write_all(&out.clone().stderr).unwrap();
         if !out.status.success() {
@@ -312,14 +310,14 @@ fn main() {
     let dir_parent_tmp = format!("{}.{}.{}", source_file.to_str().unwrap(), service, ro.name);
     std::fs::copy(edit_file, dir_parent_tmp.as_str()).unwrap();
 
-    nix::unistd::chown(
+    chown(
         dir_parent_tmp.as_str(),
         Some(nix::unistd::Uid::from_raw(lookup_name.uid())),
         Some(nix::unistd::Gid::from_raw(lookup_name.primary_group_id())),
     )
     .unwrap();
 
-    nix::sys::stat::fchmodat(
+    fchmodat(
         None,
         dir_parent_tmp.as_str(),
         if entry.clone().unwrap().edit_mode.is_some() {

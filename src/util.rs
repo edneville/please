@@ -17,7 +17,7 @@ use regex::Regex;
 
 use std::collections::HashMap;
 use std::env;
-use std::ffi::CStr;
+use std::ffi::{CStr, CString};
 use std::path::Path;
 use std::process;
 use std::time::SystemTime;
@@ -28,6 +28,8 @@ use std::fs;
 use std::fs::File;
 use std::io::prelude::*;
 use users::*;
+
+use nix::unistd::{initgroups, setgid, setuid};
 
 #[derive(Clone)]
 pub struct EnvOptions {
@@ -50,6 +52,7 @@ pub struct EnvOptions {
     pub edit_mode: Option<i32>,
     pub reason: bool,
     pub last: bool,
+    pub syslog: bool,
 }
 
 impl EnvOptions {
@@ -74,6 +77,7 @@ impl EnvOptions {
             edit_mode: None,
             reason: false,
             last: false,
+            syslog: true,
         }
     }
     fn new_deny() -> EnvOptions {
@@ -104,6 +108,7 @@ pub struct RunOptions {
     pub date: NaiveDateTime,
     pub acl_type: ACLTYPE,
     pub reason: Option<String>,
+    pub syslog: bool,
 }
 
 impl RunOptions {
@@ -119,6 +124,7 @@ impl RunOptions {
             directory: ".".to_string(),
             acl_type: ACLTYPE::RUN,
             reason: None,
+            syslog: true,
         }
     }
 }
@@ -332,6 +338,7 @@ pub fn read_ini(
             }
             "reason" => opt.reason = value == "true",
             "last" => opt.last = value == "true",
+            "syslog" => opt.syslog = value == "true",
             &_ => {
                 println!("{}: unknown attribute \"{}\": {}", config_path, key, value);
                 faulty = true;
@@ -734,6 +741,13 @@ pub fn search_path(binary: &str) -> Option<String> {
     None
 }
 
+pub fn set_privs(user: &str, target_uid: nix::unistd::Uid, target_gid: nix::unistd::Gid) {
+    let user = CString::new(user).unwrap();
+    initgroups(&user, target_gid).unwrap();
+    setgid(target_gid).unwrap();
+    setuid(target_uid).unwrap();
+}
+
 pub fn tty_name() -> String {
     let mut ttyname = "failed";
 
@@ -756,14 +770,11 @@ pub fn tty_name() -> String {
     ttyname.to_string()
 }
 
-pub fn log_action(
-    service: &str,
-    result: &str,
-    user: &str,
-    target: &str,
-    reason: &Option<String>,
-    command: &str,
-) -> bool {
+pub fn log_action(service: &str, result: &str, ro: &RunOptions, command: &str) -> bool {
+    if !ro.syslog {
+        return false;
+    }
+
     let formatter = Formatter3164 {
         facility: Facility::LOG_USER,
         hostname: None,
@@ -772,17 +783,17 @@ pub fn log_action(
     };
 
     match syslog::unix(formatter) {
-        Err(e) => println!("impossible to connect to syslog: {:?}", e),
+        Err(e) => println!("Impossible to connect to syslog: {:?}", e),
         Ok(mut writer) => {
             writer
                 .err(format!(
                     "user={} tty={} action={} target={} reason={} command={}",
-                    user,
+                    &ro.name,
                     tty_name(),
                     result,
-                    target,
-                    if reason.clone().is_some() {
-                        reason.clone().unwrap()
+                    &ro.target,
+                    if ro.reason.clone().is_some() {
+                        ro.reason.clone().unwrap()
                     } else {
                         String::from("")
                     },
