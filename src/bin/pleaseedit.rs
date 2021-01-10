@@ -1,5 +1,5 @@
 //    pleaseedit
-//    Copyright (C) 2020  ed neville
+//    Copyright (C) 2020-2021 ed neville
 //
 //    This program is free software: you can redistribute it and/or modify
 //    it under the terms of the GNU General Public License as published by
@@ -15,8 +15,8 @@
 //    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 use pleaser::util::{
-    can, challenge_password, get_editor, log_action, read_ini_config_file, remove_token, set_privs,
-    EnvOptions, RunOptions, ACLTYPE,
+    can, challenge_password, get_editor, group_hash, log_action, read_ini_config_file,
+    remove_token, set_privs, EnvOptions, RunOptions, ACLTYPE,
 };
 
 use std::fs::*;
@@ -37,7 +37,8 @@ use users::*;
 
 fn print_usage(program: &str) {
     println!("usage:");
-    println!("{} /path/to/file", program);
+    println!("{} [arguments] /path/to/file", program);
+    println!(" -h, --help: this message");
     println!(" -n, --noprompt: rather than prompt for password, exit non-zero");
     println!(" -p, --purge: purge valid tokens");
     println!(" -r, --reason, [text]: provide reason for execution");
@@ -61,26 +62,45 @@ fn setup_temp_edit_file(
     );
     let tmp_edit_file_path = Path::new(&tmp_edit_file);
 
-    if source_file.exists() {
-        std::fs::copy(source_file, tmp_edit_file_path).unwrap();
-    } else {
-        File::create(tmp_edit_file_path).unwrap();
+    if tmp_edit_file_path.exists() && std::fs::remove_file(tmp_edit_file_path).is_err() {
+        println!("Could not remove {}", tmp_edit_file_path.to_str().unwrap());
+        std::process::exit(1);
     }
 
-    chown(
+    if source_file.exists() && std::fs::copy(source_file, tmp_edit_file_path).is_err() {
+        println!(
+            "Could not copy {} to {}",
+            source_file.to_str().unwrap(),
+            tmp_edit_file_path.to_str().unwrap()
+        );
+        std::process::exit(1);
+    } else if File::create(tmp_edit_file_path).is_err() {
+        println!("Could not create {}", tmp_edit_file_path.to_str().unwrap());
+        std::process::exit(1);
+    }
+
+    if chown(
         tmp_edit_file_path,
         Some(nix::unistd::Uid::from_raw(original_uid)),
         Some(nix::unistd::Gid::from_raw(original_gid)),
     )
-    .unwrap();
+    .is_err()
+    {
+        println!("Could not chown {}", tmp_edit_file_path.to_str().unwrap());
+        std::process::exit(1);
+    }
 
-    fchmodat(
+    if fchmodat(
         None,
         tmp_edit_file_path,
         nix::sys::stat::Mode::S_IRUSR | nix::sys::stat::Mode::S_IWUSR,
         nix::sys::stat::FchmodatFlags::FollowSymlink,
     )
-    .unwrap();
+    .is_err()
+    {
+        println!("Could not chmod {}", tmp_edit_file_path.to_str().unwrap());
+        std::process::exit(1);
+    }
 
     tmp_edit_file
 }
@@ -126,11 +146,14 @@ fn main() {
     ro.syslog = true;
     let mut vec_eo: Vec<EnvOptions> = vec![];
 
-    set_privs(
+    if !set_privs(
         "root",
         nix::unistd::Uid::from_raw(0),
         nix::unistd::Gid::from_raw(0),
-    );
+    ) {
+        println!("I cannot set privs. Exiting as not installed correctly.");
+        std::process::exit(1);
+    }
 
     let mut opts = Options::new();
     opts.parsing_style(getopts::ParsingStyle::StopAtFirstFree);
@@ -168,6 +191,8 @@ fn main() {
 
     let new_args = matches.free;
     ro.command = new_args.join(" ");
+
+    ro.groups = group_hash(original_user.groups().unwrap());
 
     if purge_token {
         remove_token(&ro.name);
@@ -273,11 +298,14 @@ fn main() {
             // drop privileges and execute editor
             let editor = get_editor();
 
-            set_privs(
+            if !set_privs(
                 &ro.name,
                 nix::unistd::Uid::from_raw(original_uid),
                 nix::unistd::Gid::from_raw(original_gid),
-            );
+            ) {
+                println!("I cannot set privs. Exiting as not installed correctly.");
+                std::process::exit(1);
+            }
 
             Command::new(editor.as_str()).arg(&edit_file).exec();
             std::process::exit(1);
@@ -309,6 +337,10 @@ fn main() {
 
     let dir_parent_tmp = format!("{}.{}.{}", source_file.to_str().unwrap(), service, ro.name);
     std::fs::copy(edit_file, dir_parent_tmp.as_str()).unwrap();
+    if std::fs::remove_file(edit_file).is_err() {
+        println!("Could not remove {}", edit_file);
+        std::process::exit(1);
+    }
 
     chown(
         dir_parent_tmp.as_str(),
@@ -329,7 +361,14 @@ fn main() {
     )
     .unwrap();
 
-    std::fs::rename(&dir_parent_tmp.as_str(), source_file).unwrap();
+    if std::fs::rename(&dir_parent_tmp.as_str(), source_file).is_err() {
+        println!(
+            "Could not rename {} to {}",
+            &dir_parent_tmp.as_str(),
+            source_file.to_str().unwrap()
+        );
+        std::process::exit(1);
+    }
 }
 
 #[cfg(test)]

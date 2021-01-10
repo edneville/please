@@ -12,7 +12,7 @@ A simple install:
   git clone https://gitlab.com/edneville/please.git
   cd please
   cargo test && cargo build --release \
-  && install -oroot -groot -D -m6755 target/release/please target/release/pleaseedit /usr/local/bin
+  && install -oroot -groot -D -m4755 target/release/please target/release/pleaseedit /usr/local/bin
 ```
 
 Arch, BTW:

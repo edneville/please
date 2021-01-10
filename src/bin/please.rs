@@ -1,5 +1,5 @@
 //    please
-//    Copyright (C) 2020  ed neville
+//    Copyright (C) 2020-2021 ed neville
 //
 //    This program is free software: you can redistribute it and/or modify
 //    it under the terms of the GNU General Public License as published by
@@ -36,7 +36,8 @@ fn print_usage(program: &str) {
     println!("{} [arguments] <path/to/executable>", program);
     println!(" -c, --check, [file]: check config file");
     println!(" -d, --dir, [dir]: change to dir before execution");
-    println!(" -l, --list, <-t users permissions> <-v>: list permissions");
+    println!(" -h, --help: this message");
+    println!(" -l, --list, <-t users permissions>: list permissions");
     println!(" -n, --noprompt: rather than prompt for password, exit non-zero");
     println!(" -p, --purge: purge valid tokens");
     println!(" -r, --reason, [text]: provide reason for execution");
@@ -46,7 +47,11 @@ fn print_usage(program: &str) {
 }
 
 fn do_list(ro: &mut RunOptions, vec_eo: &[EnvOptions], service: &str) {
-    let name = if ro.target != "" { &ro.target } else { "You" };
+    let name = if ro.target == ro.name || ro.target == "" {
+        "You"
+    } else {
+        &ro.target
+    };
 
     let can_do = can(&vec_eo, &ro);
     if can_do.is_ok() && can_do.unwrap().permit {
@@ -134,11 +139,14 @@ fn main() {
     ro.syslog = true;
     let mut vec_eo: Vec<EnvOptions> = vec![];
 
-    set_privs(
+    if !set_privs(
         "root",
         nix::unistd::Uid::from_raw(0),
         nix::unistd::Gid::from_raw(0),
-    );
+    ) {
+        println!("I cannot set privs. Exiting as not installed correctly.");
+        std::process::exit(1);
+    }
 
     let mut opts = Options::new();
     opts.parsing_style(getopts::ParsingStyle::StopAtFirstFree);
@@ -281,7 +289,6 @@ fn main() {
 
     if !challenge_password(ro.name.to_string(), entry.unwrap(), &service, prompt) {
         log_action(&service, "deny", &ro, &original_command.join(" "));
-        println!("Keyboard not present or not functioning, press F1 to continue.");
         std::process::exit(1);
     }
 
@@ -294,7 +301,10 @@ fn main() {
 
     do_environment(&mut ro, &original_user, original_uid, &lookup_name);
 
-    set_privs(&ro.target.to_string(), target_uid, target_gid);
+    if !set_privs(&ro.target.to_string(), target_uid, target_gid) {
+        println!("I cannot set privs. Exiting as not installed correctly.");
+        std::process::exit(1);
+    }
 
     if new_args.len() > 1 {
         Command::new(&new_args[0])

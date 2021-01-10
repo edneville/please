@@ -99,6 +99,16 @@ type=list
 target=^(eng|net|dba)ops$
 ```
 
+All users may list their own permissions. You may or may not wish to do this if you consider permitting a view of the rules to be a security risk. Note that the target rule permits two types of string, the empty regex `^$` and their own name `%{USER}` in an `or` rule using the `|` operator. The empty string is for cases where there is no target name (`-t`) given with `-l`.
+
+```
+[list_own]
+name=^%{USER}$
+permit=true
+type=list
+target=^(|%{USER})$
+```
+
 # EXITCMD
 
 To verify a file edit, `ben`'s entry to check `/etc/hosts` after edit could look like this:
@@ -113,6 +123,18 @@ exitcmd=/usr/local/bin/check_hosts %{OLD} ${NEW}
 ```
 
 `/usr/local/bin/check_hosts` would take two arguments, the original file as the first argument and the modify candidate as the second argument. If `check_hosts` terminates zero, then the edit is considered clean and the original file is replaced with the candidate. Otherwise the edit file is not copied and is left, `pleaseedit` will exit with the return value from `check_hosts`.
+
+A common `exitcmd` is to check the validity of `please.ini`, shown below. This permits members of the `admin` group to edit `/etc/please.ini` if they provide a reason (`-r`). Upon clean exit from the editor the tmp file will be syntax checked.
+
+```
+[please_ini]
+name = admins
+group = true
+regex = /etc/please.ini
+reason = true
+type = edit
+exitcmd = /usr/bin/please -c %{NEW}
+```
 
 # DATED RANGES
 

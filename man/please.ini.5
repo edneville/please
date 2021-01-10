@@ -157,6 +157,25 @@ type=list
 target=^(eng|net|dba)ops$
 \f[]
 .fi
+.PP
+All users may list their own permissions.
+You may or may not wish to do this if you consider permitting a view of
+the rules to be a security risk.
+Note that the target rule permits two types of string, the empty regex
+\f[C]^$\f[] and their own name \f[C]%{USER}\f[] in an \f[C]or\f[] rule
+using the \f[C]|\f[] operator.
+The empty string is for cases where there is no target name
+(\f[C]\-t\f[]) given with \f[C]\-l\f[].
+.IP
+.nf
+\f[C]
+[list_own]
+name=^%{USER}$
+permit=true
+type=list
+target=^(|%{USER})$
+\f[]
+.fi
 .SH EXITCMD
 .PP
 To verify a file edit, \f[C]ben\f[]'s entry to check \f[C]/etc/hosts\f[]
@@ -180,6 +199,24 @@ If \f[C]check_hosts\f[] terminates zero, then the edit is considered
 clean and the original file is replaced with the candidate.
 Otherwise the edit file is not copied and is left, \f[C]pleaseedit\f[]
 will exit with the return value from \f[C]check_hosts\f[].
+.PP
+A common \f[C]exitcmd\f[] is to check the validity of
+\f[C]please.ini\f[], shown below.
+This permits members of the \f[C]admin\f[] group to edit
+\f[C]/etc/please.ini\f[] if they provide a reason (\f[C]\-r\f[]).
+Upon clean exit from the editor the tmp file will be syntax checked.
+.IP
+.nf
+\f[C]
+[please_ini]
+name\ =\ admins
+group\ =\ true
+regex\ =\ /etc/please.ini
+reason\ =\ true
+type\ =\ edit
+exitcmd\ =\ /usr/bin/please\ \-c\ %{NEW}
+\f[]
+.fi
 .SH DATED RANGES
 .PP
 For large environments it is not unusual for a third party to require

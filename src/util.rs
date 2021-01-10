@@ -1,5 +1,5 @@
 //    please
-//    Copyright (C) 2020  ed neville
+//    Copyright (C) 2020-2021 ed neville
 //
 //    This program is free software: you can redistribute it and/or modify
 //    it under the terms of the GNU General Public License as published by
@@ -13,6 +13,7 @@
 //
 //    You should have received a copy of the GNU General Public License
 //    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
 use regex::Regex;
 
 use std::collections::HashMap;
@@ -691,7 +692,7 @@ pub fn list(vec_eo: &[EnvOptions], ro: &RunOptions) {
             }
         }
         if last_file != item.file_name {
-            println!("  file: {}", item.file_name);
+            println!("  in file: {}", item.file_name);
             last_file = &item.file_name;
         }
 
@@ -741,11 +742,20 @@ pub fn search_path(binary: &str) -> Option<String> {
     None
 }
 
-pub fn set_privs(user: &str, target_uid: nix::unistd::Uid, target_gid: nix::unistd::Gid) {
+pub fn set_privs(user: &str, target_uid: nix::unistd::Uid, target_gid: nix::unistd::Gid) -> bool {
     let user = CString::new(user).unwrap();
-    initgroups(&user, target_gid).unwrap();
-    setgid(target_gid).unwrap();
-    setuid(target_uid).unwrap();
+    if initgroups(&user, target_gid).is_err() {
+        return false;
+    }
+
+    if setgid(target_gid).is_err() {
+        return false;
+    }
+
+    if setuid(target_uid).is_err() {
+        return false;
+    }
+    true
 }
 
 pub fn tty_name() -> String {
@@ -1920,5 +1930,28 @@ regex=^/usr/bin/wc (/var/log/[a-zA-Z0-9-]+(\\.\\d+)?(\\s)?)+$
         ro.command = "/usr/bin/wc /var/log/messages /var/log/messages.1 /var/log/../../etc/shadow"
             .to_string();
         assert_eq!(can(&vec_eo, &ro).unwrap().permit, false);
+    }
+
+    #[test]
+    fn test_edit_group_regression() {
+        let config = "
+[please_ini]
+name = lpadmin
+group = true
+regex = /etc/please.ini
+reason = true
+type = edit
+exitcmd = /usr/bin/please -c %{NEW}
+"
+        .to_string();
+        let mut vec_eo: Vec<EnvOptions> = vec![];
+        read_ini_config_str(&config, &mut vec_eo, "ed", false);
+        let mut ro = RunOptions::new();
+        ro.name = "ed".to_string();
+        ro.target = "root".to_string();
+        ro.groups.insert(String::from("lpadmin"), 1);
+        ro.acl_type = ACLTYPE::EDIT;
+        ro.command = "/etc/please.ini".to_string();
+        assert_eq!(can(&vec_eo, &ro).unwrap().permit, true);
     }
 }
