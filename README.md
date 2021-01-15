@@ -52,7 +52,7 @@ The options are as follows:
 | regex=rule                  | This is the regex for the section, default is ^$ |
 | notbefore                   | The date, in YYYYmmdd or YYYYmmddHHMMSS when this rule becomes effective. |
 | notafter                    | The date, in YYYYmmdd or YYYYmmddHHMMSS when this rule expires. |
-| datematch=[Day Mon dd HH:MM:SS UTC YYYY] | regex to match against a date string |
+| datematch=[Day dd Mon HH:MM:SS UTC YYYY] | regex to match against a date string |
 | type=[edit/run/list]        | Set the entry type. Run = execution, edit = pleaseedit, list = show user rights |
 | group=[true/false]          | True to signify that name= refers to a group rather than a user. |
 | hostname=regex              | Hosts where this applies. Defaults to 'localhost'. |
@@ -116,7 +116,7 @@ Many enterprises may wish to permit access to a user for a limited time only, ev
 
 # Date matches
 
-Another date type is the `datematch` item, this constrains sections to a regex match against the date string `Day Mon HH:MM:SS UTC Year`.
+Another date type is the `datematch` item, this constrains sections to a regex match against the date string `Day dd Mon HH:MM:SS UTC Year`.
 
 You can permit some a group of users to perform some house keeping on a Monday:
 

@@ -219,6 +219,10 @@ pub fn read_ini(
 
         match key {
             "include" => {
+                if !value.starts_with('/') {
+                    println!("Includes should start with /");
+                    return true;
+                }
                 if read_ini_config_file(&value, vec_eo, &user, fail_error) {
                     println!("Couldn't read {}", value);
                     return true;
@@ -226,6 +230,10 @@ pub fn read_ini(
                 continue;
             }
             "includedir" => {
+                if !value.starts_with('/') {
+                    println!("Includes should start with /");
+                    return true;
+                }
                 match fs::read_dir(value) {
                     Err(_x) => {
                         faulty = true;
@@ -1953,5 +1961,33 @@ exitcmd = /usr/bin/please -c %{NEW}
         ro.acl_type = ACLTYPE::EDIT;
         ro.command = "/etc/please.ini".to_string();
         assert_eq!(can(&vec_eo, &ro).unwrap().permit, true);
+    }
+
+    #[test]
+    fn test_ini_relative() {
+        let mut vec_eo: Vec<EnvOptions> = vec![];
+        let config = "
+[inc]
+include = ./some.ini
+"
+        .to_string();
+        assert_eq!(read_ini_config_str(&config, &mut vec_eo, "ed", false), true);
+
+        let config = "
+[inc]
+includedir = ./dir.d/some.ini
+"
+        .to_string();
+        assert_eq!(read_ini_config_str(&config, &mut vec_eo, "ed", false), true);
+
+        let config = "
+[inc]
+includedir = /dev/null
+"
+        .to_string();
+        assert_eq!(
+            read_ini_config_str(&config, &mut vec_eo, "ed", false),
+            false
+        );
     }
 }

@@ -162,7 +162,10 @@ fn main() {
 
     let matches = match opts.parse(&args[1..]) {
         Ok(m) => m,
-        Err(f) => panic!(f.to_string()),
+        Err(f) => {
+            println!("{}", f.to_string());
+            std::process::exit(1);
+        }
     };
 
     if matches.opt_present("h") {
@@ -230,6 +233,9 @@ fn main() {
         .to_string();
 
     if ro.acl_type == ACLTYPE::LIST {
+        if ro.target == "" {
+            ro.target = ro.name.to_string();
+        }
         do_list(&mut ro, &vec_eo, &service);
         return;
     }

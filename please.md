@@ -1,6 +1,11 @@
-% PLEASE(1) please user manual
-% Ed Neville (ed-please@s5h.net)
-% 16 August 2020
+---
+title: please
+section: 1
+header: User Manual
+footer: please 0.3.19
+author: ed neville (ed-please@s5h.net)
+date: 19 January 2021
+---
 
 # NAME
 
@@ -8,47 +13,79 @@ please - a tool for access elevation.
 
 # SYNOPSIS
 
-```
-please /bin/bash
-please [-t/--target] backup tar -cvf - /home/data | ...
-pleaseedit /etc/fstab
-pleaseedit [-r/--reason] "new fs" /etc/fstab
-please [-l/--list]
-please [-l/--list] [-t/--target] user
-please [-d/--dir] [dir] command
-please [-n/--noprompt] command
-please [-r/--reason] "sshd reconfigured, ticket 24365" /etc/init.d/ssh restart
-please [-p/--purge]
-please [-w/--warm]
-```
+**please /bin/bash**
+
+**please [-c/\--check] /etc/please.ini**
+
+**please [-d/\--dir] [dir] command**
+
+**please [-h/\--help]**
+
+**please [-t/\--target] backup tar -cvf - /home/data | ...**
+
+**pleaseedit /etc/fstab**
+
+**pleaseedit [-r/\--reason \"new fs\"] /etc/fstab**
+
+**please [-l/\--list]**
+
+**please [-l/\--list] [-t/\--target user]**
+
+**please [-n/\--noprompt] command**
+
+**please [-r/\--reason \"sshd reconfigured, ticket 24365\"] /etc/init.d/ssh restart**
+
+**please [-p/\--purge]**
+
+**please [-w/\--warm]**
 
 # DESCRIPTION
 
-please is a sudo clone that has regex support and a simple approach to ACL.
+`please` is a sudo clone that has regex support and a simple approach to ACL.
 
 The aim is to allow admins to delegate accurate least privilege access with ease. There are times when what is intended to be executed can be expressed easily with a regex to expose only what is needed and nothing more.
 
-Executing with `-d dir` will change directory to dir prior to execution. `-n` will force please to exit with 1 if please would require a password prior to execution. `-p` will purge an existing token for the running user, `-w` will warm the token and challenge authentication and immediately exit.
+`pleaseedit` allows safe editing of files. The file is copied to /tmp, where it can be updated. When `EDITOR` exits cleanly the file is copied alongside the target and then renamed.
+
+`-c`/`--check file`
+: will check the syntax of a `please.ini` config file. Exits non-zero on error.
+
+`-d`/`--dir`
+: will change the directory prior to executing the command in that location.
+
+`-l`/`--list`
+: to list rules.
+
+`-n`/`--noprompt`
+: will not prompt for authentication and exits with a status of 1.
+
+`-r`/`--reason` `[reason]`
+: will add `reason` to the system log.
+
+`-p`/`--purge`
+: will purge your current authentication token for the running user.
+
+`-t`/`--target` `[user]`
+: to execute command as target user.
+
+`-w`/`--warm`
+: will warm an authentication token and exit.
 
 # EXAMPLES
 
-Run a shell as the httpd user:
+`please -t httpd /bin/bash`
+: Run a shell as the httpd user.
 
-```
-please -t httpd /bin/bash
-```
+`please -l`
+: To list what you may run.
 
-To list what you may run:
+`please -t username -l`
+: to show what username may run. `username` must match the target regex in a `type=list` rule.
 
-```
-please -l
-```
+`please -r "reloading httpd for ticket #123" systemctl reload apache2`
+: to show what username may run. `username` must match the target regex in a `type=list` rule.
 
-Or with `username` to show what another user may run. username must match the regex in a `permit=list` rule.
-
-```
-please -l username
-```
+Please see `please.ini` for configuration examples.
 
 # FILES
 
@@ -56,7 +93,7 @@ please -l username
 
 # CONTRIBUTIONS
 
-I welcome pull requests with open arms.
+I welcome pull requests with open arms. Do please raise a ticket if you find a bug or would like to improve please in some way.
 
 # SEE ALSO
 

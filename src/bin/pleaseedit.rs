@@ -67,13 +67,15 @@ fn setup_temp_edit_file(
         std::process::exit(1);
     }
 
-    if source_file.exists() && std::fs::copy(source_file, tmp_edit_file_path).is_err() {
-        println!(
-            "Could not copy {} to {}",
-            source_file.to_str().unwrap(),
-            tmp_edit_file_path.to_str().unwrap()
-        );
-        std::process::exit(1);
+    if source_file.exists() {
+        if std::fs::copy(source_file, tmp_edit_file_path).is_err() {
+            println!(
+                "Could not copy {} to {}",
+                source_file.to_str().unwrap(),
+                tmp_edit_file_path.to_str().unwrap()
+            );
+            std::process::exit(1);
+        }
     } else if File::create(tmp_edit_file_path).is_err() {
         println!("Could not create {}", tmp_edit_file_path.to_str().unwrap());
         std::process::exit(1);
@@ -166,7 +168,10 @@ fn main() {
 
     let matches = match opts.parse(&args[1..]) {
         Ok(m) => m,
-        Err(f) => panic!(f.to_string()),
+        Err(f) => {
+            println!("{}", f.to_string());
+            std::process::exit(1);
+        }
     };
     if matches.opt_present("h") {
         print_usage(&program);

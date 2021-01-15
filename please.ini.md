@@ -1,6 +1,11 @@
-% PLEASE.INI(5) please user manual
-% Ed Neville (ed-please@s5h.net)
-% 16 August 2020
+---
+title: please.ini
+section: 5
+header: User Manual
+footer: please 0.3.19
+author: Ed Neville (ed-please@s5h.net)
+date: 19 January 2021
+---
 
 # NAME
 
@@ -16,37 +21,102 @@ All rules in `please.ini` will permit or deny based on command regex matches.
 
 Rules are read and applied in the order they are presented in the configuration file. So if the user is permitted to run a command early in the file, but later a deny is matches against `.*`, then the user will not be permitted to run any command.
 
-`%{USER}` will expand to the user who is currently running `please`, this enables a single rule for a group to modify/run something that matches their name.
+The properties in ini permitted are described below.
 
-The properties in ini permitted are as follows:
+# MATCHES
 
- * name=[regex], or user, mandatory
- * target=[regex] user to execute or list as, defaults to root
- * permit=[true|false] defaults to true
- * require_pass=[true|false], defaults to true
- * regex=[regex], is the regular expression that the command matches against, defaults to ^$
- * notbefore=[YYYYmmdd|YYYYmmddHHMMSS], defaults to never
- * notafter=[YYYYmmdd|YYYYmmddHHMMSS], defaults to never
- * datematch=[Day dd Mon HH:MM:SS UTC YYYY], regex to match against a date string
- * type=[edit/run/list], defaults to run, edit = pleaseedit entry, list = user access rights listing
- * group=[true|false] user, when true name refers to a group rather than a user
- * hostname=[regex], permitted hostnames where this may apply
- * dir=[regex], permitted regex for switchable directories
- * include=[file], read ini file, and continue to next section
- * includedir=[directory], read .ini files in directory, and continue to next section
- * exitcmd=[program], run program after editor exits, if exit is zero, continue with file replacement. %{NEW} and %{OLD} expand to new and old edit files
- * editmode=[octal mode], set replacement file to octal mode
- * reason=[true|false], require a reason for execution, defaults to false
- * last=[true|false], when true, stop processing if matched, defaults to false
- * syslog=[true|false], log this activity to syslog, defaults to true
+**name=[regex]**
+: mandatory, the user or **group** (see below) to match against.
 
-`regex` is a regular expression.
+**target=[regex]**
+: user to execute or list as, defaults to root
 
-# EXAMPLE
+**regex=[regex]**
+: is the regular expression that the command matches against, defaults to ^$
 
-Using an anchor (`^`) for the regex field will be as good as saying the rule should match any command.
+**notbefore=[YYYYmmdd|YYYYmmddHHMMSS]**
+: will add HHMMSS as 00:00:00 to the date if not given, defaults to never
 
-If you wish to permit a user to view another's command set, then you may do this using `type=list` (`run` by default). To list another user, they must match the `target` regex. `type` may also be `edit` if you wish to permit a file edit with `pleaseedit`.
+**notafter=[YYYYmmdd|YYYYmmddHHMMSS]**
+: will add 23:59:59 to the date if not given, defaults to never
+
+**datematch=[Day dd Mon HH:MM:SS UTC YYYY]**
+: regex to match against a date string
+
+**type=[edit/run/list]**
+: defaults to run, edit = pleaseedit entry, list = user access rights listing
+
+**group=[true|false]**
+: defaults to false, when true name refers to a group rather than a user
+
+**hostname=[regex]**
+: permitted hostnames where this may apply, defaults to localhost
+
+**dir=[regex]**
+: permitted regex for switchable directories, defaults to any
+
+**include=[file]**
+: read ini file, and continue to next section
+
+**includedir=[directory]**
+: read .ini files in directory, and continue to next section
+
+`regex` is a regular expression, `%{USER}` will expand to the user who is currently running `please`. This enables a single rule for a group to modify/run something that matches their name.
+
+# ACTIONS
+
+**exitcmd=[program]**
+: run program after editor exits, if exit is zero, continue with file replacement. %{NEW} and %{OLD} placeholders expand to new and old edit files
+
+**permit=[true|false]**
+: permit or disallow the entry, defaults to true
+
+**require_pass=[true|false]**
+: if entry matches, require a password, defaults to true
+
+**editmode=[octal mode]**
+: set the file mode bits on replacement file to octal mode
+
+**reason=[true|false]**
+: require a reason for execution/edit, defaults to false
+
+**last=[true|false]**
+: if true, stop processing when entry is matched, defaults to false
+
+**syslog=[true|false]**
+: log this activity to syslog, defaults to true
+
+# EXAMPLES
+
+To allow all commands, you can use a greedy match (`^.*$`). You should probably reduce this to the set of acceptable commands though.
+
+```
+[user_ed_root]
+name=ed
+target=root
+regex=^.*$
+```
+
+If you wish to permit a user to view another's command set, then you may do this using `type=list` (`run` by default). To list another user, they must match the `target` regex.
+
+```
+[user_ed_list_root]
+name=ed
+type=list
+target=root
+```
+
+`type` may also be `edit` if you wish to permit a file edit with `pleaseedit`.
+
+```
+[user_ed_edit_hosts]
+name=ed
+type=edit
+target=root
+regex=^/etc/hosts$
+```
+
+Naming sections should help later when listing permissions.
 
 `regex` can include repetitions. To permit running `wc` to count the lines in the log files in `/var/log` you can use the following:
 
@@ -65,8 +135,6 @@ This will permit commands such as the following, note how for efficiency find wi
 ```
 $ find /var/log -type f -exec please /usr/bin/wc {} \+
 ```
-
-# OTHER EXAMPLES
 
 User `ed` may only start or stop a docker container:
 
@@ -111,7 +179,9 @@ target=^(|%{USER})$
 
 # EXITCMD
 
-To verify a file edit, `ben`'s entry to check `/etc/hosts` after edit could look like this:
+When the user completes their edit, and the editor exits cleanly, if `exitcmd` is included then the program will run. If the program also exits cleanly then the temporary edit will be copied to the destination.
+
+%{OLD} and %{NEW} will expand to the old (existing source) file and edit candidate, respectively. To verify a file edit, `ben`'s entry to check `/etc/hosts` after clean exit could look like this:
 
 ```
 [ben_ops]
@@ -119,7 +189,7 @@ name=ben
 permit=true
 type=edit
 regex=^/etc/hosts$
-exitcmd=/usr/local/bin/check_hosts %{OLD} ${NEW}
+exitcmd=/usr/local/bin/check_hosts %{OLD} %{NEW}
 ```
 
 `/usr/local/bin/check_hosts` would take two arguments, the original file as the first argument and the modify candidate as the second argument. If `check_hosts` terminates zero, then the edit is considered clean and the original file is replaced with the candidate. Otherwise the edit file is not copied and is left, `pleaseedit` will exit with the return value from `check_hosts`.
@@ -130,9 +200,10 @@ A common `exitcmd` is to check the validity of `please.ini`, shown below. This p
 [please_ini]
 name = admins
 group = true
-regex = /etc/please.ini
 reason = true
+regex = /etc/please.ini
 type = edit
+editmode = 600
 exitcmd = /usr/bin/please -c %{NEW}
 ```
 
@@ -187,6 +258,7 @@ regex = ^/usr/sbin/useradd\s+-m\s+\w+$
 ```
 
 # LAST
+
 To stop processing at a match, `last=true` can be applied:
 
 ```
@@ -202,12 +274,18 @@ last=true
 
 For simplicity, there is no need to process other configured rules if certain that the `l2users` group are safe to execute this. `last` should only be used in situations where there will never be something that could contradict the match later.
 
-
 # FILES
 
 /etc/please.ini
 
 # CONTRIBUTIONS
 
-I welcome pull requests with open arms.
+I welcome pull requests with open arms. New features always considered.
 
+# BUGS
+
+Found a bug? Please either open a ticket or send a pull request/patch.
+
+# SEE ALSO
+
+please
