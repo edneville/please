@@ -1,8 +1,10 @@
 # Please, a sudo clone with regex support
 
-Great! This is what I needed.
+Great! This is what I need.
 
 The aim is to allow admins to delegate accurate least privilege access with ease. There are times when what is intended to be executed can be expressed easily with a regex to expose only what is needed and nothing more.
+
+The idea is to help you admin your box without giving users full root, just because that is easier. Most admins have experience of regex in one form or another, so lets configure access that way.
 
 # How do I install it
 
@@ -23,6 +25,12 @@ git clone ssh://aur@aur.archlinux.org/pleaser.git
 cd pleaser && makepkg -isr
 ```
 
+NetBSD, BTW:
+
+```
+pkgin install pleaser
+```
+
 Optionally, set `sudo` as an alias of `please`:
 
 ```
@@ -38,34 +46,48 @@ cd /usr/local/bin && ln -s /usr/local/bin/please sudo && ln -s /usr/local/bin/pl
 
 # How do I set it up
 
-Next, configure your `/etc/please.ini` similar to this, replace user names with appropriate values. One of the simplest, that does not require password authentication can be defined as follows, assuming the user is `ed`:
+Next, configure your `/etc/please.ini`, replace user names with appropriate values. The `ini` is divided into section options, matches and actions.
+
+## Section options
+
+| Part                        | Effect       |
+|-----------------------------|--------------|
+| [section-name]              | Section name, shown in list mode |
+| include=file                | Include file as another ini source, other options will be skipped in this section. |
+| includedir=dir              | Include dir of `.ini` files as other sources, in ascii sort order other options will be skipped in this section. Files not matching `.ini` will be ignored to allow for editor tmp files. |
+
+`include` and `includedir` will override mandatory arguments.
+
+## Matches
+
+One of the simplest, that does not require password authentication can be defined as follows, assuming the user is `ed`:
 
 The options are as follows:
 
-| part                        | effect       |
+| Part                        | Effect       |
 |-----------------------------|--------------|
-| [section-name]              | Section name, naming sections may help you later. |
 | name=regex                  | Mandatory, apply configuration to this entity. |
 | target=regex                | May become these users. |
-| permit=[true/false]         | Defaults to true |
-| require_pass=[true/false]   | Defaults to true, mandatory in run and edit, become this user.   |
-| regex=rule                  | This is the regex for the section, default is ^$ |
-| notbefore                   | The date, in YYYYmmdd or YYYYmmddHHMMSS when this rule becomes effective. |
-| notafter                    | The date, in YYYYmmdd or YYYYmmddHHMMSS when this rule expires. |
+| regex=rule                  | This is the command regex for the section, default is ^$ |
+| notbefore=YYYYmmdd          | The date, or YYYYmmddHHMMSS when this rule becomes effective. |
+| notafter=YYYYmmdd           | The date, or YYYYmmddHHMMSS when this rule expires. |
 | datematch=[Day dd Mon HH:MM:SS UTC YYYY] | regex to match against a date string |
 | type=[edit/run/list]        | Set the entry type. Run = execution, edit = pleaseedit, list = show user rights |
 | group=[true/false]          | True to signify that name= refers to a group rather than a user. |
 | hostname=regex              | Hosts where this applies. Defaults to 'localhost'. |
 | dir=regex                   | Permit switching to regex defined directory prior to execution. |
-| include=file                | Include file as another ini source, other options will be skipped in this section. |
-| includedir=dir              | Include dir of `.ini` files as other sources, in ascii sort order other options will be skipped in this section. Files not matching `.ini` will be ignored to allow for editor tmp files. |
-| exitcmd=[program]           | (edit) continue with file replacement if `program` exits 0 |
-| editmode=[octal mode]       | (edit) set destination file mode to `octal mode` |
 | reason=[true/false]         | when true, require a reason to be provided by `-r`, defaults to false |
+
+## Actions
+
+| Part                        | Effect       |
+|-----------------------------|--------------|
+| permit=[true/false]         | Defaults to true |
+| require_pass=[true/false]   | Defaults to true, mandatory in run and edit, become this user.   |
 | last=[true/false]           | when true, stop processing when matched, defaults to false |
 | syslog=[true/false]         | log this activity to syslog, default = true |
-
-`include` and `includedir` will override mandatory arguments.
+| exitcmd=[program]           | (edit) continue with file replacement if `program` exits 0 |
+| editmode=[octal mode]       | (edit) set destination file mode to `octal mode` |
 
 Using a greedy `.*` for the regex field will be as good as saying the rule should match any command. In previous releases there was no anchor (`^` and `$`) however, it seems more sensible to follow `find`'s approach and insist that there are anchors around the regex. This avoids `/bin/bash` matching `/home/user/bin/bash` unless the rule permits something like `/home/%{USER}/bin/bash`.
 
@@ -214,7 +236,9 @@ To avoid single points of failure in a service, `ini` configuration should be ge
 
 It could be possible to use caching, but a form of positive (correct match) and negative (incorrect match) would be required. 10,000 computers with hundreds of active users performing lookups against an LDAP server could be problematic.
 
-For these reasons I prefer rsync configuration as the protocol is highly efficient and reduces network transfer overall.
+For these reasons I prefer rsync distribution as the protocol is highly efficient and reduces network transfer overall.
+
+LDAP may at a later date be reconsidered.
 
 # Contributions
 

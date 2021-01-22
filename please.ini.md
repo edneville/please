@@ -2,9 +2,9 @@
 title: please.ini
 section: 5
 header: User Manual
-footer: please 0.3.19
+footer: please 0.3.20
 author: Ed Neville (ed-please@s5h.net)
-date: 19 January 2021
+date: 23 January 2021
 ---
 
 # NAME
@@ -22,6 +22,17 @@ All rules in `please.ini` will permit or deny based on command regex matches.
 Rules are read and applied in the order they are presented in the configuration file. So if the user is permitted to run a command early in the file, but later a deny is matches against `.*`, then the user will not be permitted to run any command.
 
 The properties in ini permitted are described below.
+
+# SECTION OPTIONS
+
+**[section-name]**
+: section name, shown in list mode
+
+**include=[file]**
+: read ini file, and continue to next section
+
+**includedir=[directory]**
+: read .ini files in directory, and continue to next section
 
 # MATCHES
 
@@ -54,12 +65,6 @@ The properties in ini permitted are described below.
 
 **dir=[regex]**
 : permitted regex for switchable directories, defaults to any
-
-**include=[file]**
-: read ini file, and continue to next section
-
-**includedir=[directory]**
-: read .ini files in directory, and continue to next section
 
 `regex` is a regular expression, `%{USER}` will expand to the user who is currently running `please`. This enables a single rule for a group to modify/run something that matches their name.
 
@@ -167,14 +172,14 @@ type=list
 target=^(eng|net|dba)ops$
 ```
 
-All users may list their own permissions. You may or may not wish to do this if you consider permitting a view of the rules to be a security risk. Note that the target rule permits two types of string, the empty regex `^$` and their own name `%{USER}` in an `or` rule using the `|` operator. The empty string is for cases where there is no target name (`-t`) given with `-l`.
+All users may list their own permissions. You may or may not wish to do this if you consider permitting a view of the rules to be a security risk.
 
 ```
 [list_own]
 name=^%{USER}$
 permit=true
 type=list
-target=^(|%{USER})$
+target=^%{USER}$
 ```
 
 # EXITCMD

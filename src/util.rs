@@ -800,13 +800,19 @@ pub fn log_action(service: &str, result: &str, ro: &RunOptions, command: &str) -
         pid: process::id() as i32,
     };
 
+    let cwd = match env::current_dir() {
+        Err(_) => "unable to get cwd".to_string(),
+        Ok(x) => x.to_string_lossy().to_string(),
+    };
+
     match syslog::unix(formatter) {
-        Err(e) => println!("Impossible to connect to syslog: {:?}", e),
+        Err(e) => println!("Could not connect to syslog: {:?}", e),
         Ok(mut writer) => {
             writer
                 .err(format!(
-                    "user={} tty={} action={} target={} reason={} command={}",
+                    "user={} cwd={} tty={} action={} target={} reason={} command={}",
                     &ro.name,
+                    &cwd,
                     tty_name(),
                     result,
                     &ro.target,

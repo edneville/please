@@ -2,9 +2,9 @@
 title: please
 section: 1
 header: User Manual
-footer: please 0.3.19
+footer: please 0.3.20
 author: ed neville (ed-please@s5h.net)
-date: 19 January 2021
+date: 23 January 2021
 ---
 
 # NAME
@@ -74,10 +74,10 @@ The aim is to allow admins to delegate accurate least privilege access with ease
 # EXAMPLES
 
 `please -t httpd /bin/bash`
-: Run a shell as the httpd user.
+: run a shell as the httpd user.
 
 `please -l`
-: To list what you may run.
+: to list what you may run.
 
 `please -t username -l`
 : to show what username may run. `username` must match the target regex in a `type=list` rule.

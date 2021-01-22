@@ -312,7 +312,16 @@ fn main() {
                 std::process::exit(1);
             }
 
-            Command::new(editor.as_str()).arg(&edit_file).exec();
+            let args: Vec<&str> = editor.as_str().split(' ').collect();
+            if args.len() == 1 {
+                Command::new(editor.as_str()).arg(&edit_file).exec();
+            } else {
+                Command::new(&args[0])
+                    .args(&args[1..])
+                    .arg(&edit_file)
+                    .exec();
+            }
+            println!("Could not execute {}", editor.as_str());
             std::process::exit(1);
         }
         Err(_) => println!("Fork failed"),
