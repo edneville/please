@@ -2,9 +2,9 @@
 title: please.ini
 section: 5
 header: User Manual
-footer: please 0.3.20
+footer: please 0.3.21
 author: Ed Neville (ed-please@s5h.net)
-date: 23 January 2021
+date: 27 January 2021
 ---
 
 # NAME
@@ -13,15 +13,15 @@ please.ini - configuration file for access
 
 # DESCRIPTION
 
-The `please.ini` file contains the ACL for users of the `please` and `pleaseedit` programs.
+The **please.ini** file contains one or more **[sections]** that hold ACL for users of the **please** and **pleaseedit** programs.
 
 All rules in `please.ini` will permit or deny based on command regex matches.
 
-`please.ini` is an ini file, and as such it makes sense to label the sections with a good short description of what the section provides. You may then find this helpful when listing rights with `please -l`.
+`please.ini` is an ini file, and as such it makes sense to label the sections with a good short description of what the section provides. You may then find this helpful when listing rights with **please -l**.
 
-Rules are read and applied in the order they are presented in the configuration file. So if the user is permitted to run a command early in the file, but later a deny is matches against `.*`, then the user will not be permitted to run any command.
+Rules are read and applied in the order they are presented in the configuration file. If the user matches a permit rule to run a command in an early section, but in a later section matches a deny regex for `.*`, then the user will not be permitted to run any command. The last match wins.
 
-The properties in ini permitted are described below.
+The properties in ini permitted are described below and should appear at most once per section. If a property is used more than once in a section, the last one will be used.
 
 # SECTION OPTIONS
 
@@ -66,12 +66,12 @@ The properties in ini permitted are described below.
 **dir=[regex]**
 : permitted regex for switchable directories, defaults to any
 
-`regex` is a regular expression, `%{USER}` will expand to the user who is currently running `please`. This enables a single rule for a group to modify/run something that matches their name.
+`regex` is a regular expression, **%{USER}** will expand to the user who is currently running `please`. This enables a single rule for a group to modify/run something that matches their name.
 
 # ACTIONS
 
 **exitcmd=[program]**
-: run program after editor exits, if exit is zero, continue with file replacement. %{NEW} and %{OLD} placeholders expand to new and old edit files
+: run program after editor exits, if exit is zero, continue with file replacement. **%{NEW}** and **%{OLD}** placeholders expand to new and old edit files
 
 **permit=[true|false]**
 : permit or disallow the entry, defaults to true
@@ -123,7 +123,29 @@ regex=^/etc/hosts$
 
 Naming sections should help later when listing permissions.
 
-`regex` can include repetitions. To permit running `wc` to count the lines in the log files in `/var/log` you can use the following:
+Below, user **mandy** may run **du** without needing a password, but must enter a password for **bash**:
+
+```
+[mandy_du]
+name = mandy
+regex = ^(/usr)?/bin/du\s+.*$
+require_pass = false
+
+[mandy_some]
+name = mandy
+regex = ^(/usr)?/bin/bash$
+require_pass = true
+```
+
+`regex` can include repetitions. To permit running `wc` to count the lines in the log files (we don't know how many there are) in `/var/log`. This sort of regex will allow multiple instances of a `()` group with `+`, which is used to define the character class `[a-zA-Z0-9-]+`, the numeric class `\d+` and the group near the end of the line. In other words, multiple instances of files in /var/log that may end in common log rotate forms `-YYYYMMDD` or `.N`.
+
+This will permit commands such as the following, note how for efficiency find will combine arguments with `\+` into fewer invocations. `xargs` could have been used in place of `find`.
+
+```
+$ find /var/log -type f -exec please /usr/bin/wc {} \+
+```
+
+Here is a sample for the above scenario:
 
 ```
 [user_ed_root]
@@ -131,14 +153,6 @@ name=ed
 target=root
 permit=true
 regex=^/usr/bin/wc (/var/log/[a-zA-Z0-9-]+(\.\d+)?(\s)?)+$
-```
-
-This sort of regex will allow multiple instances of a `()` group with `+`, which is used to define the character class `[a-zA-Z0-9-]+`, the numeric class `\d+` and the group near the end of the line. In other words, multiple instances of files in /var/log that may end in common log rotate forms `-YYYYMMDD` or `.N`.
-
-This will permit commands such as the following, note how for efficiency find will combine arguments with `\+` into fewer invocations. `xargs` could have been used in place of `find`.
-
-```
-$ find /var/log -type f -exec please /usr/bin/wc {} \+
 ```
 
 User `ed` may only start or stop a docker container:
@@ -186,7 +200,7 @@ target=^%{USER}$
 
 When the user completes their edit, and the editor exits cleanly, if `exitcmd` is included then the program will run. If the program also exits cleanly then the temporary edit will be copied to the destination.
 
-%{OLD} and %{NEW} will expand to the old (existing source) file and edit candidate, respectively. To verify a file edit, `ben`'s entry to check `/etc/hosts` after clean exit could look like this:
+**%{OLD}** and **%{NEW}** will expand to the old (existing source) file and edit candidate, respectively. To verify a file edit, **ben**'s entry to check `/etc/hosts` after clean exit could look like this:
 
 ```
 [ben_ops]
@@ -199,7 +213,7 @@ exitcmd=/usr/local/bin/check_hosts %{OLD} %{NEW}
 
 `/usr/local/bin/check_hosts` would take two arguments, the original file as the first argument and the modify candidate as the second argument. If `check_hosts` terminates zero, then the edit is considered clean and the original file is replaced with the candidate. Otherwise the edit file is not copied and is left, `pleaseedit` will exit with the return value from `check_hosts`.
 
-A common `exitcmd` is to check the validity of `please.ini`, shown below. This permits members of the `admin` group to edit `/etc/please.ini` if they provide a reason (`-r`). Upon clean exit from the editor the tmp file will be syntax checked.
+A common `exitcmd` is to check the validity of `please.ini`, shown below. This permits members of the `admin` group to edit `/etc/please.ini` if they provide a reason (**-r**). Upon clean exit from the editor the tmp file will be syntax checked.
 
 ```
 [please_ini]
@@ -250,7 +264,7 @@ datematch = ^Thu\s+1\s+Oct\s+22:00:00\s+UTC\s+2020
 
 # REASONS
 
-When `true`, require a reason before permitting edits or execution with the `-r` option. Some organisations may prefer a reason to be logged when a command is executed. This can be helpful for some situations where something such as `mkfs` or `useradd` might be preferable to be logged against a ticket.
+When `true`, require a reason before permitting edits or execution with the **-r** option. Some organisations may prefer a reason to be logged when a command is executed. This can be helpful for some situations where something such as `mkfs` or `useradd` might be preferable to be logged against a ticket.
 
 ```
 [l2_user_admin]
@@ -264,7 +278,7 @@ regex = ^/usr/sbin/useradd\s+-m\s+\w+$
 
 # LAST
 
-To stop processing at a match, `last=true` can be applied:
+To stop processing at a match, **last=true** can be applied:
 
 ```
 [mkfs]

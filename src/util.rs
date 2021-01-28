@@ -143,14 +143,23 @@ pub enum ACLTYPE {
     EDIT,
 }
 
-pub fn regex_build(v: &str, user: &str, config_path: &str, section: &str) -> Option<Regex> {
+pub fn regex_build(
+    v: &str,
+    user: &str,
+    config_path: &str,
+    section: &str,
+    line: Option<i32>,
+) -> Option<Regex> {
     let rule = Regex::new(&format!("^{}$", &v.replace("%{USER}", &user)));
     if rule.is_err() {
         println!(
-            "Error parsing {}:{}, {}",
+            "Error parsing {}{}",
             config_path,
-            section,
-            v.to_string()
+            if line.is_some() {
+                format!(": {}:{}", section, line.unwrap())
+            } else {
+                "".to_string()
+            }
         );
         return None;
     }
@@ -183,8 +192,10 @@ pub fn read_ini(
     let mut section = String::from("no section defined");
     let mut in_section = false;
     let mut opt = EnvOptions::new();
+    let mut line_number = 0;
 
     for l in conf.split('\n') {
+        line_number += 1;
         let line = l.trim();
 
         if line == "" || line.starts_with('#') {
@@ -212,7 +223,7 @@ pub fn read_ini(
         let value = line[equals_pos.unwrap() + 1..].trim();
 
         if !in_section {
-            println!("Error parsing {}:{}", config_path, line);
+            println!("Error parsing {}:{}", config_path, line_number);
             faulty = true;
             continue;
         }
@@ -224,7 +235,7 @@ pub fn read_ini(
                     return true;
                 }
                 if read_ini_config_file(&value, vec_eo, &user, fail_error) {
-                    println!("Couldn't read {}", value);
+                    println!("Could not include file");
                     return true;
                 }
                 continue;
@@ -250,7 +261,7 @@ pub fn read_ini(
                                 continue;
                             }
                             if read_ini_config_file(&incf, vec_eo, &user, fail_error) {
-                                println!("Could not read {}", value);
+                                println!("Could not include file");
                                 return true;
                             }
                         }
@@ -262,20 +273,26 @@ pub fn read_ini(
             "name" => {
                 opt.name = value.to_string();
                 opt.configured = true;
-                if fail_error && regex_build(value, user, config_path, &section).is_none() {
+                if fail_error
+                    && regex_build(value, user, config_path, &section, Some(line_number)).is_none()
+                {
                     faulty = true;
                 }
             }
             "hostname" => {
                 opt.hostname = Some(value.to_string());
                 opt.configured = true;
-                if fail_error && regex_build(value, user, config_path, &section).is_none() {
+                if fail_error
+                    && regex_build(value, user, config_path, &section, Some(line_number)).is_none()
+                {
                     faulty = true;
                 }
             }
             "target" => {
                 opt.target = value.to_string();
-                if fail_error && regex_build(value, user, config_path, &section).is_none() {
+                if fail_error
+                    && regex_build(value, user, config_path, &section, Some(line_number)).is_none()
+                {
                     faulty = true;
                 }
             }
@@ -289,7 +306,9 @@ pub fn read_ini(
             "group" => opt.group = value == "true",
             "regex" | "rule" => {
                 opt.rule = value.to_string();
-                if fail_error && regex_build(value, user, config_path, &section).is_none() {
+                if fail_error
+                    && regex_build(value, user, config_path, &section, Some(line_number)).is_none()
+                {
                     faulty = true;
                 }
             }
@@ -317,13 +336,17 @@ pub fn read_ini(
             }
             "datematch" => {
                 opt.datematch = Some(value.to_string());
-                if fail_error && regex_build(value, user, config_path, &section).is_none() {
+                if fail_error
+                    && regex_build(value, user, config_path, &section, Some(line_number)).is_none()
+                {
                     faulty = true;
                 }
             }
             "dir" => {
                 opt.dir = Some(value.to_string());
-                if fail_error && regex_build(value, user, config_path, &section).is_none() {
+                if fail_error
+                    && regex_build(value, user, config_path, &section, Some(line_number)).is_none()
+                {
                     faulty = true;
                 }
             }
@@ -349,7 +372,7 @@ pub fn read_ini(
             "last" => opt.last = value == "true",
             "syslog" => opt.syslog = value == "true",
             &_ => {
-                println!("{}: unknown attribute \"{}\": {}", config_path, key, value);
+                println!("Error parsing {}:{}", config_path, line_number);
                 faulty = true;
             }
         }
@@ -395,13 +418,14 @@ pub fn read_ini_config_str(
     read_ini(&config, vec_eo, &user, fail_error, "static")
 }
 
-pub fn hostname_ok(item: &EnvOptions, ro: &RunOptions) -> bool {
+pub fn hostname_ok(item: &EnvOptions, ro: &RunOptions, line: Option<i32>) -> bool {
     if item.hostname.is_some() {
         let hostname_re = match regex_build(
             &item.hostname.as_ref().unwrap(),
             &ro.name,
             &item.file_name,
             &item.section,
+            line,
         ) {
             Some(check) => check,
             None => {
@@ -421,13 +445,14 @@ pub fn hostname_ok(item: &EnvOptions, ro: &RunOptions) -> bool {
     true
 }
 
-pub fn directory_check_ok(item: &EnvOptions, ro: &RunOptions) -> bool {
+pub fn directory_check_ok(item: &EnvOptions, ro: &RunOptions, line: Option<i32>) -> bool {
     if item.dir.is_some() {
         let dir_re = match regex_build(
             &item.dir.as_ref().unwrap(),
             &ro.name,
             &item.file_name,
             &item.section,
+            line,
         ) {
             Some(check) => check,
             None => {
@@ -444,7 +469,7 @@ pub fn directory_check_ok(item: &EnvOptions, ro: &RunOptions) -> bool {
     true
 }
 
-pub fn permitted_dates_ok(item: &EnvOptions, ro: &RunOptions) -> bool {
+pub fn permitted_dates_ok(item: &EnvOptions, ro: &RunOptions, line: Option<i32>) -> bool {
     if item.notbefore.is_some() && item.notbefore.unwrap() > ro.date {
         // println!("{}: now is before date", item.section);
         return false;
@@ -461,6 +486,7 @@ pub fn permitted_dates_ok(item: &EnvOptions, ro: &RunOptions) -> bool {
             &ro.name,
             &item.file_name,
             &item.section,
+            line,
         ) {
             Some(check) => check,
             None => {
@@ -488,11 +514,12 @@ pub fn can(vec_eo: &[EnvOptions], ro: &RunOptions) -> Result<EnvOptions, ()> {
             continue;
         }
 
-        if !permitted_dates_ok(&item, &ro) {
+        if !permitted_dates_ok(&item, &ro, None) {
             continue;
         }
 
-        let name_re = match regex_build(&item.name, &ro.name, &item.file_name, &item.section) {
+        let name_re = match regex_build(&item.name, &ro.name, &item.file_name, &item.section, None)
+        {
             Some(check) => check,
             None => {
                 println!("Could not compile {}", &item.name);
@@ -520,21 +547,22 @@ pub fn can(vec_eo: &[EnvOptions], ro: &RunOptions) -> Result<EnvOptions, ()> {
             }
         }
 
-        if !hostname_ok(&item, &ro) {
+        if !hostname_ok(&item, &ro, None) {
             continue;
         }
 
-        if !directory_check_ok(&item, &ro) {
+        if !directory_check_ok(&item, &ro, None) {
             continue;
         }
 
-        let target_re = match regex_build(&item.target, &ro.name, &item.file_name, &item.section) {
-            Some(check) => check,
-            None => {
-                println!("Could not compile {}", &item.name);
-                continue;
-            }
-        };
+        let target_re =
+            match regex_build(&item.target, &ro.name, &item.file_name, &item.section, None) {
+                Some(check) => check,
+                None => {
+                    println!("Could not compile {}", &item.name);
+                    continue;
+                }
+            };
 
         if item.acl_type == ACLTYPE::LIST {
             if target_re.is_match(&ro.target) {
@@ -548,13 +576,14 @@ pub fn can(vec_eo: &[EnvOptions], ro: &RunOptions) -> Result<EnvOptions, ()> {
                 continue;
             }
 
-            let rule_re = match regex_build(&item.rule, &ro.name, &item.file_name, &item.section) {
-                Some(check) => check,
-                None => {
-                    println!("Could not compile {}", &item.name);
-                    continue;
-                }
-            };
+            let rule_re =
+                match regex_build(&item.rule, &ro.name, &item.file_name, &item.section, None) {
+                    Some(check) => check,
+                    None => {
+                        println!("Could not compile {}", &item.name);
+                        continue;
+                    }
+                };
 
             if rule_re.is_match(&ro.command) {
                 // println!("{}: item rule is match", item.section);
@@ -637,7 +666,8 @@ pub fn list(vec_eo: &[EnvOptions], ro: &RunOptions) {
     let mut last_file = "";
 
     for item in vec_eo {
-        let name_re = match regex_build(&item.name, &ro.name, &item.file_name, &item.section) {
+        let name_re = match regex_build(&item.name, &ro.name, &item.file_name, &item.section, None)
+        {
             Some(check) => check,
             None => {
                 println!("Could not compile {}", &item.name);
@@ -683,7 +713,7 @@ pub fn list(vec_eo: &[EnvOptions], ro: &RunOptions) {
             prefixes.push(String::from("not permitted"));
         }
 
-        if !hostname_ok(&item, &ro) {
+        if !hostname_ok(&item, &ro, None) {
             continue;
         }
 
@@ -735,16 +765,14 @@ pub fn search_path(binary: &str) -> Option<String> {
         }
     }
 
-    if let Ok(path) = env::var("PATH") {
-        for dir in path.split(':') {
-            let path_name = format!("{}/{}", &dir, &binary.to_string());
-            let p = Path::new(&path_name);
+    for dir in "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin".split(':') {
+        let path_name = format!("{}/{}", &dir, &binary.to_string());
+        let p = Path::new(&path_name);
 
-            if !p.exists() {
-                continue;
-            }
-            return Some(path_name);
+        if !p.exists() {
+            continue;
         }
+        return Some(path_name);
     }
 
     None
@@ -1876,7 +1904,8 @@ reason=true
 
     #[test]
     fn test_regex_build_user_expansion() {
-        let regex_re = regex_build("/var/www/html/%{USER}/page.html", "ed", "/", "none").unwrap();
+        let regex_re =
+            regex_build("/var/www/html/%{USER}/page.html", "ed", "/", "none", None).unwrap();
 
         assert_eq!(regex_re.as_str(), "^/var/www/html/ed/page.html$");
     }

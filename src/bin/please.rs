@@ -69,7 +69,11 @@ fn do_list(ro: &mut RunOptions, vec_eo: &[EnvOptions], service: &str) {
         log_action(&service, "deny", &ro, &ro.command);
         println!(
             "You may not view {} command list",
-            if ro.target == "" { "your" } else { &dest }
+            if ro.target == "" || ro.target == ro.name {
+                "your"
+            } else {
+                &dest
+            }
         );
     }
 }
