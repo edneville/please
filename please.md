@@ -3,7 +3,7 @@ title: please
 section: 1
 header: User Manual
 footer: please 0.3.21
-author: ed neville (ed-please@s5h.net)
+author: Ed Neville (ed-please@s5h.net)
 date: 27 January 2021
 ---
 
@@ -22,6 +22,8 @@ please - a tool for access elevation.
 **please [-h/\--help]**
 
 **please [-t/\--target] backup tar -cvf - /home/data | ...**
+
+**please [-u/\--user] backup tar -cvf - /home/data | ...**
 
 **pleaseedit /etc/fstab**
 
@@ -53,20 +55,29 @@ The aim is to allow admins to delegate accurate least privilege access with ease
 `-d`/`--dir`
 : will change the directory prior to executing the command in that location.
 
+`-h`/`--help`
+: print help and exit.
+
 `-l`/`--list`
 : to list rules.
 
 `-n`/`--noprompt`
 : will not prompt for authentication and exits with a status of 1.
 
-`-r`/`--reason` `[reason]`
-: will add `reason` to the system log.
-
 `-p`/`--purge`
 : will purge your current authentication token for the running user.
 
+`-r`/`--reason` `[reason]`
+: will add `reason` to the system log.
+
 `-t`/`--target` `[user]`
 : to execute command as target user.
+
+`-u`/`--user` `[user]`
+: to execute command as target user.
+
+`-v`/`--version`
+: print version and exit.
 
 `-w`/`--warm`
 : will warm an authentication token and exit.

@@ -11,23 +11,20 @@ The \f[B]please.ini\f[] file contains one or more \f[B][sections]\f[]
 that hold ACL for users of the \f[B]please\f[] and \f[B]pleaseedit\f[]
 programs.
 .PP
-All rules in \f[C]please.ini\f[] will permit or deny based on command
-regex matches.
-.PP
-\f[C]please.ini\f[] is an ini file, and as such it makes sense to label
-the sections with a good short description of what the section provides.
+\f[C]please.ini\f[] is an ini file, sections can be named with a short
+description of what the section provides.
 You may then find this helpful when listing rights with \f[B]please
 \-l\f[].
 .PP
 Rules are read and applied in the order they are presented in the
 configuration file.
 If the user matches a permit rule to run a command in an early section,
-but in a later section matches a deny regex for \f[C]\&.*\f[], then the
+but in a later section matches a deny regex for \f[B].*\f[], then the
 user will not be permitted to run any command.
 The last match wins.
 .PP
-The properties in ini permitted are described below and should appear at
-most once per section.
+The properties permitted are described below and should appear at most
+once per section.
 If a property is used more than once in a section, the last one will be
 used.
 .SH SECTION OPTIONS
@@ -100,19 +97,18 @@ permitted regex for switchable directories, defaults to any
 .RS
 .RE
 .PP
-\f[C]regex\f[] is a regular expression, \f[B]%{USER}\f[] will expand to
+\f[B]regex\f[] is a regular expression, \f[B]%{USER}\f[] will expand to
 the user who is currently running \f[C]please\f[].
 This enables a single rule for a group to modify/run something that
 matches their name.
+.PP
+Spaces within arguments will be substituted as \f[B]`\\\ '\f[]
+(backslash space).
+Use \f[B]^/bin/echo hello\\\\ world$\f[] to match \f[B]/bin/echo
+\[lq]hello world\[rq]\f[], note that \f[B]\\\f[] is a regex escape
+character so it must be escaped, therefore matching a space becomes
+\f[B]`\\\\\ '\f[] (backslash backslash space).
 .SH ACTIONS
-.TP
-.B \f[B]exitcmd=[program]\f[]
-run program after editor exits, if exit is zero, continue with file
-replacement.
-\f[B]%{NEW}\f[] and \f[B]%{OLD}\f[] placeholders expand to new and old
-edit files
-.RS
-.RE
 .TP
 .B \f[B]permit=[true|false]\f[]
 permit or disallow the entry, defaults to true
@@ -121,11 +117,6 @@ permit or disallow the entry, defaults to true
 .TP
 .B \f[B]require_pass=[true|false]\f[]
 if entry matches, require a password, defaults to true
-.RS
-.RE
-.TP
-.B \f[B]editmode=[octal mode]\f[]
-set the file mode bits on replacement file to octal mode
 .RS
 .RE
 .TP
@@ -143,11 +134,24 @@ if true, stop processing when entry is matched, defaults to false
 log this activity to syslog, defaults to true
 .RS
 .RE
+.TP
+.B \f[B]editmode=[octal mode]\f[]
+(\f[B]type=edit\f[]) set the file mode bits on replacement file to octal
+mode, defaults to 0600
+.RS
+.RE
+.TP
+.B \f[B]exitcmd=[program]\f[]
+(\f[B]type=edit\f[]) run program after editor exits as the root user, if
+exit is zero, continue with file replacement.
+\f[B]%{NEW}\f[] and \f[B]%{OLD}\f[] placeholders expand to new and old
+edit files
+.RS
+.RE
 .SH EXAMPLES
 .PP
-To allow all commands, you can use a greedy match (\f[C]^.*$\f[]).
-You should probably reduce this to the set of acceptable commands
-though.
+To allow all commands, you can use a greedy match (\f[B]^.*$\f[]).
+You should reduce this to the set of acceptable commands though.
 .IP
 .nf
 \f[C]
@@ -159,8 +163,8 @@ regex=^.*$
 .fi
 .PP
 If you wish to permit a user to view another's command set, then you may
-do this using \f[C]type=list\f[] (\f[C]run\f[] by default).
-To list another user, they must match the \f[C]target\f[] regex.
+do this using \f[B]type=list\f[] (\f[B]run\f[] by default).
+To list another user, they must match the \f[B]target\f[] regex.
 .IP
 .nf
 \f[C]
@@ -171,8 +175,8 @@ target=root
 \f[]
 .fi
 .PP
-\f[C]type\f[] may also be \f[C]edit\f[] if you wish to permit a file
-edit with \f[C]pleaseedit\f[].
+\f[B]type\f[] may also be \f[B]edit\f[] if you wish to permit a file
+edit with \f[B]pleaseedit\f[].
 .IP
 .nf
 \f[C]
@@ -195,7 +199,6 @@ password, but must enter a password for \f[B]bash\f[]:
 name\ =\ mandy
 regex\ =\ ^(/usr)?/bin/du\\s+.*$
 require_pass\ =\ false
-
 [mandy_some]
 name\ =\ mandy
 regex\ =\ ^(/usr)?/bin/bash$
@@ -203,19 +206,19 @@ require_pass\ =\ true
 \f[]
 .fi
 .PP
-\f[C]regex\f[] can include repetitions.
-To permit running \f[C]wc\f[] to count the lines in the log files (we
-don't know how many there are) in \f[C]/var/log\f[].
-This sort of regex will allow multiple instances of a \f[C]()\f[] group
-with \f[C]+\f[], which is used to define the character class
-\f[C][a\-zA\-Z0\-9\-]+\f[], the numeric class \f[C]\\d+\f[] and the
-group near the end of the line.
-In other words, multiple instances of files in /var/log that may end in
-common log rotate forms \f[C]\-YYYYMMDD\f[] or \f[C]\&.N\f[].
+\f[B]regex\f[] can include repetitions.
+To permit running \f[B]wc\f[] to count the lines in the log files (we
+don't know how many there are) in \f[B]/var/log\f[].
+This sort of regex will allow multiple instances of a \f[B]()\f[] group
+with \f[B]+\f[], which is used to define the character class
+\f[B][a\-zA\-Z0\-9\-]+\f[], the numeric class \f[B]+\f[] and the group
+near the end of the line.
+In other words, multiple instances of files in \f[B]/var/log\f[] that
+may end in common log rotate forms \f[B]\-YYYYMMDD\f[] or \f[B].N\f[].
 .PP
 This will permit commands such as the following, note how for efficiency
-find will combine arguments with \f[C]\\+\f[] into fewer invocations.
-\f[C]xargs\f[] could have been used in place of \f[C]find\f[].
+find will combine arguments with \f[B]+\f[] into fewer invocations.
+\f[B]xargs\f[] could have been used in place of \f[B]find\f[].
 .IP
 .nf
 \f[C]
@@ -235,7 +238,7 @@ regex=^/usr/bin/wc\ (/var/log/[a\-zA\-Z0\-9\-]+(\\.\\d+)?(\\s)?)+$
 \f[]
 .fi
 .PP
-User \f[C]ed\f[] may only start or stop a docker container:
+User ed may only start or stop a docker container:
 .IP
 .nf
 \f[C]
@@ -247,7 +250,7 @@ regex=^/usr/bin/docker\ (start|stop)\ \\S+
 \f[]
 .fi
 .PP
-User \f[C]ben\f[] may only edit \f[C]/etc/fstab\f[]:
+User ben may only edit \f[B]/etc/fstab\f[]:
 .IP
 .nf
 \f[C]
@@ -260,8 +263,8 @@ regex=^/etc/fstab$
 \f[]
 .fi
 .PP
-User \f[C]ben\f[] may list only users \f[C]eng\f[], \f[C]net\f[] and
-\f[C]dba\f[] operators:
+User ben may list only users \f[B]eng\f[], \f[B]net\f[] and
+\f[B]dba\f[]:
 .IP
 .nf
 \f[C]
@@ -289,13 +292,13 @@ target=^%{USER}$
 .SH EXITCMD
 .PP
 When the user completes their edit, and the editor exits cleanly, if
-\f[C]exitcmd\f[] is included then the program will run.
+\f[B]exitcmd\f[] is included then the program will run as root.
 If the program also exits cleanly then the temporary edit will be copied
 to the destination.
 .PP
 \f[B]%{OLD}\f[] and \f[B]%{NEW}\f[] will expand to the old (existing
 source) file and edit candidate, respectively.
-To verify a file edit, \f[B]ben\f[]'s entry to check \f[C]/etc/hosts\f[]
+To verify a file edit, \f[B]ben\f[]'s entry to check \f[B]/etc/hosts\f[]
 after clean exit could look like this:
 .IP
 .nf
@@ -309,18 +312,18 @@ exitcmd=/usr/local/bin/check_hosts\ %{OLD}\ %{NEW}
 \f[]
 .fi
 .PP
-\f[C]/usr/local/bin/check_hosts\f[] would take two arguments, the
+\f[B]/usr/local/bin/check_hosts\f[] would take two arguments, the
 original file as the first argument and the modify candidate as the
 second argument.
-If \f[C]check_hosts\f[] terminates zero, then the edit is considered
+If \f[B]check_hosts\f[] terminates zero, then the edit is considered
 clean and the original file is replaced with the candidate.
-Otherwise the edit file is not copied and is left, \f[C]pleaseedit\f[]
-will exit with the return value from \f[C]check_hosts\f[].
+Otherwise the edit file is not copied and is left, \f[B]pleaseedit\f[]
+will exit with the return value from \f[B]check_hosts\f[].
 .PP
-A common \f[C]exitcmd\f[] is to check the validity of
-\f[C]please.ini\f[], shown below.
-This permits members of the \f[C]admin\f[] group to edit
-\f[C]/etc/please.ini\f[] if they provide a reason (\f[B]\-r\f[]).
+A common \f[B]exitcmd\f[] is to check the validity of
+\f[B]please.ini\f[], shown below.
+This permits members of the \f[B]admin\f[] group to edit
+\f[B]/etc/please.ini\f[] if they provide a reason (\f[B]\-r\f[]).
 Upon clean exit from the editor the tmp file will be syntax checked.
 .IP
 .nf
@@ -339,17 +342,17 @@ exitcmd\ =\ /usr/bin/please\ \-c\ %{NEW}
 .PP
 For large environments it is not unusual for a third party to require
 access during a short time frame for debugging.
-To accommodate this there are the \f[C]notbefore\f[] and
-\f[C]notafter\f[] time brackets.
-These can be either \f[C]YYYYmmdd\f[] or \f[C]YYYYMMDDHHMMSS\f[].
+To accommodate this there are the \f[B]notbefore\f[] and
+\f[B]notafter\f[] time brackets.
+These can be either \f[B]YYYYmmdd\f[] or \f[B]YYYYMMDDHHMMSS\f[].
 .PP
 The whole day is considered when using the shorter date form of
-\f[C]YYYYMMDD\f[].
+\f[B]YYYYMMDD\f[].
 .PP
 Many enterprises may wish to permit access to a user for a limited time
 only, even if that individual is in the role permanently.
 .PP
-User joker can do what they want as root on \f[C]1st\ April\ 2021\f[]:
+User joker can do what they want as root on 1st April 2021:
 .IP
 .nf
 \f[C]
@@ -364,12 +367,15 @@ regex=^/bin/bash
 .fi
 .SH DATEMATCHES
 .PP
-Another date type is the \f[C]datematch\f[] item, this constrains
-sections to a regex match against the date string
-\f[C]Day\ dd\ mon\ HH:MM:SS\ UTC\ Year\f[].
+\f[B]datematch\f[] matches against the date string \f[B]Day dd mon
+HH:MM:SS UTC Year\f[].
+This enables calendar style date matches.
 .PP
-You can permit some a group of users to perform some house keeping on a
-Monday:
+Note that the day of the month (\f[B]dd\f[]) will be padded with spaces
+if less than two characters wide.
+.PP
+You can permit a group of users to run \f[B]/usr/local/housekeeping/\f[]
+scripts every Monday:
 .IP
 .nf
 \f[C]
@@ -379,17 +385,18 @@ group=true
 target=root
 permit=true
 regex\ =\ /usr/local/housekeeping/.*
-datematch\ =\ ^Thu\\s+1\\s+Oct\\s+22:00:00\\s+UTC\\s+2020
+datematch\ =\ ^Mon\\s+.*
 \f[]
 .fi
 .SH REASONS
 .PP
-When \f[C]true\f[], require a reason before permitting edits or
-execution with the \f[B]\-r\f[] option.
+When \f[B]reason=true\f[], require a reason before permitting edits or
+execution with the \f[B]\-r\f[] options to \f[B]please\f[] and
+\f[B]pleaseedit\f[].
 Some organisations may prefer a reason to be logged when a command is
 executed.
 This can be helpful for some situations where something such as
-\f[C]mkfs\f[] or \f[C]useradd\f[] might be preferable to be logged
+\f[B]mkfs\f[] or \f[B]useradd\f[] might be preferable to be logged
 against a ticket.
 .IP
 .nf
@@ -405,7 +412,7 @@ regex\ =\ ^/usr/sbin/useradd\\s+\-m\\s+\\w+$
 .fi
 .SH LAST
 .PP
-To stop processing at a match, \f[B]last=true\f[] can be applied:
+\f[B]last=true\f[] stops processing at a match:
 .IP
 .nf
 \f[C]
@@ -421,9 +428,26 @@ last=true
 .fi
 .PP
 For simplicity, there is no need to process other configured rules if
-certain that the \f[C]l2users\f[] group are safe to execute this.
-\f[C]last\f[] should only be used in situations where there will never
+certain that the \f[B]l2users\f[] group are safe to execute this.
+\f[B]last\f[] should only be used in situations where there will never
 be something that could contradict the match later.
+.SH SYSLOG
+.PP
+By default entries are logged to syslog.
+If you do not wish an entry to go logged then specify
+\f[B]syslog=false\f[].
+Use this only if you are happy with commands going unlogged, simialr to
+if policy would permit the user to switch to the target account.
+.IP
+.nf
+\f[C]
+[maverick]
+syslog\ =\ false
+name\ =\ ed
+regex\ =\ /usr/bin/.*
+reason\ =\ false
+\f[]
+.fi
 .SH FILES
 .PP
 /etc/please.ini

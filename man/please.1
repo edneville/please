@@ -17,6 +17,8 @@ please \- a tool for access elevation.
 .PP
 \f[B]please [\-t/\-\-target] backup tar \-cvf \- /home/data | \&...\f[]
 .PP
+\f[B]please [\-u/\-\-user] backup tar \-cvf \- /home/data | \&...\f[]
+.PP
 \f[B]pleaseedit /etc/fstab\f[]
 .PP
 \f[B]pleaseedit [\-r/\-\-reason "new fs"] /etc/fstab\f[]
@@ -60,6 +62,11 @@ location.
 .RS
 .RE
 .TP
+.B \f[C]\-h\f[]/\f[C]\-\-help\f[]
+print help and exit.
+.RS
+.RE
+.TP
 .B \f[C]\-l\f[]/\f[C]\-\-list\f[]
 to list rules.
 .RS
@@ -70,18 +77,28 @@ will not prompt for authentication and exits with a status of 1.
 .RS
 .RE
 .TP
-.B \f[C]\-r\f[]/\f[C]\-\-reason\f[] \f[C][reason]\f[]
-will add \f[C]reason\f[] to the system log.
-.RS
-.RE
-.TP
 .B \f[C]\-p\f[]/\f[C]\-\-purge\f[]
 will purge your current authentication token for the running user.
 .RS
 .RE
 .TP
+.B \f[C]\-r\f[]/\f[C]\-\-reason\f[] \f[C][reason]\f[]
+will add \f[C]reason\f[] to the system log.
+.RS
+.RE
+.TP
 .B \f[C]\-t\f[]/\f[C]\-\-target\f[] \f[C][user]\f[]
 to execute command as target user.
+.RS
+.RE
+.TP
+.B \f[C]\-u\f[]/\f[C]\-\-user\f[] \f[C][user]\f[]
+to execute command as target user.
+.RS
+.RE
+.TP
+.B \f[C]\-v\f[]/\f[C]\-\-version\f[]
+print version and exit.
 .RS
 .RE
 .TP
@@ -128,4 +145,4 @@ please in some way.
 .PP
 please.ini
 .SH AUTHORS
-ed neville (ed\-please\@s5h.net).
+Ed Neville (ed\-please\@s5h.net).

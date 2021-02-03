@@ -25,11 +25,13 @@ use std::time::SystemTime;
 use syslog::{Facility, Formatter3164};
 
 use chrono::{NaiveDate, NaiveDateTime, Utc};
+use std::fmt;
 use std::fs;
 use std::fs::File;
 use std::io::prelude::*;
 use users::*;
 
+use getopts::{Matches, Options};
 use nix::unistd::{initgroups, setgid, setuid};
 
 #[derive(Clone)]
@@ -110,6 +112,10 @@ pub struct RunOptions {
     pub acl_type: ACLTYPE,
     pub reason: Option<String>,
     pub syslog: bool,
+    pub prompt: bool,
+    pub purge_token: bool,
+    pub warm_token: bool,
+    pub new_args: Vec<String>,
 }
 
 impl RunOptions {
@@ -126,6 +132,10 @@ impl RunOptions {
             acl_type: ACLTYPE::RUN,
             reason: None,
             syslog: true,
+            prompt: true,
+            purge_token: false,
+            warm_token: false,
+            new_args: vec![],
         }
     }
 }
@@ -141,6 +151,16 @@ pub enum ACLTYPE {
     RUN,
     LIST,
     EDIT,
+}
+
+impl fmt::Display for ACLTYPE {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            ACLTYPE::RUN => write!(f, "run"),
+            ACLTYPE::LIST => write!(f, "list"),
+            ACLTYPE::EDIT => write!(f, "edit"),
+        }
+    }
 }
 
 pub fn regex_build(
@@ -177,6 +197,70 @@ pub fn can_dir_include(file: &str) -> bool {
     }
 
     false
+}
+
+pub fn print_usage(opts: &Options, header: &str) {
+    println!("usage:");
+    println!("{}", opts.usage(header));
+}
+
+pub fn common_opt_arguments(
+    matches: &Matches,
+    opts: &Options,
+    ro: &mut RunOptions,
+    service: &str,
+    header: &str,
+) {
+    if matches.opt_present("r") {
+        ro.reason = Some(matches.opt_str("r").unwrap());
+    }
+    if matches.opt_present("t") {
+        ro.target = matches.opt_str("t").unwrap();
+    }
+    if matches.opt_present("u") {
+        ro.target = matches.opt_str("u").unwrap();
+    }
+
+    if matches.opt_str("u").is_some()
+        && matches.opt_str("t").is_some()
+        && matches.opt_str("t").unwrap() != matches.opt_str("u").unwrap()
+    {
+        println!("Cannot use -t and -u with conflicting values");
+        print_usage(&opts, &header);
+        std::process::exit(1);
+    }
+
+    if matches.opt_present("p") {
+        ro.purge_token = true;
+    }
+    if matches.opt_present("v") {
+        print_version(&service);
+        std::process::exit(0);
+    }
+    if matches.opt_present("w") {
+        ro.warm_token = true;
+    }
+
+    if matches.opt_present("n") {
+        ro.prompt = false;
+    }
+    if matches.opt_present("h") {
+        print_usage(&opts, &header);
+        print_version(&service);
+        std::process::exit(0);
+    }
+
+    if ro.purge_token {
+        remove_token(&ro.name);
+        std::process::exit(0);
+    }
+
+    if ro.warm_token {
+        if ro.prompt {
+            challenge_password(&ro.name, EnvOptions::new(), &service, ro.prompt);
+        }
+        std::process::exit(0);
+    }
 }
 
 pub fn read_ini(
@@ -623,8 +707,13 @@ pub fn get_editor() -> String {
     editor.to_string()
 }
 
-pub fn challenge_password(user: String, entry: EnvOptions, service: &str, prompt: bool) -> bool {
+pub fn challenge_password(user: &str, entry: EnvOptions, service: &str, prompt: bool) -> bool {
     if entry.require_pass {
+        if tty_name().is_none() {
+            println!("Cannot read password without tty");
+            return false;
+        }
+
         let mut retry_counter = 0;
         if valid_token(&user) {
             update_token(&user);
@@ -794,8 +883,8 @@ pub fn set_privs(user: &str, target_uid: nix::unistd::Uid, target_gid: nix::unis
     true
 }
 
-pub fn tty_name() -> String {
-    let mut ttyname = "failed";
+pub fn tty_name() -> Option<String> {
+    let mut ttyname = None;
 
     /* sometimes a tty isn't attached for all pipes FIXME: make this testable */
     unsafe {
@@ -806,14 +895,18 @@ pub fn tty_name() -> String {
             }
 
             match CStr::from_ptr(ptr).to_str() {
-                Err(_x) => ttyname = "failed",
-                Ok(x) => ttyname = x,
+                Err(_x) => ttyname = None,
+                Ok(x) => ttyname = Some(x.to_string()),
             }
             break;
         }
     }
 
-    ttyname.to_string()
+    ttyname
+}
+
+pub fn escape_log(message: &str) -> String {
+    message.replace("\"", "\\\"")
 }
 
 pub fn log_action(service: &str, result: &str, ro: &RunOptions, command: &str) -> bool {
@@ -836,20 +929,27 @@ pub fn log_action(service: &str, result: &str, ro: &RunOptions, command: &str) -
     match syslog::unix(formatter) {
         Err(e) => println!("Could not connect to syslog: {:?}", e),
         Ok(mut writer) => {
+            let tty_name = tty_name();
+
             writer
                 .err(format!(
-                    "user={} cwd={} tty={} action={} target={} reason={} command={}",
-                    &ro.name,
-                    &cwd,
-                    tty_name(),
+                    "user=\"{}\" cwd=\"{}\" tty=\"{}\" action=\"{}\" target=\"{}\" type=\"{}\" reason=\"{}\" command=\"{}\"",
+                    escape_log( &ro.name ),
+                    escape_log( &cwd ),
+                    if tty_name.is_none() {
+                        "no_tty".to_string()
+                    } else {
+                        tty_name.unwrap()
+                    },
                     result,
-                    &ro.target,
+                    escape_log( &ro.target ),
+                    ro.acl_type,
                     if ro.reason.clone().is_some() {
-                        ro.reason.clone().unwrap()
+                        escape_log( &ro.reason.clone().unwrap() )
                     } else {
                         String::from("")
                     },
-                    command
+                    escape_log( command )
                 ))
                 .expect("could not write error message");
         }
@@ -861,15 +961,17 @@ pub fn token_dir() -> String {
     "/var/run/please/token".to_string()
 }
 
-pub fn token_path(user: &str) -> String {
+pub fn token_path(user: &str) -> Option<String> {
+    let tty_name = tty_name();
+    tty_name.as_ref()?;
     let ppid = nix::unistd::getppid();
-    return format!(
+    Some(format!(
         "{}/{}:{}:{}",
         token_dir(),
         user,
-        tty_name().replace("/", "_"),
+        tty_name.unwrap().replace("/", "_"),
         ppid
-    );
+    ))
 }
 
 pub fn valid_token(user: &str) -> bool {
@@ -877,7 +979,13 @@ pub fn valid_token(user: &str) -> bool {
         return false;
     }
 
-    match fs::metadata(token_path(user)) {
+    let token_path = token_path(user);
+    if token_path.is_none() {
+        return false;
+    }
+
+    let token_path = token_path.unwrap();
+    match fs::metadata(token_path) {
         Ok(meta) => match meta.modified() {
             Ok(t) => match SystemTime::now().duration_since(t) {
                 Ok(d) => {
@@ -899,7 +1007,13 @@ pub fn update_token(user: &str) {
         return;
     }
 
-    match fs::File::create(token_path(&user)) {
+    let token_path = token_path(user);
+    if token_path.is_none() {
+        return;
+    }
+
+    let token_path = token_path.unwrap();
+    match fs::File::create(token_path) {
         Ok(_x) => {}
         Err(x) => println!("Error creating token: {}", x),
     }
@@ -911,6 +1025,12 @@ pub fn remove_token(user: &str) {
     }
 
     let token_location = token_path(&user);
+    if token_location.is_none() {
+        return;
+    }
+
+    let token_location = token_location.unwrap();
+
     let p = Path::new(&token_location);
     if p.is_file() {
         match fs::remove_file(p) {
@@ -927,6 +1047,20 @@ pub fn group_hash(groups: Vec<Group>) -> HashMap<String, u32> {
             .or_insert_with(|| group.gid());
     }
     hm
+}
+
+/// escape ' ' within an argument
+pub fn replace_new_args(new_args: Vec<String>) -> String {
+    let mut args = vec![];
+    for arg in &new_args {
+        args.push(arg.replace(" ", "\\ "));
+    }
+
+    args.join(" ")
+}
+
+pub fn print_version(program: &str) {
+    println!("{} version: {}", &program, env!("CARGO_PKG_VERSION"));
 }
 
 #[cfg(test)]
@@ -2023,6 +2157,26 @@ includedir = /dev/null
         assert_eq!(
             read_ini_config_str(&config, &mut vec_eo, "ed", false),
             false
+        );
+    }
+
+    #[test]
+    fn test_argument_replace() {
+        assert_eq!(
+            replace_new_args(vec![
+                "/bin/bash".to_string(),
+                "-c".to_string(),
+                "/bin/id".to_string(),
+                "you're not the boss of me".to_string()
+            ]),
+            "/bin/bash -c /bin/id you're\\ not\\ the\\ boss\\ of\\ me"
+        );
+    }
+    #[test]
+    fn test_syslog_format() {
+        assert_eq!(
+            escape_log(&"multiple \"strings\""),
+            "multiple \\\"strings\\\"".to_string()
         );
     }
 }

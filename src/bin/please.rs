@@ -16,10 +16,7 @@
 
 //! please.rs a sudo-like clone that implements regex all over the place
 
-use pleaser::util::{
-    can, challenge_password, group_hash, list, log_action, read_ini_config_file, remove_token,
-    search_path, set_privs, EnvOptions, RunOptions, ACLTYPE,
-};
+use pleaser::util::*;
 
 use std::os::unix::process::CommandExt;
 use std::process::Command;
@@ -31,21 +28,6 @@ use nix::unistd::gethostname;
 use users::os::unix::UserExt;
 use users::*;
 
-fn print_usage(program: &str) {
-    println!("usage:");
-    println!("{} [arguments] <path/to/executable>", program);
-    println!(" -c, --check, [file]: check config file");
-    println!(" -d, --dir, [dir]: change to dir before execution");
-    println!(" -h, --help: this message");
-    println!(" -l, --list, <-t users permissions>: list permissions");
-    println!(" -n, --noprompt: rather than prompt for password, exit non-zero");
-    println!(" -p, --purge: purge valid tokens");
-    println!(" -r, --reason, [text]: provide reason for execution");
-    println!(" -t, --target, [user]: become target user");
-    println!(" -w, --warm: warm token cache");
-    println!("version: {}", env!("CARGO_PKG_VERSION"));
-}
-
 fn do_list(ro: &mut RunOptions, vec_eo: &[EnvOptions], service: &str) {
     let name = if ro.target == ro.name || ro.target == "" {
         "You"
@@ -55,6 +37,7 @@ fn do_list(ro: &mut RunOptions, vec_eo: &[EnvOptions], service: &str) {
 
     let can_do = can(&vec_eo, &ro);
     if can_do.is_ok() && can_do.unwrap().permit {
+        log_action(&service, "permit", &ro, &ro.command);
         println!("{} may run the following:", name);
         ro.acl_type = ACLTYPE::RUN;
         list(&vec_eo, &ro);
@@ -128,40 +111,24 @@ fn do_environment(
     std::env::set_var("LOGNAME", &ro.target);
 }
 
-fn main() {
-    let args: Vec<String> = std::env::args().collect();
-    let original_command = args.clone();
-    let program = args[0].clone();
-    let service = String::from("please");
-    let mut ro = RunOptions::new();
-    let mut prompt = true;
-    let mut purge_token = false;
-    let mut warm_token = false;
-    let original_uid = get_current_uid();
-    let original_user = get_user_by_uid(original_uid).unwrap();
-    ro.name = original_user.name().to_string_lossy().to_string();
-    ro.syslog = true;
-    let mut vec_eo: Vec<EnvOptions> = vec![];
-
-    if !set_privs(
-        "root",
-        nix::unistd::Uid::from_raw(0),
-        nix::unistd::Gid::from_raw(0),
-    ) {
-        println!("I cannot set privs. Exiting as not installed correctly.");
-        std::process::exit(1);
-    }
-
+fn general_options(
+    mut ro: &mut RunOptions,
+    args: Vec<String>,
+    service: &str,
+    mut vec_eo: &mut Vec<EnvOptions>,
+) {
     let mut opts = Options::new();
     opts.parsing_style(getopts::ParsingStyle::StopAtFirstFree);
-    opts.optopt("c", "check", "check config file", "CHECK");
+    opts.optopt("c", "check", "check config file", "FILE");
     opts.optopt("d", "dir", "change to directory prior to execution", "DIR");
     opts.optflag("h", "help", "print usage help");
-    opts.optflag("l", "list", "list effective rules");
+    opts.optflag("l", "list", "list effective rules, can combine with -t/-u");
     opts.optflag("n", "noprompt", "do nothing if a password is required");
     opts.optflag("p", "purge", "purge access token");
-    opts.optopt("r", "reason", "reason for execution", "REASON");
-    opts.optopt("t", "target", "target user", "TARGET");
+    opts.optopt("r", "reason", "provide reason for execution", "REASON");
+    opts.optopt("t", "target", "become target user", "USER");
+    opts.optopt("u", "user", "become target user", "USER");
+    opts.optflag("v", "version", "print version and exit");
     opts.optflag("w", "warm", "warm access token and exit");
 
     let matches = match opts.parse(&args[1..]) {
@@ -171,11 +138,6 @@ fn main() {
             std::process::exit(1);
         }
     };
-
-    if matches.opt_present("h") {
-        print_usage(&program);
-        return;
-    }
 
     if matches.opt_present("c") {
         std::process::exit(read_ini_config_file(
@@ -192,37 +154,43 @@ fn main() {
     if matches.opt_present("l") {
         ro.acl_type = ACLTYPE::LIST;
     }
-    if matches.opt_present("r") {
-        ro.reason = Some(matches.opt_str("r").unwrap());
+
+    let header = format!("{} [arguments] </path/to/executable>", &service);
+    common_opt_arguments(&matches, &opts, &mut ro, &service, &header);
+
+    ro.new_args = matches.free;
+
+    if ro.new_args.is_empty() && !ro.warm_token && !ro.purge_token && ro.acl_type != ACLTYPE::LIST {
+        println!("No command given");
+        print_usage(&opts, &header);
+        print_version(&service);
+        std::process::exit(0);
     }
-    if matches.opt_present("t") {
-        ro.target = matches.opt_str("t").unwrap();
-    }
-    if matches.opt_present("p") {
-        purge_token = true;
-    }
-    if matches.opt_present("w") {
-        warm_token = true;
-    }
-    if matches.opt_present("n") {
-        prompt = false;
+}
+
+fn main() {
+    let args: Vec<String> = std::env::args().collect();
+    let original_command = args.clone();
+    let service = String::from("please");
+    let mut ro = RunOptions::new();
+    let original_uid = get_current_uid();
+    let original_user = get_user_by_uid(original_uid).unwrap();
+    ro.name = original_user.name().to_string_lossy().to_string();
+    ro.syslog = true;
+    let mut vec_eo: Vec<EnvOptions> = vec![];
+
+    if !set_privs(
+        "root",
+        nix::unistd::Uid::from_raw(0),
+        nix::unistd::Gid::from_raw(0),
+    ) {
+        println!("I cannot set privs. Exiting as not installed correctly.");
+        std::process::exit(1);
     }
 
-    let mut new_args = matches.free;
+    general_options(&mut ro, args, &service, &mut vec_eo);
 
     ro.groups = group_hash(original_user.groups().unwrap());
-
-    if purge_token {
-        remove_token(&ro.name);
-        return;
-    }
-
-    if warm_token {
-        if prompt {
-            challenge_password(ro.name, EnvOptions::new(), &service, prompt);
-        }
-        return;
-    }
 
     if read_ini_config_file("/etc/please.ini", &mut vec_eo, &ro.name, true) {
         println!("Exiting due to error, cannot fully process /etc/please.ini");
@@ -248,22 +216,17 @@ fn main() {
         ro.target = "root".to_string();
     }
 
-    if new_args.is_empty() {
-        println!("No command given.");
-        std::process::exit(1);
-    }
-
-    match search_path(&new_args[0]) {
+    match search_path(&ro.new_args[0]) {
         None => {
             println!("[{}]: command not found", service);
             std::process::exit(1);
         }
         Some(x) => {
-            new_args[0] = x;
+            ro.new_args[0] = x;
         }
     }
 
-    ro.command = new_args.join(" ");
+    ro.command = replace_new_args(ro.new_args.clone());
     let entry = can(&vec_eo, &ro);
 
     match &entry {
@@ -297,7 +260,7 @@ fn main() {
         }
     }
 
-    if !challenge_password(ro.name.to_string(), entry.unwrap(), &service, prompt) {
+    if !challenge_password(&ro.name, entry.unwrap(), &service, ro.prompt) {
         log_action(&service, "deny", &ro, &original_command.join(" "));
         std::process::exit(1);
     }
@@ -305,7 +268,12 @@ fn main() {
     do_dir_changes(&ro);
 
     log_action(&service, "permit", &ro, &original_command.join(" "));
-    let lookup_name = get_user_by_name(&ro.target).unwrap();
+    let lookup_name = get_user_by_name(&ro.target);
+    if lookup_name.is_none() {
+        println!("Could not lookup {}", &ro.target);
+        std::process::exit(1);
+    }
+    let lookup_name = lookup_name.unwrap();
     let target_uid = nix::unistd::Uid::from_raw(lookup_name.uid());
     let target_gid = nix::unistd::Gid::from_raw(lookup_name.primary_group_id());
 
@@ -316,14 +284,14 @@ fn main() {
         std::process::exit(1);
     }
 
-    if new_args.len() > 1 {
-        Command::new(&new_args[0])
-            .args(new_args.clone().split_off(1))
+    if ro.new_args.len() > 1 {
+        Command::new(&ro.new_args[0])
+            .args(ro.new_args.clone().split_off(1))
             .exec();
-        Command::new(&"/bin/sh").args(new_args).exec();
+        Command::new(&"/bin/sh").args(ro.new_args).exec();
     } else {
-        Command::new(&new_args[0]).exec();
-        Command::new("/bin/sh").args(new_args).exec();
+        Command::new(&ro.new_args[0]).exec();
+        Command::new("/bin/sh").args(ro.new_args).exec();
     }
 }
 
