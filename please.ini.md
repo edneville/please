@@ -15,13 +15,11 @@ please.ini - configuration file for access
 
 The **please.ini** file contains one or more **[sections]** that hold ACL for users of the **please** and **pleaseedit** programs.
 
-All rules in `please.ini` will permit or deny based on command regex matches.
+`please.ini` is an ini file, sections can be named with a short description of what the section provides. You may then find this helpful when listing rights with **please -l**.
 
-`please.ini` is an ini file, and as such it makes sense to label the sections with a good short description of what the section provides. You may then find this helpful when listing rights with **please -l**.
+Rules are read and applied in the order they are presented in the configuration file. If the user matches a permit rule to run a command in an early section, but in a later section matches a deny regex for **.\***, then the user will not be permitted to run any command. The last match wins.
 
-Rules are read and applied in the order they are presented in the configuration file. If the user matches a permit rule to run a command in an early section, but in a later section matches a deny regex for `.*`, then the user will not be permitted to run any command. The last match wins.
-
-The properties in ini permitted are described below and should appear at most once per section. If a property is used more than once in a section, the last one will be used.
+The properties permitted are described below and should appear at most once per section. If a property is used more than once in a section, the last one will be used.
 
 # SECTION OPTIONS
 
@@ -66,21 +64,17 @@ The properties in ini permitted are described below and should appear at most on
 **dir=[regex]**
 : permitted regex for switchable directories, defaults to any
 
-`regex` is a regular expression, **%{USER}** will expand to the user who is currently running `please`. This enables a single rule for a group to modify/run something that matches their name.
+**regex** is a regular expression, **%{USER}** will expand to the user who is currently running `please`. This enables a single rule for a group to modify/run something that matches their name.
+
+Spaces within arguments will be substituted as **'\\\ '** (backslash space). Use **^/bin/echo hello\\\\ world$** to match **/bin/echo "hello world"**, note that **\\** is a regex escape character so it must be escaped, therefore matching a space becomes **'\\\\\ '** (backslash backslash space).
 
 # ACTIONS
-
-**exitcmd=[program]**
-: run program after editor exits, if exit is zero, continue with file replacement. **%{NEW}** and **%{OLD}** placeholders expand to new and old edit files
 
 **permit=[true|false]**
 : permit or disallow the entry, defaults to true
 
 **require_pass=[true|false]**
 : if entry matches, require a password, defaults to true
-
-**editmode=[octal mode]**
-: set the file mode bits on replacement file to octal mode
 
 **reason=[true|false]**
 : require a reason for execution/edit, defaults to false
@@ -91,9 +85,15 @@ The properties in ini permitted are described below and should appear at most on
 **syslog=[true|false]**
 : log this activity to syslog, defaults to true
 
+**editmode=[octal mode]**
+: (**type=edit**) set the file mode bits on replacement file to octal mode, defaults to 0600
+
+**exitcmd=[program]**
+: (**type=edit**) run program after editor exits as the root user, if exit is zero, continue with file replacement. **%{NEW}** and **%{OLD}** placeholders expand to new and old edit files
+
 # EXAMPLES
 
-To allow all commands, you can use a greedy match (`^.*$`). You should probably reduce this to the set of acceptable commands though.
+To allow all commands, you can use a greedy match (**^.\*$**). You should reduce this to the set of acceptable commands though.
 
 ```
 [user_ed_root]
@@ -102,7 +102,7 @@ target=root
 regex=^.*$
 ```
 
-If you wish to permit a user to view another's command set, then you may do this using `type=list` (`run` by default). To list another user, they must match the `target` regex.
+If you wish to permit a user to view another's command set, then you may do this using **type=list** (**run** by default). To list another user, they must match the **target** regex.
 
 ```
 [user_ed_list_root]
@@ -111,7 +111,7 @@ type=list
 target=root
 ```
 
-`type` may also be `edit` if you wish to permit a file edit with `pleaseedit`.
+**type** may also be **edit** if you wish to permit a file edit with **pleaseedit**.
 
 ```
 [user_ed_edit_hosts]
@@ -130,16 +130,15 @@ Below, user **mandy** may run **du** without needing a password, but must enter 
 name = mandy
 regex = ^(/usr)?/bin/du\s+.*$
 require_pass = false
-
 [mandy_some]
 name = mandy
 regex = ^(/usr)?/bin/bash$
 require_pass = true
 ```
 
-`regex` can include repetitions. To permit running `wc` to count the lines in the log files (we don't know how many there are) in `/var/log`. This sort of regex will allow multiple instances of a `()` group with `+`, which is used to define the character class `[a-zA-Z0-9-]+`, the numeric class `\d+` and the group near the end of the line. In other words, multiple instances of files in /var/log that may end in common log rotate forms `-YYYYMMDD` or `.N`.
+**regex** can include repetitions. To permit running **wc** to count the lines in the log files (we don't know how many there are) in **/var/log**. This sort of regex will allow multiple instances of a **()** group with **+**, which is used to define the character class **[a-zA-Z0-9-]+**, the numeric class **\d+** and the group near the end of the line. In other words, multiple instances of files in **/var/log** that may end in common log rotate forms **-YYYYMMDD** or **.N**.
 
-This will permit commands such as the following, note how for efficiency find will combine arguments with `\+` into fewer invocations. `xargs` could have been used in place of `find`.
+This will permit commands such as the following, note how for efficiency find will combine arguments with **\+** into fewer invocations. **xargs** could have been used in place of **find**.
 
 ```
 $ find /var/log -type f -exec please /usr/bin/wc {} \+
@@ -155,7 +154,7 @@ permit=true
 regex=^/usr/bin/wc (/var/log/[a-zA-Z0-9-]+(\.\d+)?(\s)?)+$
 ```
 
-User `ed` may only start or stop a docker container:
+User ed may only start or stop a docker container:
 
 ```
 [user_ed_root]
@@ -165,7 +164,7 @@ permit=true
 regex=^/usr/bin/docker (start|stop) \S+
 ```
 
-User `ben` may only edit `/etc/fstab`:
+User ben may only edit **/etc/fstab**:
 
 ```
 [ben_fstab]
@@ -176,7 +175,7 @@ type=edit
 regex=^/etc/fstab$
 ```
 
-User `ben` may list only users `eng`, `net` and `dba` operators:
+User ben may list only users **eng**, **net** and **dba**:
 
 ```
 [ben_ops]
@@ -198,9 +197,9 @@ target=^%{USER}$
 
 # EXITCMD
 
-When the user completes their edit, and the editor exits cleanly, if `exitcmd` is included then the program will run. If the program also exits cleanly then the temporary edit will be copied to the destination.
+When the user completes their edit, and the editor exits cleanly, if **exitcmd** is included then the program will run as root. If the program also exits cleanly then the temporary edit will be copied to the destination.
 
-**%{OLD}** and **%{NEW}** will expand to the old (existing source) file and edit candidate, respectively. To verify a file edit, **ben**'s entry to check `/etc/hosts` after clean exit could look like this:
+**%{OLD}** and **%{NEW}** will expand to the old (existing source) file and edit candidate, respectively. To verify a file edit, **ben**'s entry to check **/etc/hosts** after clean exit could look like this:
 
 ```
 [ben_ops]
@@ -211,9 +210,9 @@ regex=^/etc/hosts$
 exitcmd=/usr/local/bin/check_hosts %{OLD} %{NEW}
 ```
 
-`/usr/local/bin/check_hosts` would take two arguments, the original file as the first argument and the modify candidate as the second argument. If `check_hosts` terminates zero, then the edit is considered clean and the original file is replaced with the candidate. Otherwise the edit file is not copied and is left, `pleaseedit` will exit with the return value from `check_hosts`.
+**/usr/local/bin/check_hosts** would take two arguments, the original file as the first argument and the modify candidate as the second argument. If **check_hosts** terminates zero, then the edit is considered clean and the original file is replaced with the candidate. Otherwise the edit file is not copied and is left, **pleaseedit** will exit with the return value from **check_hosts**.
 
-A common `exitcmd` is to check the validity of `please.ini`, shown below. This permits members of the `admin` group to edit `/etc/please.ini` if they provide a reason (**-r**). Upon clean exit from the editor the tmp file will be syntax checked.
+A common **exitcmd** is to check the validity of **please.ini**, shown below. This permits members of the **admin** group to edit **/etc/please.ini** if they provide a reason (**-r**). Upon clean exit from the editor the tmp file will be syntax checked.
 
 ```
 [please_ini]
@@ -228,13 +227,13 @@ exitcmd = /usr/bin/please -c %{NEW}
 
 # DATED RANGES
 
-For large environments it is not unusual for a third party to require access during a short time frame for debugging. To accommodate this there are the `notbefore` and `notafter` time brackets. These can be either `YYYYmmdd` or `YYYYMMDDHHMMSS`.
+For large environments it is not unusual for a third party to require access during a short time frame for debugging. To accommodate this there are the **notbefore** and **notafter** time brackets. These can be either **YYYYmmdd** or **YYYYMMDDHHMMSS**.
 
-The whole day is considered when using the shorter date form of `YYYYMMDD`.
+The whole day is considered when using the shorter date form of **YYYYMMDD**.
 
 Many enterprises may wish to permit access to a user for a limited time only, even if that individual is in the role permanently.
 
-User joker can do what they want as root on `1st April 2021`:
+User joker can do what they want as root on 1st April 2021:
 
 ```
 [joker_april_first]
@@ -248,9 +247,11 @@ regex=^/bin/bash
 
 # DATEMATCHES
 
-Another date type is the `datematch` item, this constrains sections to a regex match against the date string `Day dd mon HH:MM:SS UTC Year`.
+**datematch** matches against the date string **Day dd mon HH:MM:SS UTC Year**. This enables calendar style date matches.
 
-You can permit some a group of users to perform some house keeping on a Monday:
+Note that the day of the month (**dd**) will be padded with spaces if less than two characters wide.
+
+You can permit a group of users to run **/usr/local/housekeeping/** scripts every Monday:
 
 ```
 [l2_housekeeping]
@@ -259,12 +260,12 @@ group=true
 target=root
 permit=true
 regex = /usr/local/housekeeping/.*
-datematch = ^Thu\s+1\s+Oct\s+22:00:00\s+UTC\s+2020
+datematch = ^Mon\s+.*
 ```
 
 # REASONS
 
-When `true`, require a reason before permitting edits or execution with the **-r** option. Some organisations may prefer a reason to be logged when a command is executed. This can be helpful for some situations where something such as `mkfs` or `useradd` might be preferable to be logged against a ticket.
+When **reason=true**, require a reason before permitting edits or execution with the **-r** options to **please** and **pleaseedit**. Some organisations may prefer a reason to be logged when a command is executed. This can be helpful for some situations where something such as **mkfs** or **useradd** might be preferable to be logged against a ticket.
 
 ```
 [l2_user_admin]
@@ -278,7 +279,7 @@ regex = ^/usr/sbin/useradd\s+-m\s+\w+$
 
 # LAST
 
-To stop processing at a match, **last=true** can be applied:
+**last=true** stops processing at a match:
 
 ```
 [mkfs]
@@ -291,7 +292,19 @@ regex = ^/sbin/mkfs.(ext[234]|xfs) /dev/sd[bcdefg]\d?$
 last=true
 ```
 
-For simplicity, there is no need to process other configured rules if certain that the `l2users` group are safe to execute this. `last` should only be used in situations where there will never be something that could contradict the match later.
+For simplicity, there is no need to process other configured rules if certain that the **l2users** group are safe to execute this. **last** should only be used in situations where there will never be something that could contradict the match later.
+
+# SYSLOG
+
+By default entries are logged to syslog. If you do not wish an entry to go logged then specify **syslog=false**. Use this only if you are happy with commands going unlogged, simialr to if policy would permit the user to switch to the target account.
+
+```
+[maverick]
+syslog = false
+name = ed
+regex = /usr/bin/.*
+reason = false
+```
 
 # FILES
 

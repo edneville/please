@@ -14,10 +14,9 @@
 //    You should have received a copy of the GNU General Public License
 //    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-use pleaser::util::{
-    can, challenge_password, get_editor, group_hash, log_action, read_ini_config_file,
-    remove_token, set_privs, EnvOptions, RunOptions, ACLTYPE,
-};
+//! please.rs a sudo-like clone that implements regex all over the place
+
+use pleaser::util::*;
 
 use std::fs::*;
 use std::io::{self, Write};
@@ -35,16 +34,13 @@ use nix::unistd::{chown, fork, gethostname, ForkResult};
 
 use users::*;
 
-fn print_usage(program: &str) {
-    println!("usage:");
-    println!("{} [arguments] /path/to/file", program);
-    println!(" -h, --help: this message");
-    println!(" -n, --noprompt: rather than prompt for password, exit non-zero");
-    println!(" -p, --purge: purge valid tokens");
-    println!(" -r, --reason, [text]: provide reason for execution");
-    println!(" -t, --target, [user]: edit as target user");
-    println!(" -w, --warm: warm token cache");
-    println!("version: {}", env!("CARGO_PKG_VERSION"));
+fn tmp_edit_file_name(source_file: &Path, service: &str, original_user: &str) -> String {
+    format!(
+        "/tmp/{}.{}.{}",
+        source_file.file_name().unwrap().to_str().unwrap(),
+        service,
+        original_user
+    )
 }
 
 fn setup_temp_edit_file(
@@ -54,12 +50,7 @@ fn setup_temp_edit_file(
     original_gid: u32,
     original_user: &str,
 ) -> String {
-    let tmp_edit_file = format!(
-        "/tmp/{}.{}.{}",
-        source_file.file_name().unwrap().to_str().unwrap(),
-        service,
-        original_user
-    );
+    let tmp_edit_file = tmp_edit_file_name(&source_file, &service, &original_user);
     let tmp_edit_file_path = Path::new(&tmp_edit_file);
 
     if tmp_edit_file_path.exists() && std::fs::remove_file(tmp_edit_file_path).is_err() {
@@ -131,15 +122,44 @@ fn build_exitcmd(entry: &EnvOptions, source_file: &str, edit_file: &str) -> Comm
     cmd
 }
 
+fn general_options(mut ro: &mut RunOptions, args: Vec<String>, service: &str) {
+    let mut opts = Options::new();
+    opts.parsing_style(getopts::ParsingStyle::StopAtFirstFree);
+    opts.optflag("h", "help", "print usage help");
+    opts.optflag("n", "noprompt", "do nothing if a password is required");
+    opts.optflag("p", "purge", "purge access token");
+    opts.optopt("r", "reason", "provide reason for edit", "REASON");
+    opts.optopt("t", "target", "edit as target user", "USER");
+    opts.optopt("u", "user", "edit as target user", "USER");
+    opts.optflag("v", "version", "print version and exit");
+    opts.optflag("w", "warm", "warm access token and exit");
+
+    let matches = match opts.parse(&args[1..]) {
+        Ok(m) => m,
+        Err(f) => {
+            println!("{}", f.to_string());
+            std::process::exit(1);
+        }
+    };
+
+    let header = format!("{} [arguments] </path/to/file>", &service);
+    common_opt_arguments(&matches, &opts, &mut ro, &service, &header);
+
+    ro.new_args = matches.free;
+
+    if (ro.new_args.is_empty() || ro.new_args.len() > 1) && !ro.warm_token && !ro.purge_token {
+        println!("You must provide one file to edit");
+        print_usage(&opts, &header);
+        print_version(&service);
+        std::process::exit(1);
+    }
+}
+
 fn main() {
     let args: Vec<String> = std::env::args().collect();
     let original_command = args.clone();
-    let program = args[0].clone();
     let service = String::from("pleaseedit");
     let mut ro = RunOptions::new();
-    let mut prompt = true;
-    let mut purge_token = false;
-    let mut warm_token = false;
     let original_uid = get_current_uid();
     let original_user = get_user_by_uid(original_uid).unwrap();
     let original_gid = original_user.primary_group_id();
@@ -157,68 +177,13 @@ fn main() {
         std::process::exit(1);
     }
 
-    let mut opts = Options::new();
-    opts.parsing_style(getopts::ParsingStyle::StopAtFirstFree);
-    opts.optflag("h", "help", "print usage help");
-    opts.optflag("n", "noprompt", "do nothing if a password is required");
-    opts.optflag("p", "purge", "purge access token");
-    opts.optopt("r", "reason", "reason for execution", "REASON");
-    opts.optopt("t", "target", "edit as target user", "TARGET");
-    opts.optflag("w", "warm", "warm access token and exit");
-
-    let matches = match opts.parse(&args[1..]) {
-        Ok(m) => m,
-        Err(f) => {
-            println!("{}", f.to_string());
-            std::process::exit(1);
-        }
-    };
-    if matches.opt_present("h") {
-        print_usage(&program);
-        return;
-    }
-    if matches.opt_present("r") {
-        ro.reason = Some(matches.opt_str("r").unwrap());
-    }
-    if matches.opt_present("t") {
-        ro.target = matches.opt_str("t").unwrap();
-    }
-    if matches.opt_present("p") {
-        purge_token = true;
-    }
-    if matches.opt_present("w") {
-        warm_token = true;
-    }
-
-    if matches.opt_present("n") {
-        prompt = false;
-    }
-
-    let new_args = matches.free;
-    ro.command = new_args.join(" ");
-
-    ro.groups = group_hash(original_user.groups().unwrap());
-
-    if purge_token {
-        remove_token(&ro.name);
-        return;
-    }
-
-    if warm_token {
-        if prompt {
-            challenge_password(ro.name, EnvOptions::new(), &service, prompt);
-        }
-        return;
-    }
-
+    general_options(&mut ro, args, &service);
     if ro.target == "" {
         ro.target = "root".to_string();
     }
+    ro.command = ro.new_args.join(" ");
 
-    if new_args.is_empty() || new_args.len() > 1 {
-        print_usage(&program);
-        return;
-    }
+    ro.groups = group_hash(original_user.groups().unwrap());
 
     if read_ini_config_file("/etc/please.ini", &mut vec_eo, &ro.name, true) {
         println!("Exiting due to error, cannot fully process /etc/please.ini");
@@ -269,26 +234,31 @@ fn main() {
         std::process::exit(1);
     }
 
-    if !challenge_password(
-        ro.name.to_string(),
-        entry.clone().unwrap(),
-        &service,
-        prompt,
-    ) {
+    if !challenge_password(&ro.name, entry.clone().unwrap(), &service, ro.prompt) {
         log_action(&service, "deny", &ro, &original_command.join(" "));
         std::process::exit(1);
     }
 
-    let lookup_name = users::get_user_by_name(&ro.target).unwrap();
-    let source_file = Path::new(&new_args[0]);
+    let lookup_name = get_user_by_name(&ro.target);
+    if lookup_name.is_none() {
+        println!("Could not lookup {}", &ro.target);
+        std::process::exit(1);
+    }
+    let lookup_name = lookup_name.unwrap();
+
+    let source_file = Path::new(&ro.new_args[0]);
 
     let edit_file =
         &setup_temp_edit_file(&service, source_file, original_uid, original_gid, &ro.name);
 
     std::env::set_var("PLEASE_USER", original_user.name());
     std::env::set_var("PLEASE_UID", original_uid.to_string());
+    std::env::set_var("PLEASE_GID", original_uid.to_string());
     std::env::set_var("PLEASE_EDIT_FILE", edit_file.to_string());
     std::env::set_var("PLEASE_SOURCE_FILE", source_file.to_str().unwrap());
+    std::env::set_var("SUDO_USER", original_user.name());
+    std::env::set_var("SUDO_UID", original_uid.to_string());
+    std::env::set_var("SUDO_GID", original_user.primary_group_id().to_string());
 
     let mut good_edit = false;
     match unsafe { fork() } {
@@ -349,8 +319,18 @@ fn main() {
         }
     }
 
-    let dir_parent_tmp = format!("{}.{}.{}", source_file.to_str().unwrap(), service, ro.name);
-    std::fs::copy(edit_file, dir_parent_tmp.as_str()).unwrap();
+    let dir_parent_tmp =
+        tmp_edit_file_name(&source_file, format!("{}.copy", service).as_str(), &ro.name);
+    if let Err(x) = std::fs::copy(edit_file, dir_parent_tmp.as_str()) {
+        println!(
+            "Could not copy {} to {}: {}",
+            edit_file,
+            dir_parent_tmp.as_str(),
+            x
+        );
+        std::process::exit(1);
+    }
+
     if std::fs::remove_file(edit_file).is_err() {
         println!("Could not remove {}", edit_file);
         std::process::exit(1);

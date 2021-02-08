@@ -260,7 +260,6 @@ This project is named "please". In some places that project name was used by oth
 
 ```
 [ ] docker image for testing
-[ ] plugins/modules
 [ ] packages
 ```
 
