@@ -1060,7 +1060,7 @@ pub fn replace_new_args(new_args: Vec<String>) -> String {
 }
 
 pub fn print_version(program: &str) {
-    println!("{} version: {}", &program, env!("CARGO_PKG_VERSION"));
+    println!("{} version {}", &program, env!("CARGO_PKG_VERSION"));
 }
 
 #[cfg(test)]

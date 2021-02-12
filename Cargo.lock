@@ -170,7 +170,7 @@ dependencies = [
 
 [[package]]
 name = "pleaser"
-version = "0.3.21"
+version = "0.3.22"
 dependencies = [
  "chrono 0.4.15 (registry+https://github.com/rust-lang/crates.io-index)",
  "getopts 0.2.21 (registry+https://github.com/rust-lang/crates.io-index)",

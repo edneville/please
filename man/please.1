@@ -9,6 +9,10 @@ please \- a tool for access elevation.
 .PP
 \f[B]please /bin/bash\f[]
 .PP
+\f[B]pleaseedit /etc/fstab\f[]
+.PP
+\f[B]pleaseedit [\-r/\-\-reason "new fs"] /etc/fstab\f[]
+.PP
 \f[B]please [\-c/\-\-check] /etc/please.ini\f[]
 .PP
 \f[B]please [\-d/\-\-dir] [dir] command\f[]
@@ -18,10 +22,6 @@ please \- a tool for access elevation.
 \f[B]please [\-t/\-\-target] backup tar \-cvf \- /home/data | \&...\f[]
 .PP
 \f[B]please [\-u/\-\-user] backup tar \-cvf \- /home/data | \&...\f[]
-.PP
-\f[B]pleaseedit /etc/fstab\f[]
-.PP
-\f[B]pleaseedit [\-r/\-\-reason "new fs"] /etc/fstab\f[]
 .PP
 \f[B]please [\-l/\-\-list]\f[]
 .PP
@@ -37,112 +37,113 @@ please \- a tool for access elevation.
 \f[B]please [\-w/\-\-warm]\f[]
 .SH DESCRIPTION
 .PP
-\f[C]please\f[] is a sudo clone that has regex support and a simple
-approach to ACL.
+\f[B]please\f[] and \f[B]pleaseedit\f[] are a sudo clones that have
+regex support and a simple approach to ACL.
 .PP
-The aim is to allow admins to delegate accurate least privilege access
-with ease.
+The aim is to allow admins to delegate accurate principle of least
+privilege access with ease.
 There are times when what is intended to be executed can be expressed
 easily with a regex to expose only what is needed and nothing more.
 .PP
-\f[C]pleaseedit\f[] allows safe editing of files.
+\f[B]pleaseedit\f[] allows safe editing of files.
 The file is copied to /tmp, where it can be updated.
-When \f[C]EDITOR\f[] exits cleanly the file is copied alongside the
+When \f[B]EDITOR\f[] exits cleanly the file is copied alongside the
 target and then renamed.
 .TP
-.B \f[C]\-c\f[]/\f[C]\-\-check\ file\f[]
-will check the syntax of a \f[C]please.ini\f[] config file.
-Exits non\-zero on error.
+.B \f[B]\-c\f[]/\f[B]\-\-check file\f[]
+will check the syntax of a \f[B]please.ini\f[] config file.
+Exits non\-zero on error
 .RS
 .RE
 .TP
-.B \f[C]\-d\f[]/\f[C]\-\-dir\f[]
-will change the directory prior to executing the command in that
-location.
+.B \f[B]\-d\f[]/\f[B]\-\-dir\f[]
+will change directory to \f[B]dir\f[] prior to executing the command
 .RS
 .RE
 .TP
-.B \f[C]\-h\f[]/\f[C]\-\-help\f[]
-print help and exit.
+.B \f[B]\-h\f[]/\f[B]\-\-help\f[]
+print help and exit
 .RS
 .RE
 .TP
-.B \f[C]\-l\f[]/\f[C]\-\-list\f[]
-to list rules.
+.B \f[B]\-l\f[]/\f[B]\-\-list\f[]
+to list rules
 .RS
 .RE
 .TP
-.B \f[C]\-n\f[]/\f[C]\-\-noprompt\f[]
-will not prompt for authentication and exits with a status of 1.
+.B \f[B]\-n\f[]/\f[B]\-\-noprompt\f[]
+will not prompt for authentication and exits with a status of 1
 .RS
 .RE
 .TP
-.B \f[C]\-p\f[]/\f[C]\-\-purge\f[]
-will purge your current authentication token for the running user.
+.B \f[B]\-p\f[]/\f[B]\-\-purge\f[]
+will purge your current authentication token for the running user
 .RS
 .RE
 .TP
-.B \f[C]\-r\f[]/\f[C]\-\-reason\f[] \f[C][reason]\f[]
-will add \f[C]reason\f[] to the system log.
+.B \f[B]\-r\f[]/\f[B]\-\-reason\f[] \f[B][reason]\f[]
+will add \f[B]reason\f[] to the system log
 .RS
 .RE
 .TP
-.B \f[C]\-t\f[]/\f[C]\-\-target\f[] \f[C][user]\f[]
-to execute command as target user.
+.B \f[B]\-t\f[]/\f[B]\-\-target\f[] \f[B][user]\f[]
+to execute command as target \f[B]user\f[]
 .RS
 .RE
 .TP
-.B \f[C]\-u\f[]/\f[C]\-\-user\f[] \f[C][user]\f[]
-to execute command as target user.
+.B \f[B]\-u\f[]/\f[B]\-\-user\f[] \f[B][user]\f[]
+to execute command as target \f[B]user\f[]
 .RS
 .RE
 .TP
-.B \f[C]\-v\f[]/\f[C]\-\-version\f[]
-print version and exit.
+.B \f[B]\-v\f[]/\f[B]\-\-version\f[]
+print version and exit
 .RS
 .RE
 .TP
-.B \f[C]\-w\f[]/\f[C]\-\-warm\f[]
-will warm an authentication token and exit.
+.B \f[B]\-w\f[]/\f[B]\-\-warm\f[]
+will warm an authentication token and exit
 .RS
 .RE
 .SH EXAMPLES
 .TP
-.B \f[C]please\ \-t\ httpd\ /bin/bash\f[]
+.B \f[B]please \-t httpd /bin/bash\f[]
 run a shell as the httpd user.
 .RS
 .RE
 .TP
-.B \f[C]please\ \-l\f[]
+.B \f[B]please \-l\f[]
 to list what you may run.
 .RS
 .RE
 .TP
-.B \f[C]please\ \-t\ username\ \-l\f[]
+.B \f[B]please \-t username \-l\f[]
 to show what username may run.
-\f[C]username\f[] must match the target regex in a \f[C]type=list\f[]
+\f[B]username\f[] must match the target regex in a \f[B]type=list\f[]
 rule.
 .RS
 .RE
 .TP
-.B \f[C]please\ \-r\ "reloading\ httpd\ for\ ticket\ #123"\ systemctl\ reload\ apache2\f[]
+.B \f[B]please \-r "reloading httpd for ticket #123" systemctl reload apache2\f[]
 to show what username may run.
-\f[C]username\f[] must match the target regex in a \f[C]type=list\f[]
-rule.
+\f[B]username\f[] must match the target regex.
 .RS
 .RE
 .PP
-Please see \f[C]please.ini\f[] for configuration examples.
+Please see \f[B]please.ini\f[] for configuration examples.
 .SH FILES
 .PP
 /etc/please.ini
 .SH CONTRIBUTIONS
 .PP
 I welcome pull requests with open arms.
-Do please raise a ticket if you find a bug or would like to improve
-please in some way.
+New features always considered.
+.SH BUGS
+.PP
+Found a bug?
+Please either open a ticket or send a pull request/patch.
 .SH SEE ALSO
 .PP
-please.ini
+\f[B]please.ini\f[](5)
 .SH AUTHORS
 Ed Neville (ed\-please\@s5h.net).
