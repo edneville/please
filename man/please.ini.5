@@ -46,18 +46,18 @@ read .ini files in directory, and continue to next section
 .SH MATCHES
 .TP
 .B \f[B]name=[regex]\f[]
-mandatory, the user or \f[B]group\f[] (see below) to match against.
+mandatory, the user or \f[B]group\f[] (see below) to match against
 .RS
 .RE
 .TP
 .B \f[B]target=[regex]\f[]
-user to execute or list as, defaults to root
+user to execute or list as, defaults to \f[B]root\f[]
 .RS
 .RE
 .TP
 .B \f[B]regex=[regex]\f[]
-is the regular expression that the command matches against, defaults to
-^$
+the regular expression that the command or edit path matches against,
+defaults to ^$
 .RS
 .RE
 .TP
@@ -72,18 +72,19 @@ will add 23:59:59 to the date if not given, defaults to never
 .RE
 .TP
 .B \f[B]datematch=[Day dd Mon HH:MM:SS UTC YYYY]\f[]
-regex to match against a date string
+regex to match a date string with
 .RS
 .RE
 .TP
 .B \f[B]type=[edit/run/list]\f[]
-defaults to run, edit = pleaseedit entry, list = user access rights
-listing
+this section's mode behaviour, defaults to \f[B]run\f[], edit =
+\f[B]pleaseedit\f[] entry, list = user access rights listing
 .RS
 .RE
 .TP
 .B \f[B]group=[true|false]\f[]
-defaults to false, when true name refers to a group rather than a user
+defaults to false, when true, the \f[B]name\f[] (above) refers to a
+group rather than a user
 .RS
 .RE
 .TP
@@ -93,7 +94,7 @@ permitted hostnames where this may apply, defaults to localhost
 .RE
 .TP
 .B \f[B]dir=[regex]\f[]
-permitted regex for switchable directories, defaults to any
+permitted directories to run within
 .RS
 .RE
 .PP
@@ -312,9 +313,9 @@ exitcmd=/usr/local/bin/check_hosts\ %{OLD}\ %{NEW}
 \f[]
 .fi
 .PP
-\f[B]/usr/local/bin/check_hosts\f[] would take two arguments, the
-original file as the first argument and the modify candidate as the
-second argument.
+\f[B]/usr/local/bin/check_hosts\f[] takes two arguments, the original
+file as the first argument and the modify candidate as the second
+argument.
 If \f[B]check_hosts\f[] terminates zero, then the edit is considered
 clean and the original file is replaced with the candidate.
 Otherwise the edit file is not copied and is left, \f[B]pleaseedit\f[]
@@ -349,8 +350,9 @@ These can be either \f[B]YYYYmmdd\f[] or \f[B]YYYYMMDDHHMMSS\f[].
 The whole day is considered when using the shorter date form of
 \f[B]YYYYMMDD\f[].
 .PP
-Many enterprises may wish to permit access to a user for a limited time
-only, even if that individual is in the role permanently.
+Many enterprises may wish to permit windows of access to a user for a
+limited time only, even if that individual is considered to have a
+permanent role.
 .PP
 User joker can do what they want as root on 1st April 2021:
 .IP
@@ -410,6 +412,24 @@ reason=true
 regex\ =\ ^/usr/sbin/useradd\\s+\-m\\s+\\w+$
 \f[]
 .fi
+.SH DIR
+.PP
+In some situations you may only want a command to run within a set of
+directories.
+The directory is specified with the \f[B]\-d\f[] argument to
+\f[B]please\f[].
+For example, the \f[B]build_aliases\f[] command may run programs that
+output to the current working directory.
+.IP
+.nf
+\f[C]
+[eng_build_aliases]
+name=l2users
+group=true
+dir=^/etc/mail$
+regex\ =\ ^/usr/local/bin/build_aliases$
+\f[]
+.fi
 .SH LAST
 .PP
 \f[B]last=true\f[] stops processing at a match:
@@ -451,6 +471,13 @@ reason\ =\ false
 .SH FILES
 .PP
 /etc/please.ini
+.SH NOTES
+.PP
+At a later date repeated properties within the same section may be
+treated as a matche list.
+.PP
+At a later date sections with names containing `default' may behave
+differently to normal sections.
 .SH CONTRIBUTIONS
 .PP
 I welcome pull requests with open arms.
@@ -461,6 +488,6 @@ Found a bug?
 Please either open a ticket or send a pull request/patch.
 .SH SEE ALSO
 .PP
-please
+\f[B]please\f[](1)
 .SH AUTHORS
 Ed Neville (ed\-please\@s5h.net).

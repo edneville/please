@@ -46,6 +46,27 @@ cd /usr/local/bin && ln -s /usr/local/bin/please sudo && ln -s /usr/local/bin/pl
 
 # How do I set it up
 
+You'll need to configure PAM in order for `require_pass` to authenticate. Debian-based needs something similar to this in `/etc/pam.d/please` and `/etc/pam.d/pleaseedit`:
+
+```
+#%PAM-1.0
+@include common-auth
+@include common-account
+@include common-session-noninteractive
+```
+
+Red Hat based needs something similar to this in the same files:
+
+```
+#%PAM-1.0
+auth       include      system-auth
+account    include      system-auth
+password   include      system-auth
+session    optional     pam_keyinit.so revoke
+session    required     pam_limits.so
+session    include      system-auth
+```
+
 Next, configure your `/etc/please.ini`, replace user names with appropriate values. The `ini` is divided into section options, matches and actions.
 
 ## Section options

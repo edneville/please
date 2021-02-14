@@ -35,13 +35,13 @@ The properties permitted are described below and should appear at most once per 
 # MATCHES
 
 **name=[regex]**
-: mandatory, the user or **group** (see below) to match against.
+: mandatory, the user or **group** (see below) to match against
 
 **target=[regex]**
-: user to execute or list as, defaults to root
+: user to execute or list as, defaults to **root**
 
 **regex=[regex]**
-: is the regular expression that the command matches against, defaults to ^$
+: the regular expression that the command or edit path matches against, defaults to ^$
 
 **notbefore=[YYYYmmdd|YYYYmmddHHMMSS]**
 : will add HHMMSS as 00:00:00 to the date if not given, defaults to never
@@ -50,19 +50,19 @@ The properties permitted are described below and should appear at most once per 
 : will add 23:59:59 to the date if not given, defaults to never
 
 **datematch=[Day dd Mon HH:MM:SS UTC YYYY]**
-: regex to match against a date string
+: regex to match a date string with
 
 **type=[edit/run/list]**
-: defaults to run, edit = pleaseedit entry, list = user access rights listing
+: this section's mode behaviour, defaults to **run**, edit = **pleaseedit** entry, list = user access rights listing
 
 **group=[true|false]**
-: defaults to false, when true name refers to a group rather than a user
+: defaults to false, when true, the **name** (above) refers to a group rather than a user
 
 **hostname=[regex]**
 : permitted hostnames where this may apply, defaults to localhost
 
 **dir=[regex]**
-: permitted regex for switchable directories, defaults to any
+: permitted directories to run within
 
 **regex** is a regular expression, **%{USER}** will expand to the user who is currently running `please`. This enables a single rule for a group to modify/run something that matches their name.
 
@@ -210,7 +210,7 @@ regex=^/etc/hosts$
 exitcmd=/usr/local/bin/check_hosts %{OLD} %{NEW}
 ```
 
-**/usr/local/bin/check_hosts** would take two arguments, the original file as the first argument and the modify candidate as the second argument. If **check_hosts** terminates zero, then the edit is considered clean and the original file is replaced with the candidate. Otherwise the edit file is not copied and is left, **pleaseedit** will exit with the return value from **check_hosts**.
+**/usr/local/bin/check_hosts** takes two arguments, the original file as the first argument and the modify candidate as the second argument. If **check_hosts** terminates zero, then the edit is considered clean and the original file is replaced with the candidate. Otherwise the edit file is not copied and is left, **pleaseedit** will exit with the return value from **check_hosts**.
 
 A common **exitcmd** is to check the validity of **please.ini**, shown below. This permits members of the **admin** group to edit **/etc/please.ini** if they provide a reason (**-r**). Upon clean exit from the editor the tmp file will be syntax checked.
 
@@ -231,7 +231,7 @@ For large environments it is not unusual for a third party to require access dur
 
 The whole day is considered when using the shorter date form of **YYYYMMDD**.
 
-Many enterprises may wish to permit access to a user for a limited time only, even if that individual is in the role permanently.
+Many enterprises may wish to permit windows of access to a user for a limited time only, even if that individual is considered to have a permanent role.
 
 User joker can do what they want as root on 1st April 2021:
 
@@ -277,6 +277,18 @@ reason=true
 regex = ^/usr/sbin/useradd\s+-m\s+\w+$
 ```
 
+# DIR
+
+In some situations you may only want a command to run within a set of directories. The directory is specified with the **-d** argument to **please**. For example, the **build_aliases** command may run programs that output to the current working directory.
+
+```
+[eng_build_aliases]
+name=l2users
+group=true
+dir=^/etc/mail$
+regex = ^/usr/local/bin/build_aliases$
+```
+
 # LAST
 
 **last=true** stops processing at a match:
@@ -310,6 +322,12 @@ reason = false
 
 /etc/please.ini
 
+# NOTES
+
+At a later date repeated properties within the same section may be treated as a matche list.
+
+At a later date sections with names containing 'default' may behave differently to normal sections.
+
 # CONTRIBUTIONS
 
 I welcome pull requests with open arms. New features always considered.
@@ -320,4 +338,4 @@ Found a bug? Please either open a ticket or send a pull request/patch.
 
 # SEE ALSO
 
-please
+**please**(1)
