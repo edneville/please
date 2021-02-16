@@ -119,8 +119,8 @@ The ordering of rules matters. The last match will win. Set `permit=false` if yo
 For example, using the two entries below:
 
 ```
-[ed_root_du]
-name=ed
+[jim_root_du]
+name=jim
 target=root
 permit=true
 regex = ^(/usr)?/bin/du\s.*
@@ -128,8 +128,8 @@ require_pass=false
 ```
 
 ```
-[ed_postgres]
-name=ed
+[jim_postgres]
+name=jim
 target=postgres
 permit=true
 regex = /bin/bash
