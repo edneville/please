@@ -96,8 +96,8 @@ Spaces within arguments will be substituted as **'\\\ '** (backslash space). Use
 To allow all commands, you can use a greedy match (**^.\*$**). You should reduce this to the set of acceptable commands though.
 
 ```
-[user_ed_root]
-name=ed
+[user_jim_root]
+name=jim
 target=root
 regex=^.*$
 ```
@@ -105,8 +105,8 @@ regex=^.*$
 If you wish to permit a user to view another's command set, then you may do this using **type=list** (**run** by default). To list another user, they must match the **target** regex.
 
 ```
-[user_ed_list_root]
-name=ed
+[user_jim_list_root]
+name=jim
 type=list
 target=root
 ```
@@ -114,8 +114,8 @@ target=root
 **type** may also be **edit** if you wish to permit a file edit with **pleaseedit**.
 
 ```
-[user_ed_edit_hosts]
-name=ed
+[user_jim_edit_hosts]
+name=jim
 type=edit
 target=root
 regex=^/etc/hosts$
@@ -147,18 +147,18 @@ $ find /var/log -type f -exec please /usr/bin/wc {} \+
 Here is a sample for the above scenario:
 
 ```
-[user_ed_root]
-name=ed
+[user_jim_root]
+name=jim
 target=root
 permit=true
 regex=^/usr/bin/wc (/var/log/[a-zA-Z0-9-]+(\.\d+)?(\s)?)+$
 ```
 
-User ed may only start or stop a docker container:
+User jim may only start or stop a docker container:
 
 ```
-[user_ed_root]
-name=ed
+[user_jim_root]
+name=jim
 target=root
 permit=true
 regex=^/usr/bin/docker (start|stop) \S+
@@ -308,12 +308,12 @@ For simplicity, there is no need to process other configured rules if certain th
 
 # SYSLOG
 
-By default entries are logged to syslog. If you do not wish an entry to go logged then specify **syslog=false**. Use this only if you are happy with commands going unlogged, simialr to if policy would permit the user to switch to the target account.
+By default entries are logged to syslog. If you do not wish an entry to go logged then specify **syslog=false**. Use this only if you are happy with commands going unlogged, similar to if policy would permit the user to switch to the target account.
 
 ```
 [maverick]
 syslog = false
-name = ed
+name = jim
 regex = /usr/bin/.*
 reason = false
 ```
