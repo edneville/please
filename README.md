@@ -81,7 +81,7 @@ Next, configure your `/etc/please.ini`, replace user names with appropriate valu
 
 ## Matches
 
-One of the simplest, that does not require password authentication can be defined as follows, assuming the user is `ed`:
+One of the simplest, that does not require password authentication can be defined as follows, assuming the user is `jim`:
 
 The options are as follows:
 
