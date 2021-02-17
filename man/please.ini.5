@@ -156,8 +156,8 @@ You should reduce this to the set of acceptable commands though.
 .IP
 .nf
 \f[C]
-[user_ed_root]
-name=ed
+[user_jim_root]
+name=jim
 target=root
 regex=^.*$
 \f[]
@@ -169,8 +169,8 @@ To list another user, they must match the \f[B]target\f[] regex.
 .IP
 .nf
 \f[C]
-[user_ed_list_root]
-name=ed
+[user_jim_list_root]
+name=jim
 type=list
 target=root
 \f[]
@@ -181,8 +181,8 @@ edit with \f[B]pleaseedit\f[].
 .IP
 .nf
 \f[C]
-[user_ed_edit_hosts]
-name=ed
+[user_jim_edit_hosts]
+name=jim
 type=edit
 target=root
 regex=^/etc/hosts$
@@ -231,20 +231,20 @@ Here is a sample for the above scenario:
 .IP
 .nf
 \f[C]
-[user_ed_root]
-name=ed
+[user_jim_root]
+name=jim
 target=root
 permit=true
 regex=^/usr/bin/wc\ (/var/log/[a\-zA\-Z0\-9\-]+(\\.\\d+)?(\\s)?)+$
 \f[]
 .fi
 .PP
-User ed may only start or stop a docker container:
+User jim may only start or stop a docker container:
 .IP
 .nf
 \f[C]
-[user_ed_root]
-name=ed
+[user_jim_root]
+name=jim
 target=root
 permit=true
 regex=^/usr/bin/docker\ (start|stop)\ \\S+
