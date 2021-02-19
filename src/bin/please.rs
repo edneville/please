@@ -36,7 +36,38 @@ fn do_list(ro: &mut RunOptions, vec_eo: &[EnvOptions], service: &str) {
     };
 
     let can_do = can(&vec_eo, &ro);
-    if can_do.is_ok() && can_do.unwrap().permit {
+
+    if let Ok(can_do) = can_do {
+        if !can_do.permit {
+            let dest = format!("{}'s", &ro.target);
+            log_action(&service, "deny", &ro, &ro.command);
+            println!(
+                "You may not view {} command list",
+                if ro.target == "" || ro.target == ro.name {
+                    "your"
+                } else {
+                    &dest
+                }
+            );
+            std::process::exit(1);
+        }
+
+        // check if a reason was given
+        if can_do.reason && ro.reason.is_none() {
+            log_action(&service, "no_reason", &ro, &ro.original_command.join(" "));
+            println!(
+                "Sorry but no reason was given to list on {} as {}",
+                &ro.hostname, &ro.target
+            );
+            std::process::exit(1);
+        }
+
+        // check if a password is required
+        if !challenge_password(&ro.name, can_do, &service, ro.prompt) {
+            log_action(&service, "deny", &ro, &ro.original_command.join(" "));
+            std::process::exit(1);
+        }
+
         log_action(&service, "permit", &ro, &ro.command);
         println!("{} may run the following:", name);
         ro.acl_type = ACLTYPE::RUN;
@@ -58,6 +89,7 @@ fn do_list(ro: &mut RunOptions, vec_eo: &[EnvOptions], service: &str) {
                 &dest
             }
         );
+        std::process::exit(1);
     }
 }
 
