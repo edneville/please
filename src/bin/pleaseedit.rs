@@ -37,9 +37,18 @@ use users::*;
 fn tmp_edit_file_name(source_file: &Path, service: &str, original_user: &str) -> String {
     format!(
         "/tmp/{}.{}.{}",
-        source_file.file_name().unwrap().to_str().unwrap(),
         service,
-        original_user
+        original_user,
+        source_file.file_name().unwrap().to_str().unwrap(),
+    )
+}
+
+fn source_tmp_file_name(source_file: &Path, service: &str, original_user: &str) -> String {
+    format!(
+        "{}.{}.{}",
+        source_file.to_str().unwrap(),
+        service,
+        original_user,
     )
 }
 
@@ -320,7 +329,7 @@ fn main() {
     }
 
     let dir_parent_tmp =
-        tmp_edit_file_name(&source_file, format!("{}.copy", service).as_str(), &ro.name);
+        source_tmp_file_name(&source_file, format!("{}.copy", service).as_str(), &ro.name);
     if let Err(x) = std::fs::copy(edit_file, dir_parent_tmp.as_str()) {
         println!(
             "Could not copy {} to {}: {}",
