@@ -22,7 +22,7 @@ use std::fs::*;
 use std::io::{self, Write};
 use std::os::unix::process::CommandExt;
 use std::path::Path;
-use std::process::Command;
+use std::process::{Command, Stdio};
 
 use regex::Regex;
 
@@ -39,7 +39,7 @@ fn tmp_edit_file_name(source_file: &Path, service: &str, original_user: &str) ->
         "/tmp/{}.{}.{}",
         service,
         original_user,
-        source_file.file_name().unwrap().to_str().unwrap(),
+        source_file.to_str().unwrap().replace('/', "_"),
     )
 }
 
@@ -127,6 +127,9 @@ fn build_exitcmd(entry: &EnvOptions, source_file: &str, edit_file: &str) -> Comm
             );
         }
     }
+    cmd.stdin(Stdio::inherit());
+    cmd.stdout(Stdio::inherit());
+    cmd.stderr(Stdio::inherit());
 
     cmd
 }
@@ -313,21 +316,6 @@ fn main() {
 
     log_action(&service, "permit", &ro, &original_command.join(" "));
 
-    if entry.clone().unwrap().exitcmd.is_some() {
-        let mut cmd = build_exitcmd(
-            &entry.clone().unwrap(),
-            &source_file.to_str().unwrap(),
-            &edit_file,
-        );
-        let out = cmd.output().expect("could not execute");
-        io::stdout().write_all(&out.clone().stdout).unwrap();
-        io::stderr().write_all(&out.clone().stderr).unwrap();
-        if !out.status.success() {
-            println!("Aborting as exitcmd was non-zero");
-            std::process::exit(out.status.code().unwrap());
-        }
-    }
-
     let dir_parent_tmp =
         source_tmp_file_name(&source_file, format!("{}.copy", service).as_str(), &ro.name);
     if let Err(x) = std::fs::copy(edit_file, dir_parent_tmp.as_str()) {
@@ -356,13 +344,29 @@ fn main() {
         None,
         dir_parent_tmp.as_str(),
         if entry.clone().unwrap().edit_mode.is_some() {
-            nix::sys::stat::Mode::from_bits(entry.unwrap().edit_mode.unwrap() as u32).unwrap()
+            nix::sys::stat::Mode::from_bits(entry.clone().unwrap().edit_mode.unwrap() as u32)
+                .unwrap()
         } else {
             nix::sys::stat::Mode::S_IRUSR | nix::sys::stat::Mode::S_IWUSR
         },
         nix::sys::stat::FchmodatFlags::FollowSymlink,
     )
     .unwrap();
+
+    if entry.clone().unwrap().exitcmd.is_some() {
+        let mut cmd = build_exitcmd(
+            &entry.unwrap(),
+            &source_file.to_str().unwrap(),
+            &dir_parent_tmp.as_str(),
+        );
+        let out = cmd.output().expect("could not execute");
+        io::stdout().write_all(&out.clone().stdout).unwrap();
+        io::stderr().write_all(&out.clone().stderr).unwrap();
+        if !out.status.success() {
+            println!("Aborting as exitcmd was non-zero");
+            std::process::exit(out.status.code().unwrap());
+        }
+    }
 
     if std::fs::rename(&dir_parent_tmp.as_str(), source_file).is_err() {
         println!(
