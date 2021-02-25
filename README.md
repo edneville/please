@@ -180,10 +180,10 @@ datematch = ^Mon.*
 This is performed as follows:
 
 1. user runs edit as `pleaseedit -u root /etc/fstab`
-2. `/etc/fstab` is copied to `/tmp/pleaseedit.$USER.fstab`
-3. user's `EDITOR` is executed against `/tmp/pleaseedit.$USER.fstab`
-4. if `EDITOR` exits 0, and `exitcmd` exits 0, then `/tmp/pleaseedit.$USER.fstab` is copied to `/etc/fstab.pleaseedit.$USER`
-5.  `/etc/fstab.pleaseedit.$USER` is set as root owned and `renamed` to `/etc/fstab`
+2. `/etc/fstab` is copied to `/tmp/pleaseedit.$USER._etc_fstab`
+3. user's `EDITOR` is executed against `/tmp/pleaseedit.$USER._etc_fstab`
+4. if `EDITOR` exits 0, and `exitcmd` exits 0, then `/tmp/pleaseedit.$USER._etc_fstab` is copied to `/etc/fstab.pleaseedit.$USER`
+5.  `/etc/fstab.pleaseedit.$USER` is set as (target) root owned and `renamed` to `/etc/fstab`
 
 # exitcmd
 
