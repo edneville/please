@@ -163,6 +163,7 @@ impl fmt::Display for ACLTYPE {
     }
 }
 
+/// build a regex and replace %{USER} with the user str, prefix with ^ and suffix with $
 pub fn regex_build(
     v: &str,
     user: &str,
@@ -186,6 +187,7 @@ pub fn regex_build(
     Some(rule.unwrap())
 }
 
+/// return true if the inclusion exists and ends with .ini
 pub fn can_dir_include(file: &str) -> bool {
     let dir_pattern = Regex::new(r".*\.ini$").unwrap();
 
@@ -199,11 +201,42 @@ pub fn can_dir_include(file: &str) -> bool {
     false
 }
 
+/// print the usage
 pub fn print_usage(opts: &Options, header: &str) {
     println!("usage:");
     println!("{}", opts.usage(header));
 }
 
+/// added around easter time
+pub fn credits(service: &str) {
+    let mut contributors = [
+        "All of the Debian Rust Maintainers, and especially Sylvestre Ledru",
+        "Andy Kluger, for your feedback",
+        "Cyrus Wyett, jim was better than ed",
+        "@unmellow, for your early testing",
+        "noproto, for your detailed report",
+        "pin, for work with pkgsrc",
+        "Stanley Dziegiel, for ini suggestions",
+        "My wife and child, for putting up with me",
+    ];
+
+    print_version(&service);
+
+    contributors.sort();
+
+    println!("\nWith thanks to the following teams and people, you got us where we are today.\n");
+    println!("If your name is missing, or incorrect, please get in contact.\n");
+    println!("In sort order:\n");
+
+    for i in contributors.iter() {
+        println!("\t{}", i);
+    }
+
+    println!("\nYou too of course, for motivating me.");
+    println!("\nI thank you all for your help\n\n\t-- Edward Neville");
+}
+
+/// common opt arguments
 pub fn common_opt_arguments(
     matches: &Matches,
     opts: &Options,
@@ -211,6 +244,8 @@ pub fn common_opt_arguments(
     service: &str,
     header: &str,
 ) {
+    ro.new_args = matches.free.clone();
+
     if matches.opt_present("r") {
         ro.reason = Some(matches.opt_str("r").unwrap());
     }
@@ -245,6 +280,11 @@ pub fn common_opt_arguments(
         ro.prompt = false;
     }
     if matches.opt_present("h") {
+        if ro.new_args == ["credits"] {
+            credits(&service);
+            std::process::exit(0);
+        }
+
         print_usage(&opts, &header);
         print_version(&service);
         std::process::exit(0);
@@ -263,6 +303,7 @@ pub fn common_opt_arguments(
     }
 }
 
+/// read an ini file and traverse includes
 pub fn read_ini(
     conf: &str,
     vec_eo: &mut Vec<EnvOptions>,
@@ -469,6 +510,7 @@ pub fn read_ini(
     fail_error && faulty
 }
 
+/// read through an ini config file, appending EnvOptions to vec_eo
 pub fn read_ini_config_file(
     config_path: &str,
     vec_eo: &mut Vec<EnvOptions>,
@@ -502,6 +544,7 @@ pub fn read_ini_config_str(
     read_ini(&config, vec_eo, &user, fail_error, "static")
 }
 
+/// may we execute with this hostname
 pub fn hostname_ok(item: &EnvOptions, ro: &RunOptions, line: Option<i32>) -> bool {
     if item.hostname.is_some() {
         let hostname_re = match regex_build(
@@ -529,6 +572,7 @@ pub fn hostname_ok(item: &EnvOptions, ro: &RunOptions, line: Option<i32>) -> boo
     true
 }
 
+/// may we execute with this directory
 pub fn directory_check_ok(item: &EnvOptions, ro: &RunOptions, line: Option<i32>) -> bool {
     if item.dir.is_some() {
         let dir_re = match regex_build(
@@ -553,6 +597,7 @@ pub fn directory_check_ok(item: &EnvOptions, ro: &RunOptions, line: Option<i32>)
     true
 }
 
+/// is the RunOption valid for the dates permitted in the EnvOption
 pub fn permitted_dates_ok(item: &EnvOptions, ro: &RunOptions, line: Option<i32>) -> bool {
     if item.notbefore.is_some() && item.notbefore.unwrap() > ro.date {
         // println!("{}: now is before date", item.section);
@@ -587,6 +632,7 @@ pub fn permitted_dates_ok(item: &EnvOptions, ro: &RunOptions, line: Option<i32>)
     true
 }
 
+/// search the EnvOptions list for matching RunOptions and return the match
 pub fn can(vec_eo: &[EnvOptions], ro: &RunOptions) -> Result<EnvOptions, ()> {
     let mut opt = EnvOptions::new_deny();
     let mut matched = false;
@@ -686,6 +732,7 @@ pub fn can(vec_eo: &[EnvOptions], ro: &RunOptions) -> Result<EnvOptions, ()> {
     Ok(opt)
 }
 
+/// are user/password authentic
 pub fn auth_ok(u: &str, p: &str, service: &str) -> bool {
     let mut auth = pam::Authenticator::with_password(&service).expect("Failed to init PAM client.");
     auth.get_handler().set_credentials(u, p);
@@ -695,6 +742,7 @@ pub fn auth_ok(u: &str, p: &str, service: &str) -> bool {
     false
 }
 
+/// find editor for user. return /usr/bin/vi if EDITOR and VISUAL are unset
 pub fn get_editor() -> String {
     let editor = "/usr/bin/vi";
 
@@ -707,6 +755,7 @@ pub fn get_editor() -> String {
     editor.to_string()
 }
 
+/// read password of user via rpassword
 pub fn challenge_password(user: &str, entry: EnvOptions, service: &str, prompt: bool) -> bool {
     if entry.require_pass {
         if tty_name().is_none() {
@@ -745,6 +794,7 @@ pub fn challenge_password(user: &str, entry: EnvOptions, service: &str, prompt: 
     true
 }
 
+/// produce output list of acl
 pub fn list(vec_eo: &[EnvOptions], ro: &RunOptions) {
     let search_user = if ro.target != "" {
         String::from(&ro.target)
@@ -844,6 +894,7 @@ pub fn list(vec_eo: &[EnvOptions], ro: &RunOptions) {
     }
 }
 
+/// if binary is not an absolute/relative path, look for it in usual places
 pub fn search_path(binary: &str) -> Option<String> {
     let p = Path::new(binary);
     if binary.starts_with('/') || binary.starts_with("./") {
@@ -855,7 +906,7 @@ pub fn search_path(binary: &str) -> Option<String> {
     }
 
     for dir in "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin".split(':') {
-        let path_name = format!("{}/{}", &dir, &binary.to_string());
+        let path_name = format!("{}/{}", &dir, &binary);
         let p = Path::new(&path_name);
 
         if !p.exists() {
@@ -867,6 +918,7 @@ pub fn search_path(binary: &str) -> Option<String> {
     None
 }
 
+/// set privs of usr to target_uid and target_gid. return false if fails
 pub fn set_privs(user: &str, target_uid: nix::unistd::Uid, target_gid: nix::unistd::Gid) -> bool {
     let user = CString::new(user).unwrap();
     if initgroups(&user, target_gid).is_err() {
@@ -883,6 +935,7 @@ pub fn set_privs(user: &str, target_uid: nix::unistd::Uid, target_gid: nix::unis
     true
 }
 
+/// return our best guess of what the user's tty is
 pub fn tty_name() -> Option<String> {
     let mut ttyname = None;
 
@@ -905,10 +958,12 @@ pub fn tty_name() -> Option<String> {
     ttyname
 }
 
+/// add a level of escape to strings when they go to the old as " holds entities
 pub fn escape_log(message: &str) -> String {
     message.replace("\"", "\\\"")
 }
 
+/// write to syslog a standard log
 pub fn log_action(service: &str, result: &str, ro: &RunOptions, command: &str) -> bool {
     if !ro.syslog {
         return false;
@@ -944,8 +999,8 @@ pub fn log_action(service: &str, result: &str, ro: &RunOptions, command: &str) -
                     result,
                     escape_log( &ro.target ),
                     ro.acl_type,
-                    if ro.reason.clone().is_some() {
-                        escape_log( &ro.reason.clone().unwrap() )
+                    if ro.reason.as_ref().is_some() {
+                        escape_log( &ro.reason.as_ref().unwrap() )
                     } else {
                         String::from("")
                     },
@@ -957,10 +1012,12 @@ pub fn log_action(service: &str, result: &str, ro: &RunOptions, command: &str) -
     false
 }
 
+/// return the directory that the token should use
 pub fn token_dir() -> String {
     "/var/run/please/token".to_string()
 }
 
+/// return the path of the users token
 pub fn token_path(user: &str) -> Option<String> {
     let tty_name = tty_name();
     tty_name.as_ref()?;
@@ -974,6 +1031,7 @@ pub fn token_path(user: &str) -> Option<String> {
     ))
 }
 
+/// does the user have a valid token
 pub fn valid_token(user: &str) -> bool {
     if !Path::new(&token_dir()).is_dir() && fs::create_dir_all(&token_dir()).is_err() {
         return false;
@@ -1002,6 +1060,7 @@ pub fn valid_token(user: &str) -> bool {
     }
 }
 
+/// touch the users token on disk
 pub fn update_token(user: &str) {
     if !Path::new(&token_dir()).is_dir() && fs::create_dir_all(&token_dir()).is_err() {
         return;
@@ -1019,6 +1078,7 @@ pub fn update_token(user: &str) {
     }
 }
 
+/// remove from disk the users token
 pub fn remove_token(user: &str) {
     if !Path::new(&token_dir()).is_dir() && fs::create_dir_all(&token_dir()).is_err() {
         return;
@@ -1040,6 +1100,7 @@ pub fn remove_token(user: &str) {
     }
 }
 
+/// turn group list into an indexed list
 pub fn group_hash(groups: Vec<Group>) -> HashMap<String, u32> {
     let mut hm: HashMap<String, u32> = HashMap::new();
     for group in groups {
@@ -1059,6 +1120,7 @@ pub fn replace_new_args(new_args: Vec<String>) -> String {
     args.join(" ")
 }
 
+/// print version string
 pub fn print_version(program: &str) {
     println!("{} version {}", &program, env!("CARGO_PKG_VERSION"));
 }

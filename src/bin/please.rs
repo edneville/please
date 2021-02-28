@@ -28,6 +28,7 @@ use nix::unistd::gethostname;
 use users::os::unix::UserExt;
 use users::*;
 
+/// walk through user ACL
 fn do_list(ro: &mut RunOptions, vec_eo: &[EnvOptions], service: &str) {
     let name = if ro.target == ro.name || ro.target == "" {
         "You"
@@ -93,6 +94,7 @@ fn do_list(ro: &mut RunOptions, vec_eo: &[EnvOptions], service: &str) {
     }
 }
 
+/// navigate to directory or exit 1
 fn do_dir_changes(ro: &RunOptions) {
     if ro.directory != "" {
         if let Err(x) = std::env::set_current_dir(&ro.directory) {
@@ -102,6 +104,7 @@ fn do_dir_changes(ro: &RunOptions) {
     }
 }
 
+/// clean environment aside from ~half a dozen vars and set some environments for helper scripts
 fn do_environment(
     ro: &mut RunOptions,
     original_user: &User,
@@ -143,6 +146,7 @@ fn do_environment(
     std::env::set_var("LOGNAME", &ro.target);
 }
 
+/// setup getopts for argument parsing and help output
 fn general_options(
     mut ro: &mut RunOptions,
     args: Vec<String>,
@@ -190,8 +194,6 @@ fn general_options(
     let header = format!("{} [arguments] </path/to/executable>", &service);
     common_opt_arguments(&matches, &opts, &mut ro, &service, &header);
 
-    ro.new_args = matches.free;
-
     if ro.new_args.is_empty() && !ro.warm_token && !ro.purge_token && ro.acl_type != ACLTYPE::LIST {
         println!("No command given");
         print_usage(&opts, &header);
@@ -200,6 +202,7 @@ fn general_options(
     }
 }
 
+/// main entry point
 fn main() {
     let args: Vec<String> = std::env::args().collect();
     let original_command = args.clone();
