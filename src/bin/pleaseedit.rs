@@ -34,6 +34,7 @@ use nix::unistd::{chown, fork, gethostname, ForkResult};
 
 use users::*;
 
+/// return a path string to work on in /tmp
 fn tmp_edit_file_name(source_file: &Path, service: &str, original_user: &str) -> String {
     format!(
         "/tmp/{}.{}.{}",
@@ -43,6 +44,7 @@ fn tmp_edit_file_name(source_file: &Path, service: &str, original_user: &str) ->
     )
 }
 
+/// return a path string that exitcmd can use adjacent in the source location
 fn source_tmp_file_name(source_file: &Path, service: &str, original_user: &str) -> String {
     format!(
         "{}.{}.{}",
@@ -52,6 +54,7 @@ fn source_tmp_file_name(source_file: &Path, service: &str, original_user: &str) 
     )
 }
 
+/// copy the contents of source file into the tmp file with original user ownership
 fn setup_temp_edit_file(
     service: &str,
     source_file: &Path,
@@ -107,10 +110,11 @@ fn setup_temp_edit_file(
     tmp_edit_file
 }
 
+/// return the exitcmd string with %{OLD} and %{NEW} replaced
 fn build_exitcmd(entry: &EnvOptions, source_file: &str, edit_file: &str) -> Command {
     let cmd_re = Regex::new(r"\s+").unwrap();
 
-    let cmd_str = entry.exitcmd.clone().unwrap();
+    let cmd_str = &(entry.exitcmd).as_ref().unwrap();
     let cmd_parts: Vec<&str> = cmd_re.split(&cmd_str).collect();
 
     if cmd_parts.is_empty() {
@@ -134,6 +138,7 @@ fn build_exitcmd(entry: &EnvOptions, source_file: &str, edit_file: &str) -> Comm
     cmd
 }
 
+/// create options for parsing and --help
 fn general_options(mut ro: &mut RunOptions, args: Vec<String>, service: &str) {
     let mut opts = Options::new();
     opts.parsing_style(getopts::ParsingStyle::StopAtFirstFree);
@@ -157,8 +162,6 @@ fn general_options(mut ro: &mut RunOptions, args: Vec<String>, service: &str) {
     let header = format!("{} [arguments] </path/to/file>", &service);
     common_opt_arguments(&matches, &opts, &mut ro, &service, &header);
 
-    ro.new_args = matches.free;
-
     if (ro.new_args.is_empty() || ro.new_args.len() > 1) && !ro.warm_token && !ro.purge_token {
         println!("You must provide one file to edit");
         print_usage(&opts, &header);
@@ -167,6 +170,7 @@ fn general_options(mut ro: &mut RunOptions, args: Vec<String>, service: &str) {
     }
 }
 
+/// entry point
 fn main() {
     let args: Vec<String> = std::env::args().collect();
     let original_command = args.clone();
@@ -343,8 +347,8 @@ fn main() {
     fchmodat(
         None,
         dir_parent_tmp.as_str(),
-        if entry.clone().unwrap().edit_mode.is_some() {
-            nix::sys::stat::Mode::from_bits(entry.clone().unwrap().edit_mode.unwrap() as u32)
+        if entry.as_ref().unwrap().edit_mode.is_some() {
+            nix::sys::stat::Mode::from_bits(entry.as_ref().unwrap().edit_mode.unwrap() as u32)
                 .unwrap()
         } else {
             nix::sys::stat::Mode::S_IRUSR | nix::sys::stat::Mode::S_IWUSR
@@ -353,7 +357,7 @@ fn main() {
     )
     .unwrap();
 
-    if entry.clone().unwrap().exitcmd.is_some() {
+    if entry.as_ref().unwrap().exitcmd.is_some() {
         let mut cmd = build_exitcmd(
             &entry.unwrap(),
             &source_file.to_str().unwrap(),

@@ -195,7 +195,7 @@ dependencies = [
 
 [[package]]
 name = "pleaser"
-version = "0.3.23"
+version = "0.3.24"
 dependencies = [
  "chrono",
  "getopts",
