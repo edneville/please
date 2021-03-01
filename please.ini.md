@@ -2,9 +2,9 @@
 title: please.ini
 section: 5
 header: User Manual
-footer: please 0.3.24
+footer: please 0.3.25
 author: Ed Neville (ed-please@s5h.net)
-date: 28 February 2021
+date: 10 March 2021
 ---
 
 # NAME
@@ -17,7 +17,7 @@ The **please.ini** file contains one or more **[sections]** that hold ACL for us
 
 `please.ini` is an ini file, sections can be named with a short description of what the section provides. You may then find this helpful when listing rights with **please -l**.
 
-Rules are read and applied in the order they are presented in the configuration file. If the user matches a permit rule to run a command in an early section, but in a later section matches a deny regex for **.\***, then the user will not be permitted to run any command. The last match wins.
+Rules are read and applied in the order they are presented in the configuration file. For example, if the user matches a permit rule to run a command in an early section, but in a later section matches criteria for a deny and no further matches, then the user will not be permitted to run that command. The last match wins.
 
 The properties permitted are described below and should appear at most once per section. If a property is used more than once in a section, the last one will be used.
 
@@ -123,7 +123,7 @@ regex=^/etc/hosts$
 
 Naming sections should help later when listing permissions.
 
-Below, user **mandy** may run **du** without needing a password, but must enter a password for **bash**:
+Below, user **mandy** may run **du** without needing a password, but must enter her password for a **bash** running as root:
 
 ```
 [mandy_du]
@@ -147,7 +147,7 @@ $ find /var/log -type f -exec please /usr/bin/wc {} \+
 Here is a sample for the above scenario:
 
 ```
-[user_jim_root]
+[user_jim_root_wc]
 name=jim
 target=root
 permit=true
@@ -157,7 +157,7 @@ regex=^/usr/bin/wc (/var/log/[a-zA-Z0-9-]+(\.\d+)?(\s)?)+$
 User jim may only start or stop a docker container:
 
 ```
-[user_jim_root]
+[user_jim_root_docker]
 name=jim
 target=root
 permit=true
@@ -197,7 +197,7 @@ target=^%{USER}$
 
 # EXITCMD
 
-When the user completes their edit, and the editor exits cleanly, if **exitcmd** is included then the program will run as root. If the program also exits cleanly then the temporary edit will be copied to the destination.
+When the user completes their edit, and the editor exits cleanly, if **exitcmd** is included then this program will run as root. If the program also exits cleanly then the temporary edit will be copied to the destination.
 
 **%{OLD}** and **%{NEW}** will expand to the old (existing source) file and edit candidate, respectively. To verify a file edit, **ben**'s entry to check **/etc/hosts** after clean exit could look like this:
 
@@ -227,11 +227,11 @@ exitcmd = /usr/bin/please -c %{NEW}
 
 # DATED RANGES
 
-For large environments it is not unusual for a third party to require access during a short time frame for debugging. To accommodate this there are the **notbefore** and **notafter** time brackets. These can be either **YYYYmmdd** or **YYYYMMDDHHMMSS**.
+For large environments it is not unusual for a third party to require access during a short time frame for debugging. To accommodate this there are the **notbefore** and **notafter** time brackets. These can be either **YYYYmmdd** or **YYYYmmddHHMMSS**.
 
-The whole day is considered when using the shorter date form of **YYYYMMDD**.
+The whole day is considered when using the shorter date form of **YYYYmmdd**.
 
-Many enterprises may wish to permit windows of access to a user for a limited time only, even if that individual is considered to have a permanent role.
+Many enterprises may wish to permit periods of access to a user for a limited time only, even if that individual is considered to have a permanent role.
 
 User joker can do what they want as root on 1st April 2021:
 
@@ -265,7 +265,7 @@ datematch = ^Mon\s+.*
 
 # REASONS
 
-When **reason=true**, require a reason before permitting edits or execution with the **-r** options to **please** and **pleaseedit**. Some organisations may prefer a reason to be logged when a command is executed. This can be helpful for some situations where something such as **mkfs** or **useradd** might be preferable to be logged against a ticket.
+When **reason=true**, require a reason before permitting edits or execution with the **-r** option to **please** and **pleaseedit**. Some organisations may prefer a reason to be logged when a command is executed. This can be helpful for some situations where something such as **mkfs** or **useradd** might be preferable to be logged against a ticket.
 
 ```
 [l2_user_admin]
@@ -279,7 +279,7 @@ regex = ^/usr/sbin/useradd\s+-m\s+\w+$
 
 # DIR
 
-In some situations you may only want a command to run within a set of directories. The directory is specified with the **-d** argument to **please**. For example, the **build_aliases** command may run programs that output to the current working directory.
+In some situations you may only want a command to run within a set of directories. The directory is specified with the **-d** argument to **please**. For example, a program may output to the current working directory.
 
 ```
 [eng_build_aliases]
@@ -304,11 +304,11 @@ regex = ^/sbin/mkfs.(ext[234]|xfs) /dev/sd[bcdefg]\d?$
 last=true
 ```
 
-For simplicity, there is no need to process other configured rules if certain that the **l2users** group are safe to execute this. **last** should only be used in situations where there will never be something that could contradict the match later.
+For simplicity, there is no need to process other configured rules if certain that the **l2users** group are safe to execute this. **last** should only be used in situations where there will never be something that could contradict the match in an undesired way later.
 
 # SYSLOG
 
-By default entries are logged to syslog. If you do not wish an entry to go logged then specify **syslog=false**. Use this only if you are happy with commands going unlogged, similar to if policy would permit the user to switch to the target account.
+By default entries are logged to syslog. If you do not wish an entry to be logged then specify **syslog=false**. In this case **jim** can run anything in **/usr/bin/** as root and it will not be logged.
 
 ```
 [maverick]
@@ -324,7 +324,7 @@ reason = false
 
 # NOTES
 
-At a later date repeated properties within the same section may be treated as a matche list.
+At a later date repeated properties within the same section may be treated as a match list.
 
 At a later date sections with names containing 'default' may behave differently to normal sections.
 

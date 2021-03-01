@@ -8,7 +8,11 @@ The idea is to help you admin your box without giving users full root, just beca
 
 # How do I install it
 
-A simple install:
+It might already be in the repo that you're using:
+
+[![Packaging status](https://repology.org/badge/vertical-allrepos/pleaser.svg)](https://repology.org/project/pleaser/versions)
+
+If not, it is a simple install:
 
 ```
   git clone https://gitlab.com/edneville/please.git
