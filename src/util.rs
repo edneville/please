@@ -233,7 +233,7 @@ pub fn credits(service: &str) {
     }
 
     println!("\nYou too of course, for motivating me.");
-    println!("\nI thank you all for your help\n\n\t-- Edward Neville");
+    println!("\nI thank you all for your help.\n\n\t-- Edward Neville");
 }
 
 /// common opt arguments

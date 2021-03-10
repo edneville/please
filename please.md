@@ -2,9 +2,9 @@
 title: please
 section: 1
 header: User Manual
-footer: please 0.3.24
+footer: please 0.3.25
 author: Ed Neville (ed-please@s5h.net)
-date: 28 February 2021
+date: 10 March 2021
 ---
 
 # NAME
@@ -25,13 +25,15 @@ please - a tool for access elevation.
 
 **please [-h/\--help]**
 
-**please [-t/\--target] backup tar -cvf - /home/data | ...**
+**please [-t/\--target username] backup tar -cvf - /home/data | ...**
 
-**please [-u/\--user] backup tar -cvf - /home/data | ...**
+**please [-u/\--user username] backup tar -cvf - /home/data | ...**
 
 **please [-l/\--list]**
 
-**please [-l/\--list] [-t/\--target user]**
+**please [-l/\--list] [-t/\--target username]**
+
+**please [-l/\--list] [-u/\--user username]**
 
 **please [-n/\--noprompt] command**
 
@@ -43,11 +45,11 @@ please - a tool for access elevation.
 
 # DESCRIPTION
 
-**please** and **pleaseedit** are a sudo clones that have regex support and a simple approach to ACL.
+**please** and **pleaseedit** are sudo alternatives that have regex support and a simple approach to ACL.
 
-The aim is to allow admins to delegate accurate principle of least privilege access with ease. There are times when what is intended to be executed can be expressed easily with a regex to expose only what is needed and nothing more.
+The aim is to allow admins to delegate accurate principle of least privilege access with ease. **please.ini** allows for very specific and flexible regex defined permissions.
 
-**pleaseedit** allows safe editing of files. The file is copied to /tmp, where it can be updated. When **EDITOR** exits cleanly the file is copied alongside the target and then renamed.
+**pleaseedit** adds a layer of safety to editing files. The file is copied to /tmp, where it can be updated. When **EDITOR** exits cleanly the file is copied alongside the target, the file will then be renamed over the original, but if a **exitcmd** is configured it must exit cleanly first.
 
 **-c**/**\--check file**
 : will check the syntax of a **please.ini** config file. Exits non-zero on error
@@ -70,11 +72,11 @@ The aim is to allow admins to delegate accurate principle of least privilege acc
 **-r**/**\--reason** **[reason]**
 : will add **reason** to the system log
 
-**-t**/**\--target** **[user]**
-: to execute command as target **user**
+**-t**/**\--target** **[username]**
+: to execute command, or edit as target **username**
 
-**-u**/**\--user** **[user]**
-: to execute command as target **user**
+**-u**/**\--user** **[username]**
+: to execute command, or edit as target **username**
 
 **-v**/**\--version**
 : print version and exit
@@ -82,19 +84,22 @@ The aim is to allow admins to delegate accurate principle of least privilege acc
 **-w**/**\--warm**
 : will warm an authentication token and exit
 
-# EXAMPLES
+# EXAMPLE USAGE
 
 **please -t httpd /bin/bash**
-: run a shell as the httpd user.
+: run a shell as the httpd user
 
 **please -l**
-: to list what you may run.
+: to list what you may run
 
-**please -t username -l**
-: to show what username may run. **username** must match the target regex in a **type=list** rule.
+**please -t \"username\" -l**
+: to show what username may run. **username** must match the target regex in a **type=list** rule
 
-**please -r \"reloading httpd for ticket #123\" systemctl reload apache2**
-: to show what username may run. **username** must match the target regex.
+**please -r \'reloading apache2, change #123\' systemctl reload apache2**
+: to reload apache2 with a reason
+
+**pleaseedit -r \'adding new storage, ticket #24365\' /etc/fstab**
+: to use pleaseedit to modify **fstab**
 
 Please see **please.ini** for configuration examples.
 
@@ -113,5 +118,4 @@ Found a bug? Please either open a ticket or send a pull request/patch.
 # SEE ALSO
 
 **please.ini**(5)
-
 
