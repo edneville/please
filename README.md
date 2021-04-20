@@ -1,10 +1,14 @@
-# Please, a sudo clone with regex support
+# Please, a sudo alternative with regex support
 
 Great! This is what I need.
 
 The aim is to allow admins to delegate accurate least privilege access with ease. There are times when what is intended to be executed can be expressed easily with a regex to expose only what is needed and nothing more.
 
 The idea is to help you admin your box without giving users full root, just because that is easier. Most admins have experience of regex in one form or another, so lets configure access that way.
+
+I saw regex but don't like regex. No problem, you can still use please without regex, just treat each field/property as plain text, and escape control characters `?(){}[]+` etc.
+
+Please is written with memory safe rust. Traditional C memory unsafety is avoided, logic problems may still exist. Logic problems would exist in both systems, but I choose the smaller problem set.
 
 # How do I install it
 
@@ -25,7 +29,7 @@ Arch, BTW:
 
 ```
 pacman -Syu git openssh fakeroot devtools make gcc rust
-git clone ssh://aur@aur.archlinux.org/pleaser.git
+git clone https://aur@aur.archlinux.org/pleaser.git
 cd pleaser && makepkg -isr
 ```
 
@@ -280,11 +284,4 @@ The source code for this project is currently hosted on [gitlab](https://gitlab.
 # Why pleaser in some circles?
 
 This project is named "please". In some places that project name was used by others for other things. Some packages will be named pleaser, some will be named please. The only important thing is if you wish someone to make you a sandwich, just say "please" first.
-
-# Todo
-
-```
-[ ] docker image for testing
-[ ] packages
-```
 

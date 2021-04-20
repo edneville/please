@@ -21,7 +21,6 @@ use std::env;
 use std::ffi::{CStr, CString};
 use std::path::Path;
 use std::process;
-use std::time::SystemTime;
 use syslog::{Facility, Formatter3164};
 
 use chrono::{NaiveDate, NaiveDateTime, Utc};
@@ -29,10 +28,17 @@ use std::fmt;
 use std::fs;
 use std::fs::File;
 use std::io::prelude::*;
+use std::io::BufReader;
+use std::time::SystemTime;
+use users::os::unix::UserExt;
 use users::*;
 
 use getopts::{Matches, Options};
-use nix::unistd::{initgroups, setgid, setuid};
+use nix::unistd::{initgroups, setegid, seteuid, setgid, setuid};
+use pam::Authenticator;
+
+use rand::distributions::Alphanumeric;
+use rand::{thread_rng, Rng};
 
 #[derive(Clone)]
 pub struct EnvOptions {
@@ -102,11 +108,13 @@ impl Default for EnvOptions {
 #[derive(Clone)]
 pub struct RunOptions {
     pub name: String,
+    pub original_uid: nix::unistd::Uid,
+    pub original_gid: nix::unistd::Gid,
     pub target: String,
     pub command: String,
     pub original_command: Vec<String>,
     pub hostname: String,
-    pub directory: String,
+    pub directory: Option<String>,
     pub groups: HashMap<String, u32>,
     pub date: NaiveDateTime,
     pub acl_type: ACLTYPE,
@@ -116,19 +124,22 @@ pub struct RunOptions {
     pub purge_token: bool,
     pub warm_token: bool,
     pub new_args: Vec<String>,
+    pub old_umask: Option<nix::sys::stat::Mode>,
 }
 
 impl RunOptions {
     pub fn new() -> RunOptions {
         RunOptions {
             name: "root".to_string(),
+            original_uid: nix::unistd::Uid::from_raw(get_current_uid()),
+            original_gid: nix::unistd::Gid::from_raw(get_current_gid()),
             target: "".to_string(),
             command: "".to_string(),
             original_command: vec![],
             hostname: "localhost".to_string(),
             date: Utc::now().naive_utc(),
             groups: HashMap::new(),
-            directory: ".".to_string(),
+            directory: None,
             acl_type: ACLTYPE::RUN,
             reason: None,
             syslog: true,
@@ -136,6 +147,7 @@ impl RunOptions {
             purge_token: false,
             warm_token: false,
             new_args: vec![],
+            old_umask: None,
         }
     }
 }
@@ -143,6 +155,36 @@ impl RunOptions {
 impl Default for RunOptions {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+struct PamConvo {
+    login: String,
+    passwd: Option<String>,
+    service: String,
+}
+
+impl pam::Converse for PamConvo {
+    fn prompt_echo(&mut self, _msg: &CStr) -> Result<CString, ()> {
+        CString::new(self.login.clone()).map_err(|_| ())
+    }
+    fn prompt_blind(&mut self, _msg: &CStr) -> Result<CString, ()> {
+        self.passwd = Some(
+            rpassword::read_password_from_tty(Some(&format!(
+                "[{}] password for {}: ",
+                self.service, self.login
+            )))
+            .unwrap(),
+        );
+
+        CString::new(self.passwd.clone().unwrap()).map_err(|_| ())
+    }
+    fn info(&mut self, _msg: &CStr) {}
+    fn error(&mut self, msg: &CStr) {
+        println!("[{} pam error] {}", self.service, msg.to_string_lossy());
+    }
+    fn username(&self) -> &str {
+        &self.login
     }
 }
 
@@ -161,6 +203,20 @@ impl fmt::Display for ACLTYPE {
             ACLTYPE::EDIT => write!(f, "edit"),
         }
     }
+}
+
+pub fn print_may_not(ro: &RunOptions) {
+    println!(
+        "You may not {} \"{}\" on {} as {}",
+        if ro.acl_type == ACLTYPE::RUN {
+            "execute".to_string()
+        } else {
+            ro.acl_type.to_string()
+        },
+        &ro.command,
+        &ro.hostname,
+        &ro.target
+    );
 }
 
 /// build a regex and replace %{USER} with the user str, prefix with ^ and suffix with $
@@ -291,13 +347,19 @@ pub fn common_opt_arguments(
     }
 
     if ro.purge_token {
+        if !esc_privs() {
+            std::process::exit(1);
+        }
         remove_token(&ro.name);
+        if !drop_privs(&ro) {
+            std::process::exit(1);
+        }
         std::process::exit(0);
     }
 
     if ro.warm_token {
         if ro.prompt {
-            challenge_password(&ro.name, EnvOptions::new(), &service, ro.prompt);
+            challenge_password(&ro, EnvOptions::new(), &service);
         }
         std::process::exit(0);
     }
@@ -310,6 +372,7 @@ pub fn read_ini(
     user: &str,
     fail_error: bool,
     config_path: &str,
+    bytes: &mut u64,
 ) -> bool {
     let parse_datetime_from_str = NaiveDateTime::parse_from_str;
     let parse_date_from_str = NaiveDate::parse_from_str;
@@ -359,7 +422,7 @@ pub fn read_ini(
                     println!("Includes should start with /");
                     return true;
                 }
-                if read_ini_config_file(&value, vec_eo, &user, fail_error) {
+                if read_ini_config_file(&value, vec_eo, &user, fail_error, bytes) {
                     println!("Could not include file");
                     return true;
                 }
@@ -385,7 +448,7 @@ pub fn read_ini(
                             if !can_dir_include(&incf) {
                                 continue;
                             }
-                            if read_ini_config_file(&incf, vec_eo, &user, fail_error) {
+                            if read_ini_config_file(&incf, vec_eo, &user, fail_error, bytes) {
                                 println!("Could not include file");
                                 return true;
                             }
@@ -511,28 +574,49 @@ pub fn read_ini(
 }
 
 /// read through an ini config file, appending EnvOptions to vec_eo
+/// hardcoded limit of 10M for confs
 pub fn read_ini_config_file(
     config_path: &str,
     vec_eo: &mut Vec<EnvOptions>,
     user: &str,
     fail_error: bool,
+    bytes: &mut u64,
 ) -> bool {
     let path = Path::new(config_path);
     let display = path.display();
 
-    let mut file = match File::open(&path) {
-        Err(_why) => return true,
+    let file = match File::open(&path) {
+        Err(why) => {
+            println!("Could not open {}: {}", display, why);
+            return true;
+        }
         Ok(file) => file,
     };
 
-    let mut s = String::new();
-    match file.read_to_string(&mut s) {
-        Err(why) => {
-            println!("couldn't read {}: {}", display, why);
-            true
-        }
-        Ok(_) => read_ini(&s, vec_eo, &user, fail_error, config_path),
+    let byte_limit = 1024 * 1024 * 10;
+
+    if *bytes >= byte_limit {
+        println!("Exiting as too much config has already been read.");
+        std::process::exit(1);
     }
+
+    let mut s = String::new();
+    let reader = BufReader::new(file).take(byte_limit).read_to_string(&mut s);
+    *bytes += s.len() as u64;
+
+    match reader {
+        Ok(n) => {
+            if n >= byte_limit as usize {
+                println!("Exiting as too much config has already been read.");
+                std::process::exit(1);
+            }
+        }
+        Err(why) => {
+            println!("Could not read {}: {}", display, why);
+            return true;
+        }
+    }
+    read_ini(&s, vec_eo, &user, fail_error, config_path, bytes)
 }
 
 pub fn read_ini_config_str(
@@ -540,8 +624,9 @@ pub fn read_ini_config_str(
     vec_eo: &mut Vec<EnvOptions>,
     user: &str,
     fail_error: bool,
+    bytes: &mut u64,
 ) -> bool {
-    read_ini(&config, vec_eo, &user, fail_error, "static")
+    read_ini(&config, vec_eo, &user, fail_error, "static", bytes)
 }
 
 /// may we execute with this hostname
@@ -589,10 +674,18 @@ pub fn directory_check_ok(item: &EnvOptions, ro: &RunOptions, line: Option<i32>)
             }
         };
 
-        if !dir_re.is_match(&ro.directory) {
+        if ro.directory.as_ref().is_none() {
+            return false;
+        }
+
+        if (&ro.directory.as_ref()).is_some() && !dir_re.is_match(&ro.directory.as_ref().unwrap()) {
             // && ro.directory != "." {
             return false;
         }
+        return true;
+    }
+    if ro.directory.is_some() {
+        return false;
     }
     true
 }
@@ -732,16 +825,6 @@ pub fn can(vec_eo: &[EnvOptions], ro: &RunOptions) -> Result<EnvOptions, ()> {
     Ok(opt)
 }
 
-/// are user/password authentic
-pub fn auth_ok(u: &str, p: &str, service: &str) -> bool {
-    let mut auth = pam::Authenticator::with_password(&service).expect("Failed to init PAM client.");
-    auth.get_handler().set_credentials(u, p);
-    if auth.authenticate().is_ok() && auth.open_session().is_ok() {
-        return true;
-    }
-    false
-}
-
 /// find editor for user. return /usr/bin/vi if EDITOR and VISUAL are unset
 pub fn get_editor() -> String {
     let editor = "/usr/bin/vi";
@@ -756,7 +839,8 @@ pub fn get_editor() -> String {
 }
 
 /// read password of user via rpassword
-pub fn challenge_password(user: &str, entry: EnvOptions, service: &str, prompt: bool) -> bool {
+/// should pam require a password, and it is successful, then we set a token
+pub fn challenge_password(ro: &RunOptions, entry: EnvOptions, service: &str) -> bool {
     if entry.require_pass {
         if tty_name().is_none() {
             println!("Cannot read password without tty");
@@ -764,24 +848,47 @@ pub fn challenge_password(user: &str, entry: EnvOptions, service: &str, prompt: 
         }
 
         let mut retry_counter = 0;
-        if valid_token(&user) {
-            update_token(&user);
+
+        if !esc_privs() {
+            std::process::exit(1);
+        }
+
+        if valid_token(&ro.name) {
+            update_token(&ro.name);
             return true;
         }
 
-        if !prompt {
+        if !drop_privs(&ro) {
+            std::process::exit(1);
+        }
+
+        if !ro.prompt {
             return false;
         }
 
-        loop {
-            let pass = rpassword::read_password_from_tty(Some(&format!(
-                "[{}] password for {}: ",
-                &service, &user
-            )))
-            .unwrap();
+        let convo = PamConvo {
+            login: ro.name.to_string(),
+            passwd: None,
+            service: service.to_string(),
+        };
 
-            if auth_ok(&user, &pass, &service) {
-                update_token(&user);
+        let mut handler = Authenticator::with_handler(service, convo).expect("Cannot init PAM");
+
+        loop {
+            let auth = handler.authenticate();
+
+            if auth.is_ok() {
+                if handler.get_handler().passwd.is_some() {
+                    if !esc_privs() {
+                        std::process::exit(1);
+                    }
+
+                    update_token(&ro.name);
+
+                    if !drop_privs(&ro) {
+                        std::process::exit(1);
+                    }
+                }
                 return true;
             }
             retry_counter += 1;
@@ -918,21 +1025,104 @@ pub fn search_path(binary: &str) -> Option<String> {
     None
 }
 
+/// clean environment aside from ~half a dozen vars
+pub fn clean_environment(ro: &mut RunOptions) {
+    ro.old_umask = Some(nix::sys::stat::umask(
+        nix::sys::stat::Mode::from_bits(0o077).unwrap(),
+    ));
+    for (key, _) in std::env::vars() {
+        if key == "LANGUAGE"
+            || key == "XAUTHORITY"
+            || key == "LANG"
+            || key == "LS_COLORS"
+            || key == "TERM"
+            || key == "DISPLAY"
+            || key == "LOGNAME"
+        {
+            continue;
+        }
+
+        if ro.acl_type == ACLTYPE::EDIT && (key == "EDITOR" || key == "VISUAL") {
+            continue;
+        }
+        std::env::remove_var(key);
+    }
+}
+
+/// set environment for helper scripts
+pub fn set_environment(
+    ro: &RunOptions,
+    original_user: &User,
+    original_uid: u32,
+    lookup_name: &User,
+) {
+    std::env::set_var("PLEASE_USER", original_user.name());
+    std::env::set_var("PLEASE_UID", original_uid.to_string());
+    std::env::set_var("PLEASE_GID", original_user.primary_group_id().to_string());
+    std::env::set_var("PLEASE_COMMAND", &ro.command);
+
+    std::env::set_var("SUDO_USER", original_user.name());
+    std::env::set_var("SUDO_UID", original_uid.to_string());
+    std::env::set_var("SUDO_GID", original_user.primary_group_id().to_string());
+    std::env::set_var("SUDO_COMMAND", &ro.command);
+
+    std::env::set_var(
+        "PATH",
+        "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin".to_string(),
+    );
+    std::env::set_var("HOME", lookup_name.home_dir().as_os_str());
+    std::env::set_var("MAIL", format!("/var/mail/{}", ro.target));
+    std::env::set_var("SHELL", lookup_name.shell());
+    std::env::set_var("USER", &ro.target);
+    std::env::set_var("LOGNAME", &ro.target);
+}
+
+pub fn bad_priv_msg() {
+    println!("I cannot set privs. Exiting as not installed correctly.");
+}
+
 /// set privs of usr to target_uid and target_gid. return false if fails
 pub fn set_privs(user: &str, target_uid: nix::unistd::Uid, target_gid: nix::unistd::Gid) -> bool {
     let user = CString::new(user).unwrap();
     if initgroups(&user, target_gid).is_err() {
+        bad_priv_msg();
         return false;
     }
 
     if setgid(target_gid).is_err() {
+        bad_priv_msg();
         return false;
     }
 
     if setuid(target_uid).is_err() {
+        bad_priv_msg();
         return false;
     }
     true
+}
+
+/// set privs of usr to target_uid and target_gid. return false if fails
+pub fn set_eprivs(target_uid: nix::unistd::Uid, target_gid: nix::unistd::Gid) -> bool {
+    if setegid(target_gid).is_err() {
+        bad_priv_msg();
+        return false;
+    }
+    if seteuid(target_uid).is_err() {
+        bad_priv_msg();
+        return false;
+    }
+
+    true
+}
+
+/// set privs (just call eprivs based on ro)
+pub fn drop_privs(ro: &RunOptions) -> bool {
+    esc_privs() && set_eprivs(ro.original_uid, ro.original_gid)
+}
+
+/// reset privs (just call eprivs based on root)
+pub fn esc_privs() -> bool {
+    set_eprivs(nix::unistd::Uid::from_raw(0), nix::unistd::Gid::from_raw(0))
 }
 
 /// return our best guess of what the user's tty is
@@ -941,7 +1131,7 @@ pub fn tty_name() -> Option<String> {
 
     /* sometimes a tty isn't attached for all pipes FIXME: make this testable */
     unsafe {
-        for n in 0..255 {
+        for n in 0..3 {
             let ptr = libc::ttyname(n);
             if ptr.is_null() {
                 continue;
@@ -1031,9 +1221,29 @@ pub fn token_path(user: &str) -> Option<String> {
     ))
 }
 
-/// does the user have a valid token
-pub fn valid_token(user: &str) -> bool {
+pub fn create_token_dir() -> bool {
     if !Path::new(&token_dir()).is_dir() && fs::create_dir_all(&token_dir()).is_err() {
+        println!("Could not create token directory");
+        return false;
+    }
+
+    true
+}
+
+pub fn boot_secs() -> libc::timespec {
+    let mut tp = libc::timespec {
+        tv_sec: 0 as i64,
+        tv_nsec: 0,
+    };
+    unsafe { libc::clock_gettime(libc::CLOCK_BOOTTIME, &mut tp) };
+    tp
+}
+
+/// does the user have a valid token
+/// return false if time stamp is in the future
+/// return true if token was set within 600 seconds of wall and boot time
+pub fn valid_token(user: &str) -> bool {
+    if !create_token_dir() {
         return false;
     }
 
@@ -1042,27 +1252,47 @@ pub fn valid_token(user: &str) -> bool {
         return false;
     }
 
+    let secs = 600;
+
     let token_path = token_path.unwrap();
     match fs::metadata(token_path) {
-        Ok(meta) => match meta.modified() {
-            Ok(t) => match SystemTime::now().duration_since(t) {
-                Ok(d) => {
-                    if d.as_secs() < 600 {
-                        return true;
+        Ok(meta) => {
+            match meta.modified() {
+                Ok(t) => {
+                    let tp = boot_secs();
+
+                    match t.duration_since(SystemTime::UNIX_EPOCH) {
+                        Ok(s) => {
+                            if tp.tv_sec < s.as_secs() as i64 {
+                                // println!("tv_sec lower {} vs {}", tp.tv_sec, s.as_secs());
+                                return false;
+                            }
+                            if (tp.tv_sec - s.as_secs() as i64) < secs {
+                                // check the atime isn't older than 600 too
+
+                                match SystemTime::now().duration_since(meta.accessed().unwrap()) {
+                                    Ok(a) => return a.as_secs() <= secs as u64,
+                                    Err(_) => return false,
+                                }
+                            }
+                        }
+                        Err(_) => {
+                            return false;
+                        }
                     }
+
                     false
                 }
                 Err(_e) => false,
-            },
-            Err(_e) => false,
-        },
+            }
+        }
         Err(_) => false,
     }
 }
 
 /// touch the users token on disk
 pub fn update_token(user: &str) {
-    if !Path::new(&token_dir()).is_dir() && fs::create_dir_all(&token_dir()).is_err() {
+    if !create_token_dir() {
         return;
     }
 
@@ -1071,16 +1301,42 @@ pub fn update_token(user: &str) {
         return;
     }
 
+    let old_mode = nix::sys::stat::umask(nix::sys::stat::Mode::from_bits(0o077).unwrap());
     let token_path = token_path.unwrap();
-    match fs::File::create(token_path) {
+    let token_path_tmp = format!("{}.tmp", &token_path);
+    match fs::File::create(&token_path_tmp) {
         Ok(_x) => {}
         Err(x) => println!("Error creating token: {}", x),
+    }
+    nix::sys::stat::umask(old_mode);
+
+    let tp = boot_secs();
+
+    let tv_mtime = nix::sys::time::TimeVal::from(libc::timeval {
+        tv_sec: tp.tv_sec as i64,
+        tv_usec: 0,
+    });
+
+    let tv_atime = nix::sys::time::TimeVal::from(libc::timeval {
+        tv_sec: SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .unwrap()
+            .as_secs() as i64,
+        tv_usec: 0,
+    });
+
+    if nix::sys::stat::utimes(Path::new(&token_path_tmp), &tv_atime, &tv_mtime).is_err() {
+        return;
+    }
+
+    if std::fs::rename(&token_path_tmp.as_str(), token_path).is_err() {
+        return;
     }
 }
 
 /// remove from disk the users token
 pub fn remove_token(user: &str) {
-    if !Path::new(&token_dir()).is_dir() && fs::create_dir_all(&token_dir()).is_err() {
+    if !create_token_dir() {
         return;
     }
 
@@ -1125,6 +1381,12 @@ pub fn print_version(program: &str) {
     println!("{} version {}", &program, env!("CARGO_PKG_VERSION"));
 }
 
+/// return a lump of random alpha numeric characters
+pub fn prng_alpha_num_string(n: usize) -> String {
+    let rng = thread_rng();
+    rng.sample_iter(&Alphanumeric).take(n).collect()
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -1151,8 +1413,9 @@ regex=^/bin/bash .*$
 "
         .to_string();
 
+        let mut bytes = 0;
         let mut vec_eo: Vec<EnvOptions> = vec![];
-        read_ini_config_str(&config, &mut vec_eo, "ed", false);
+        read_ini_config_str(&config, &mut vec_eo, "ed", false, &mut bytes);
         let mut ro = RunOptions::new();
         ro.date = NaiveDate::from_ymd(2020, 1, 1).and_hms(0, 0, 0);
         ro.name = "ed".to_string();
@@ -1179,7 +1442,8 @@ regex = /bin/bash
         .to_string();
 
         let mut vec_eo: Vec<EnvOptions> = vec![];
-        read_ini_config_str(&config, &mut vec_eo, "ed", false);
+        let mut bytes = 0;
+        read_ini_config_str(&config, &mut vec_eo, "ed", false, &mut bytes);
         let mut ro = RunOptions::new();
         ro.name = "ed".to_string();
         ro.target = "root".to_string();
@@ -1221,19 +1485,20 @@ regex=^/bin/bash"
         ro.command = "/bin/bash".to_string();
 
         let mut vec_eo: Vec<EnvOptions> = vec![];
-        read_ini_config_str(&config, &mut vec_eo, &ro.name, false);
+        let mut bytes = 0;
+        read_ini_config_str(&config, &mut vec_eo, &ro.name, false, &mut bytes);
         assert_eq!(can(&vec_eo, &ro).unwrap().permit, false);
 
         ro.name = "other".to_string();
         ro.target = "thingy".to_string();
         let mut vec_eo: Vec<EnvOptions> = vec![];
-        read_ini_config_str(&config, &mut vec_eo, &ro.name, false);
+        read_ini_config_str(&config, &mut vec_eo, &ro.name, false, &mut bytes);
         assert_eq!(can(&vec_eo, &ro).unwrap().permit, true);
 
         ro.name = "other".to_string();
         ro.target = "oracle".to_string();
         let mut vec_eo: Vec<EnvOptions> = vec![];
-        read_ini_config_str(&config, &mut vec_eo, &ro.name, false);
+        read_ini_config_str(&config, &mut vec_eo, &ro.name, false, &mut bytes);
         assert_eq!(can(&vec_eo, &ro).unwrap().permit, false);
     }
 
@@ -1267,7 +1532,8 @@ target=^ "
         ro.command = "/bin/bash".to_string();
 
         let mut vec_eo: Vec<EnvOptions> = vec![];
-        read_ini_config_str(&config, &mut vec_eo, "ed", false);
+        let mut bytes = 0;
+        read_ini_config_str(&config, &mut vec_eo, "ed", false, &mut bytes);
 
         ro.date = NaiveDate::from_ymd(2019, 12, 31).and_hms(0, 0, 0);
         assert_eq!(can(&vec_eo, &ro).unwrap().permit, false);
@@ -1301,7 +1567,8 @@ require_pass = false
         .to_string();
 
         let mut vec_eo: Vec<EnvOptions> = vec![];
-        read_ini_config_str(&config, &mut vec_eo, "ed", false);
+        let mut bytes = 0;
+        read_ini_config_str(&config, &mut vec_eo, "ed", false, &mut bytes);
         let mut ro = RunOptions::new();
         ro.name = "ed".to_string();
         ro.acl_type = ACLTYPE::LIST;
@@ -1325,13 +1592,15 @@ regex=^.*
         .to_string();
 
         let mut vec_eo: Vec<EnvOptions> = vec![];
-        read_ini_config_str(&config, &mut vec_eo, "ed", false);
+        let mut bytes = 0;
+        read_ini_config_str(&config, &mut vec_eo, "ed", false, &mut bytes);
         let mut ro = RunOptions::new();
         ro.name = "ed".to_string();
         ro.target = "root".to_string();
 
         let mut vec_eo: Vec<EnvOptions> = vec![];
-        read_ini_config_str(&config, &mut vec_eo, "ed", false);
+        let mut bytes = 0;
+        read_ini_config_str(&config, &mut vec_eo, "ed", false, &mut bytes);
 
         ro.date = NaiveDate::from_ymd(2020, 8, 8).and_hms(0, 0, 0);
         assert_eq!(can(&vec_eo, &ro).unwrap().permit, true);
@@ -1369,7 +1638,8 @@ regex=^/bin/bash .*$
         .to_string();
 
         let mut vec_eo: Vec<EnvOptions> = vec![];
-        read_ini_config_str(&config, &mut vec_eo, "ed", false);
+        let mut bytes = 0;
+        read_ini_config_str(&config, &mut vec_eo, "ed", false, &mut bytes);
         let mut ro = RunOptions::new();
         ro.name = "ed".to_string();
         ro.target = "oracle".to_string();
@@ -1408,7 +1678,8 @@ regex=^/bin/bash.*$
         .to_string();
 
         let mut vec_eo: Vec<EnvOptions> = vec![];
-        read_ini_config_str(&config, &mut vec_eo, "ed", false);
+        let mut bytes = 0;
+        read_ini_config_str(&config, &mut vec_eo, "ed", false, &mut bytes);
         let mut ro = RunOptions::new();
         ro.name = "ed".to_string();
         ro.target = "oracle".to_string();
@@ -1447,7 +1718,8 @@ regex=^/bin/sh.*$
         .to_string();
 
         let mut vec_eo: Vec<EnvOptions> = vec![];
-        read_ini_config_str(&config, &mut vec_eo, "ed", false);
+        let mut bytes = 0;
+        read_ini_config_str(&config, &mut vec_eo, "ed", false, &mut bytes);
         let mut ro = RunOptions::new();
         ro.name = "ed".to_string();
         ro.target = "oracle".to_string();
@@ -1483,7 +1755,8 @@ regex=/bin/sh\\b.*
         .to_string();
 
         let mut vec_eo: Vec<EnvOptions> = vec![];
-        read_ini_config_str(&config, &mut vec_eo, "ed", false);
+        let mut bytes = 0;
+        read_ini_config_str(&config, &mut vec_eo, "ed", false, &mut bytes);
         let mut ro = RunOptions::new();
         ro.name = "".to_string();
         ro.target = "oracle".to_string();
@@ -1503,7 +1776,8 @@ regex=.*
         .to_string();
 
         let mut vec_eo: Vec<EnvOptions> = vec![];
-        read_ini_config_str(&config, &mut vec_eo, "ed", false);
+        let mut bytes = 0;
+        read_ini_config_str(&config, &mut vec_eo, "ed", false, &mut bytes);
         let mut ro = RunOptions::new();
         ro.name = "ed".to_string();
         ro.target = "oracle".to_string();
@@ -1544,7 +1818,8 @@ regex = ^"
             .to_string();
 
         let mut vec_eo: Vec<EnvOptions> = vec![];
-        read_ini_config_str(&config, &mut vec_eo, "ed", false);
+        let mut bytes = 0;
+        read_ini_config_str(&config, &mut vec_eo, "ed", false, &mut bytes);
         let mut ro = RunOptions::new();
         ro.date = NaiveDate::from_ymd(2020, 1, 1).and_hms(0, 0, 0);
         ro.name = "ed".to_string();
@@ -1565,7 +1840,8 @@ regex =^/bin/cat /etc/%{USER}"
             .to_string();
 
         let mut vec_eo: Vec<EnvOptions> = vec![];
-        read_ini_config_str(&config, &mut vec_eo, "ed", false);
+        let mut bytes = 0;
+        read_ini_config_str(&config, &mut vec_eo, "ed", false, &mut bytes);
         let mut ro = RunOptions::new();
         ro.date = NaiveDate::from_ymd(2020, 1, 1).and_hms(0, 0, 0);
         ro.name = "ed".to_string();
@@ -1589,7 +1865,11 @@ target=root
 regex = ^/bin/cat /etc/("
             .to_string();
 
-        assert_eq!(read_ini_config_str(&config, &mut vec_eo, "ed", true), true);
+        let mut bytes = 0;
+        assert_eq!(
+            read_ini_config_str(&config, &mut vec_eo, "ed", true, &mut bytes),
+            true
+        );
 
         let mut vec_eo: Vec<EnvOptions> = vec![];
         let config = "
@@ -1600,7 +1880,11 @@ regex = ^/bin/cat /etc/
 "
         .to_string();
 
-        assert_eq!(read_ini_config_str(&config, &mut vec_eo, "ed", true), false);
+        let mut bytes = 0;
+        assert_eq!(
+            read_ini_config_str(&config, &mut vec_eo, "ed", true, &mut bytes),
+            false
+        );
     }
 
     #[test]
@@ -1617,7 +1901,8 @@ regex = ^.*$
         .to_string();
 
         let mut vec_eo: Vec<EnvOptions> = vec![];
-        read_ini_config_str(&config, &mut vec_eo, "ed", false);
+        let mut bytes = 0;
+        read_ini_config_str(&config, &mut vec_eo, "ed", false, &mut bytes);
         let mut ro = RunOptions::new();
         ro.date = NaiveDate::from_ymd(2020, 1, 1).and_hms(0, 0, 0);
         ro.name = "ed".to_string();
@@ -1675,7 +1960,8 @@ target = ^(eng|dba|net)ops$
         .to_string();
 
         let mut vec_eo: Vec<EnvOptions> = vec![];
-        read_ini_config_str(&config, &mut vec_eo, "ed", false);
+        let mut bytes = 0;
+        read_ini_config_str(&config, &mut vec_eo, "ed", false, &mut bytes);
         let mut ro = RunOptions::new();
         ro.date = NaiveDate::from_ymd(2020, 1, 1).and_hms(0, 0, 0);
         ro.name = "ed".to_string();
@@ -1726,7 +2012,8 @@ regex = ^/var/www/html/%{USER}.html
         .to_string();
 
         let mut vec_eo: Vec<EnvOptions> = vec![];
-        read_ini_config_str(&config, &mut vec_eo, "ed", false);
+        let mut bytes = 0;
+        read_ini_config_str(&config, &mut vec_eo, "ed", false, &mut bytes);
 
         let mut ro = RunOptions::new();
         ro.date = NaiveDate::from_ymd(2020, 1, 1).and_hms(0, 0, 0);
@@ -1765,7 +2052,8 @@ regex = ^/var/www/html/%{USER}.html$
         .to_string();
 
         let mut vec_eo: Vec<EnvOptions> = vec![];
-        read_ini_config_str(&config, &mut vec_eo, "ed", false);
+        let mut bytes = 0;
+        read_ini_config_str(&config, &mut vec_eo, "ed", false, &mut bytes);
 
         let mut ro = RunOptions::new();
         ro.name = "ed".to_string();
@@ -1789,7 +2077,8 @@ require_pass = false
 regex = ^/var/www/html/%USER.html$"
             .to_string();
         let mut vec_eo: Vec<EnvOptions> = vec![];
-        read_ini_config_str(&config, &mut vec_eo, "ed", false);
+        let mut bytes = 0;
+        read_ini_config_str(&config, &mut vec_eo, "ed", false, &mut bytes);
 
         let mut ro = RunOptions::new();
         ro.name = "ed".to_string();
@@ -1813,7 +2102,8 @@ require_pass = false
 regex = ^/var/www/html/%{USER}.html$"
             .to_string();
         let mut vec_eo: Vec<EnvOptions> = vec![];
-        read_ini_config_str(&config, &mut vec_eo, "ed", false);
+        let mut bytes = 0;
+        read_ini_config_str(&config, &mut vec_eo, "ed", false, &mut bytes);
 
         let mut ro = RunOptions::new();
         ro.name = "ed".to_string();
@@ -1838,7 +2128,8 @@ regex = /bin/bash"
             .to_string();
 
         let mut vec_eo: Vec<EnvOptions> = vec![];
-        read_ini_config_str(&config, &mut vec_eo, "ed", false);
+        let mut bytes = 0;
+        read_ini_config_str(&config, &mut vec_eo, "ed", false, &mut bytes);
         assert_eq!(vec_eo.iter().next().unwrap().rule.as_str(), "/bin/bash");
 
         let mut ro = RunOptions::new();
@@ -1863,7 +2154,8 @@ regex = /bin/bash"
     fn test_edit_regression_empty() {
         let mut vec_eo: Vec<EnvOptions> = vec![];
         let config = "".to_string();
-        read_ini_config_str(&config, &mut vec_eo, "ed", false);
+        let mut bytes = 0;
+        read_ini_config_str(&config, &mut vec_eo, "ed", false, &mut bytes);
         let mut ro = RunOptions::new();
         ro.name = "ed".to_string();
         ro.target = "root".to_string();
@@ -1885,16 +2177,17 @@ dir=.*
         .to_string();
 
         let mut vec_eo: Vec<EnvOptions> = vec![];
-        read_ini_config_str(&config, &mut vec_eo, "ed", false);
+        let mut bytes = 0;
+        read_ini_config_str(&config, &mut vec_eo, "ed", false, &mut bytes);
         let mut ro = RunOptions::new();
         ro.name = "ed".to_string();
         ro.target = "oracle".to_string();
         ro.acl_type = ACLTYPE::RUN;
         ro.command = "/bin/bash".to_string();
 
-        assert_eq!(can(&vec_eo, &ro).unwrap().permit, true);
+        assert_eq!(can(&vec_eo, &ro).unwrap().permit, false);
 
-        ro.directory = "/".to_string();
+        ro.directory = Some("/".to_string());
         assert_eq!(can(&vec_eo, &ro).unwrap().permit, true);
     }
 
@@ -1911,7 +2204,8 @@ dir=/var/www
         .to_string();
 
         let mut vec_eo: Vec<EnvOptions> = vec![];
-        read_ini_config_str(&config, &mut vec_eo, "ed", false);
+        let mut bytes = 0;
+        read_ini_config_str(&config, &mut vec_eo, "ed", false, &mut bytes);
         let mut ro = RunOptions::new();
         ro.date = NaiveDate::from_ymd(2020, 1, 1).and_hms(0, 0, 0);
         ro.name = "ed".to_string();
@@ -1925,19 +2219,68 @@ dir=/var/www
             "no directory given",
         );
 
-        ro.directory = "/".to_string();
+        ro.directory = Some("/".to_string());
         assert_eq!(
             can(&vec_eo, &ro).unwrap().permit,
             false,
             "change outside permitted",
         );
 
-        ro.directory = "/var/www".to_string();
-        assert_eq!(
-            can(&vec_eo, &ro).unwrap().permit,
-            true,
-            "change to permitted"
-        );
+        ro.directory = Some("/var/www".to_string());
+        assert_eq!(can(&vec_eo, &ro).unwrap().permit, true, "permitted");
+    }
+
+    #[test]
+    fn test_dir_tmp() {
+        let config = "
+[regex_anchor]
+name=ed
+target=root
+regex=/bin/bash
+dir=/tmp
+        "
+        .to_string();
+
+        let mut vec_eo: Vec<EnvOptions> = vec![];
+        let mut bytes = 0;
+        read_ini_config_str(&config, &mut vec_eo, "ed", false, &mut bytes);
+        let mut ro = RunOptions::new();
+        ro.date = NaiveDate::from_ymd(2020, 1, 1).and_hms(0, 0, 0);
+        ro.name = "ed".to_string();
+        ro.target = "root".to_string();
+        ro.acl_type = ACLTYPE::RUN;
+        ro.command = "/bin/bash".to_string();
+        ro.directory = Some("/tmp".to_string());
+
+        assert_eq!(can(&vec_eo, &ro).unwrap().permit, true, "dir_tmp",);
+    }
+
+    #[test]
+    fn test_dir_given_but_none_in_match() {
+        let config = "
+[regex_anchor]
+name=ed
+target=oracle
+hostname=localhost
+regex=.*
+        "
+        .to_string();
+
+        let mut vec_eo: Vec<EnvOptions> = vec![];
+        let mut bytes = 0;
+        read_ini_config_str(&config, &mut vec_eo, "ed", false, &mut bytes);
+        let mut ro = RunOptions::new();
+        ro.date = NaiveDate::from_ymd(2020, 1, 1).and_hms(0, 0, 0);
+        ro.name = "ed".to_string();
+        ro.target = "oracle".to_string();
+        ro.acl_type = ACLTYPE::RUN;
+        ro.command = "/bin/bash".to_string();
+        ro.directory = Some("/".to_string());
+
+        assert_eq!(can(&vec_eo, &ro).unwrap().permit, false, "directory given",);
+
+        ro.directory = Some("".to_string());
+        assert_eq!(can(&vec_eo, &ro).unwrap().permit, false, "directory given",);
     }
 
     #[test]
@@ -1948,13 +2291,13 @@ name=ed
 target=root
 hostname=localhost
 regex=.*
-dir=.*
 datematch=Fri.*UTC.*
 "
         .to_string();
 
         let mut vec_eo: Vec<EnvOptions> = vec![];
-        read_ini_config_str(&config, &mut vec_eo, "ed", false);
+        let mut bytes = 0;
+        read_ini_config_str(&config, &mut vec_eo, "ed", false, &mut bytes);
         let mut ro = RunOptions::new();
         ro.name = "ed".to_string();
         ro.date = NaiveDate::from_ymd(2020, 10, 02).and_hms(22, 0, 0);
@@ -1973,13 +2316,13 @@ name=ed
 target=root
 hostname=localhost
 regex=.*
-dir=.*
 datematch=Fri.*\\s22:00:00\\s+UTC\\s2020
 "
         .to_string();
 
         let mut vec_eo: Vec<EnvOptions> = vec![];
-        read_ini_config_str(&config, &mut vec_eo, "ed", false);
+        let mut bytes = 0;
+        read_ini_config_str(&config, &mut vec_eo, "ed", false, &mut bytes);
         ro.date = NaiveDate::from_ymd(2020, 10, 02).and_hms(21, 0, 0);
         assert_eq!(can(&vec_eo, &ro).unwrap().permit, false);
         ro.date = NaiveDate::from_ymd(2020, 10, 02).and_hms(23, 0, 0);
@@ -1993,13 +2336,13 @@ name=ed
 target=root
 hostname=localhost
 regex=.*
-dir=.*
 datematch=Thu\\s+1\\s+Oct\\s+22:00:00\\s+UTC\\s+2020
 "
         .to_string();
 
         let mut vec_eo: Vec<EnvOptions> = vec![];
-        read_ini_config_str(&config, &mut vec_eo, "ed", false);
+        let mut bytes = 0;
+        read_ini_config_str(&config, &mut vec_eo, "ed", false, &mut bytes);
         ro.date = NaiveDate::from_ymd(2020, 10, 01).and_hms(21, 0, 0);
         assert_eq!(can(&vec_eo, &ro).unwrap().permit, false);
         ro.date = NaiveDate::from_ymd(2020, 10, 01).and_hms(23, 0, 0);
@@ -2021,7 +2364,8 @@ editmode=0644
         .to_string();
 
         let mut vec_eo: Vec<EnvOptions> = vec![];
-        read_ini_config_str(&config, &mut vec_eo, "ed", false);
+        let mut bytes = 0;
+        read_ini_config_str(&config, &mut vec_eo, "ed", false, &mut bytes);
         let mut ro = RunOptions::new();
         ro.name = "ed".to_string();
         ro.target = "root".to_string();
@@ -2036,10 +2380,17 @@ editmode=0644
     #[test]
     fn test_read_ini_config_file() {
         let mut vec_eo: Vec<EnvOptions> = vec![];
-        assert_eq!(read_ini_config_file(".", &mut vec_eo, "ed", true), true);
-        assert_eq!(read_ini_config_file("", &mut vec_eo, "ed", true), true);
+        let mut bytes = 0;
         assert_eq!(
-            read_ini_config_file("./faulty", &mut vec_eo, "ed", true),
+            read_ini_config_file(".", &mut vec_eo, "ed", true, &mut bytes),
+            true
+        );
+        assert_eq!(
+            read_ini_config_file("", &mut vec_eo, "ed", true, &mut bytes),
+            true
+        );
+        assert_eq!(
+            read_ini_config_file("./faulty", &mut vec_eo, "ed", true, &mut bytes),
             true
         );
     }
@@ -2063,7 +2414,8 @@ permit=true
         .to_string();
 
         let mut vec_eo: Vec<EnvOptions> = vec![];
-        read_ini_config_str(&config, &mut vec_eo, "ed", false);
+        let mut bytes = 0;
+        read_ini_config_str(&config, &mut vec_eo, "ed", false, &mut bytes);
         let mut ro = RunOptions::new();
         ro.name = "ed".to_string();
         ro.target = "root".to_string();
@@ -2087,7 +2439,8 @@ reason=true
         .to_string();
 
         let mut vec_eo: Vec<EnvOptions> = vec![];
-        read_ini_config_str(&config, &mut vec_eo, "ed", false);
+        let mut bytes = 0;
+        read_ini_config_str(&config, &mut vec_eo, "ed", false, &mut bytes);
         let mut ro = RunOptions::new();
         ro.name = "ed".to_string();
         ro.target = "root".to_string();
@@ -2119,7 +2472,8 @@ reason=true
         .to_string();
 
         let mut vec_eo: Vec<EnvOptions> = vec![];
-        read_ini_config_str(&config, &mut vec_eo, "ed", false);
+        let mut bytes = 0;
+        read_ini_config_str(&config, &mut vec_eo, "ed", false, &mut bytes);
         let mut ro = RunOptions::new();
         ro.name = "ed".to_string();
         ro.target = "root".to_string();
@@ -2141,7 +2495,8 @@ regex=^/usr/bin/wc (/var/log/[a-zA-Z0-9-]+(\\.\\d+)?(\\s)?)+$
         .to_string();
 
         let mut vec_eo: Vec<EnvOptions> = vec![];
-        read_ini_config_str(&config, &mut vec_eo, "ed", false);
+        let mut bytes = 0;
+        read_ini_config_str(&config, &mut vec_eo, "ed", false, &mut bytes);
         let mut ro = RunOptions::new();
         ro.name = "ed".to_string();
         ro.target = "root".to_string();
@@ -2184,7 +2539,8 @@ exitcmd = /usr/bin/please -c %{NEW}
 "
         .to_string();
         let mut vec_eo: Vec<EnvOptions> = vec![];
-        read_ini_config_str(&config, &mut vec_eo, "ed", false);
+        let mut bytes = 0;
+        read_ini_config_str(&config, &mut vec_eo, "ed", false, &mut bytes);
         let mut ro = RunOptions::new();
         ro.name = "ed".to_string();
         ro.target = "root".to_string();
@@ -2202,14 +2558,21 @@ exitcmd = /usr/bin/please -c %{NEW}
 include = ./some.ini
 "
         .to_string();
-        assert_eq!(read_ini_config_str(&config, &mut vec_eo, "ed", false), true);
+        let mut bytes: u64 = 0;
+        assert_eq!(
+            read_ini_config_str(&config, &mut vec_eo, "ed", false, &mut bytes),
+            true
+        );
 
         let config = "
 [inc]
 includedir = ./dir.d/some.ini
 "
         .to_string();
-        assert_eq!(read_ini_config_str(&config, &mut vec_eo, "ed", false), true);
+        assert_eq!(
+            read_ini_config_str(&config, &mut vec_eo, "ed", false, &mut bytes),
+            true
+        );
 
         let config = "
 [inc]
@@ -2217,7 +2580,7 @@ includedir = /dev/null
 "
         .to_string();
         assert_eq!(
-            read_ini_config_str(&config, &mut vec_eo, "ed", false),
+            read_ini_config_str(&config, &mut vec_eo, "ed", false, &mut bytes),
             false
         );
     }
@@ -2240,5 +2603,10 @@ includedir = /dev/null
             escape_log(&"multiple \"strings\""),
             "multiple \\\"strings\\\"".to_string()
         );
+    }
+
+    #[test]
+    fn test_prng_alpha_num_string() {
+        assert_eq!(prng_alpha_num_string(2).len(), 2);
     }
 }

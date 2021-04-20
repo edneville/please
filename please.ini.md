@@ -4,7 +4,7 @@ section: 5
 header: User Manual
 footer: please 0.3.25
 author: Ed Neville (ed-please@s5h.net)
-date: 10 March 2021
+date: 15 April 2021
 ---
 
 # NAME
@@ -89,7 +89,7 @@ Spaces within arguments will be substituted as **'\\\ '** (backslash space). Use
 : (**type=edit**) set the file mode bits on replacement file to octal mode, defaults to 0600
 
 **exitcmd=[program]**
-: (**type=edit**) run program after editor exits as the root user, if exit is zero, continue with file replacement. **%{NEW}** and **%{OLD}** placeholders expand to new and old edit files
+: (**type=edit**) run program after editor exits as the target user, if exit is zero, continue with file replacement. **%{NEW}** and **%{OLD}** placeholders expand to new and old edit files
 
 # EXAMPLES
 
@@ -197,7 +197,7 @@ target=^%{USER}$
 
 # EXITCMD
 
-When the user completes their edit, and the editor exits cleanly, if **exitcmd** is included then this program will run as root. If the program also exits cleanly then the temporary edit will be copied to the destination.
+When the user completes their edit, and the editor exits cleanly, if **exitcmd** is included then this program will run as the target user. If the program also exits cleanly then the temporary edit will be copied to the destination.
 
 **%{OLD}** and **%{NEW}** will expand to the old (existing source) file and edit candidate, respectively. To verify a file edit, **ben**'s entry to check **/etc/hosts** after clean exit could look like this:
 
@@ -279,7 +279,7 @@ regex = ^/usr/sbin/useradd\s+-m\s+\w+$
 
 # DIR
 
-In some situations you may only want a command to run within a set of directories. The directory is specified with the **-d** argument to **please**. For example, a program may output to the current working directory.
+In some situations you may only want a command to run within a set of directories. The directory is specified with the **-d** argument to **please**. For example, a program may output to the current working directory, which may only be desirable in certain locations.
 
 ```
 [eng_build_aliases]
