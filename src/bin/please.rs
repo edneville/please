@@ -25,7 +25,6 @@ use getopts::Options;
 
 use nix::unistd::gethostname;
 
-use users::os::unix::UserExt;
 use users::*;
 
 /// walk through user ACL
@@ -64,7 +63,7 @@ fn do_list(ro: &mut RunOptions, vec_eo: &[EnvOptions], service: &str) {
         }
 
         // check if a password is required
-        if !challenge_password(&ro.name, can_do, &service, ro.prompt) {
+        if !challenge_password(&ro, can_do, &service) {
             log_action(&service, "deny", &ro, &ro.original_command.join(" "));
             std::process::exit(1);
         }
@@ -95,55 +94,18 @@ fn do_list(ro: &mut RunOptions, vec_eo: &[EnvOptions], service: &str) {
 }
 
 /// navigate to directory or exit 1
-fn do_dir_changes(ro: &RunOptions) {
-    if ro.directory != "" {
-        if let Err(x) = std::env::set_current_dir(&ro.directory) {
-            println!("Cannot cd into {}: {}", &ro.directory, x);
+fn do_dir_changes(ro: &RunOptions, service: &str) {
+    if ro.directory.is_some() {
+        if let Err(x) = std::env::set_current_dir(&ro.directory.as_ref().unwrap()) {
+            println!(
+                "[{}] cannot cd into {}: {}",
+                &service,
+                &ro.directory.as_ref().unwrap(),
+                x
+            );
             std::process::exit(1);
         }
     }
-}
-
-/// clean environment aside from ~half a dozen vars and set some environments for helper scripts
-fn do_environment(
-    ro: &mut RunOptions,
-    original_user: &User,
-    original_uid: u32,
-    lookup_name: &User,
-) {
-    for (key, _) in std::env::vars() {
-        if key == "LANGUAGE"
-            || key == "XAUTHORITY"
-            || key == "LANG"
-            || key == "LS_COLORS"
-            || key == "TERM"
-            || key == "DISPLAY"
-            || key == "LOGNAME"
-        {
-            continue;
-        }
-        std::env::remove_var(key);
-    }
-
-    std::env::set_var("PLEASE_USER", original_user.name());
-    std::env::set_var("PLEASE_UID", original_uid.to_string());
-    std::env::set_var("PLEASE_GID", original_user.primary_group_id().to_string());
-    std::env::set_var("PLEASE_COMMAND", &ro.command);
-
-    std::env::set_var("SUDO_USER", original_user.name());
-    std::env::set_var("SUDO_UID", original_uid.to_string());
-    std::env::set_var("SUDO_GID", original_user.primary_group_id().to_string());
-    std::env::set_var("SUDO_COMMAND", &ro.command);
-
-    std::env::set_var(
-        "PATH",
-        "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin".to_string(),
-    );
-    std::env::set_var("HOME", lookup_name.home_dir().as_os_str());
-    std::env::set_var("MAIL", format!("/var/mail/{}", ro.target));
-    std::env::set_var("SHELL", lookup_name.shell());
-    std::env::set_var("USER", &ro.target);
-    std::env::set_var("LOGNAME", &ro.target);
 }
 
 /// setup getopts for argument parsing and help output
@@ -176,16 +138,18 @@ fn general_options(
     };
 
     if matches.opt_present("c") {
+        let mut bytes = 0;
         std::process::exit(read_ini_config_file(
             &matches.opt_str("c").unwrap(),
             &mut vec_eo,
             &ro.name,
             true,
+            &mut bytes,
         ) as i32);
     }
 
     if matches.opt_present("d") {
-        ro.directory = matches.opt_str("d").unwrap();
+        ro.directory = Some(matches.opt_str("d").unwrap());
     }
     if matches.opt_present("l") {
         ro.acl_type = ACLTYPE::LIST;
@@ -214,21 +178,33 @@ fn main() {
     ro.syslog = true;
     let mut vec_eo: Vec<EnvOptions> = vec![];
 
-    if !set_privs(
-        "root",
-        nix::unistd::Uid::from_raw(0),
-        nix::unistd::Gid::from_raw(0),
-    ) {
-        println!("I cannot set privs. Exiting as not installed correctly.");
+    let root_uid = nix::unistd::Uid::from_raw(0);
+    let root_gid = nix::unistd::Gid::from_raw(0);
+
+    clean_environment(&mut ro);
+
+    if !set_privs("root", root_uid, root_gid) {
+        std::process::exit(1);
+    }
+
+    if !drop_privs(&ro) {
         std::process::exit(1);
     }
 
     general_options(&mut ro, args, &service, &mut vec_eo);
 
     ro.groups = group_hash(original_user.groups().unwrap());
+    if !esc_privs() {
+        std::process::exit(1);
+    }
 
-    if read_ini_config_file("/etc/please.ini", &mut vec_eo, &ro.name, true) {
+    let mut bytes = 0;
+    if read_ini_config_file("/etc/please.ini", &mut vec_eo, &ro.name, true, &mut bytes) {
         println!("Exiting due to error, cannot fully process /etc/please.ini");
+        std::process::exit(1);
+    }
+
+    if !drop_privs(&ro) {
         std::process::exit(1);
     }
 
@@ -251,6 +227,8 @@ fn main() {
         ro.target = "root".to_string();
     }
 
+    ro.command = replace_new_args(ro.new_args.clone());
+
     match search_path(&ro.new_args[0]) {
         None => {
             println!("[{}]: command not found", service);
@@ -258,29 +236,23 @@ fn main() {
         }
         Some(x) => {
             ro.new_args[0] = x;
+            ro.command = replace_new_args(ro.new_args.clone());
         }
     }
 
-    ro.command = replace_new_args(ro.new_args.clone());
     let entry = can(&vec_eo, &ro);
 
     match &entry {
         Err(_) => {
             log_action(&service, "deny", &ro, &original_command.join(" "));
-            println!(
-                "You may not execute \"{}\" on {} as {}",
-                &ro.command, &ro.hostname, &ro.target
-            );
+            print_may_not(&ro);
             std::process::exit(1);
         }
         Ok(x) => {
             ro.syslog = x.syslog;
             if !x.permit {
                 log_action(&service, "deny", &ro, &original_command.join(" "));
-                println!(
-                    "You may not execute \"{}\" on {} as {}",
-                    &ro.command, &ro.hostname, &ro.target
-                );
+                print_may_not(&ro);
                 std::process::exit(1);
             }
             // check if a reason was given
@@ -295,14 +267,15 @@ fn main() {
         }
     }
 
-    if !challenge_password(&ro.name, entry.unwrap(), &service, ro.prompt) {
+    if !challenge_password(&ro, entry.unwrap(), &service) {
         log_action(&service, "deny", &ro, &original_command.join(" "));
         std::process::exit(1);
     }
 
-    do_dir_changes(&ro);
+    if !drop_privs(&ro) {
+        std::process::exit(1);
+    }
 
-    log_action(&service, "permit", &ro, &original_command.join(" "));
     let lookup_name = get_user_by_name(&ro.target);
     if lookup_name.is_none() {
         println!("Could not lookup {}", &ro.target);
@@ -312,21 +285,39 @@ fn main() {
     let target_uid = nix::unistd::Uid::from_raw(lookup_name.uid());
     let target_gid = nix::unistd::Gid::from_raw(lookup_name.primary_group_id());
 
-    do_environment(&mut ro, &original_user, original_uid, &lookup_name);
-
-    if !set_privs(&ro.target.to_string(), target_uid, target_gid) {
-        println!("I cannot set privs. Exiting as not installed correctly.");
+    if !esc_privs() {
         std::process::exit(1);
     }
+    if !set_eprivs(target_uid, target_gid) {
+        std::process::exit(1);
+    }
+
+    do_dir_changes(&ro, &service);
+
+    if !drop_privs(&ro) {
+        std::process::exit(1);
+    }
+
+    log_action(&service, "permit", &ro, &original_command.join(" "));
+
+    set_environment(&ro, &original_user, original_uid, &lookup_name);
+
+    if !esc_privs() {
+        std::process::exit(1);
+    }
+
+    if !set_privs(&ro.target.to_string(), target_uid, target_gid) {
+        std::process::exit(1);
+    }
+
+    nix::sys::stat::umask(ro.old_umask.unwrap());
 
     if ro.new_args.len() > 1 {
         Command::new(&ro.new_args[0])
             .args(ro.new_args.clone().split_off(1))
             .exec();
-        Command::new(&"/bin/sh").args(ro.new_args).exec();
     } else {
         Command::new(&ro.new_args[0]).exec();
-        Command::new("/bin/sh").args(ro.new_args).exec();
     }
 }
 
