@@ -274,6 +274,7 @@ pub fn credits(service: &str) {
         "pin, for work with pkgsrc",
         "Stanley Dziegiel, for ini suggestions",
         "My wife and child, for putting up with me",
+        "The SUSE Security Team, especially Matthias Gerstner",
     ];
 
     print_version(&service);
