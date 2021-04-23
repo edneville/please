@@ -1,6 +1,6 @@
 [package]
 name = "pleaser"
-version = "0.4.0"
+version = "0.4.1"
 authors = ["ed neville <ed@s5h.net>"]
 edition = "2018"
 description = "please, a polite regex-first sudo alternative"
@@ -20,7 +20,7 @@ nix = ">= 0.16"
 pam = "0.7"
 users = "0.10"
 rpassword = "5.0"
-syslog= "4.0"
+syslog= ">= 4.0"
 libc = "0.2"
 rand = "0.7"
 
