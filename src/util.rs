@@ -839,6 +839,31 @@ pub fn get_editor() -> String {
     editor.to_string()
 }
 
+/// handler.authenticate without the root privs part for linux
+#[cfg(target_os = "linux")]
+pub fn handler_shim<T: pam::Converse>(
+    _ro: &RunOptions,
+    handler: &mut Authenticator<T>,
+) -> Result<(), pam::PamError> {
+    handler.authenticate()
+}
+
+/// handler.authenticate needs esc_privs on netbsd
+#[cfg(not(target_os = "linux"))]
+pub fn handler_shim<T: pam::Converse>(
+    ro: &RunOptions,
+    handler: &mut Authenticator<T>,
+) -> Result<(), pam::PamError> {
+    if !esc_privs() {
+        std::process::exit(1);
+    }
+    let auth = handler.authenticate();
+    if !drop_privs(&ro) {
+        std::process::exit(1);
+    }
+    auth
+}
+
 /// read password of user via rpassword
 /// should pam require a password, and it is successful, then we set a token
 pub fn challenge_password(ro: &RunOptions, entry: EnvOptions, service: &str) -> bool {
@@ -876,7 +901,7 @@ pub fn challenge_password(ro: &RunOptions, entry: EnvOptions, service: &str) -> 
         let mut handler = Authenticator::with_handler(service, convo).expect("Cannot init PAM");
 
         loop {
-            let auth = handler.authenticate();
+            let auth = handler_shim(&ro, &mut handler);
 
             if auth.is_ok() {
                 if handler.get_handler().passwd.is_some() {
@@ -1233,10 +1258,17 @@ pub fn create_token_dir() -> bool {
 
 pub fn boot_secs() -> libc::timespec {
     let mut tp = libc::timespec {
-        tv_sec: 0 as i64,
+        tv_sec: 0,
         tv_nsec: 0,
     };
-    unsafe { libc::clock_gettime(libc::CLOCK_BOOTTIME, &mut tp) };
+    #[cfg(target_os = "linux")]
+    unsafe {
+        libc::clock_gettime(libc::CLOCK_BOOTTIME, &mut tp)
+    };
+    #[cfg(not(target_os = "linux"))]
+    unsafe {
+        libc::clock_gettime(libc::CLOCK_MONOTONIC, &mut tp)
+    };
     tp
 }
 
@@ -1264,15 +1296,15 @@ pub fn valid_token(user: &str) -> bool {
 
                     match t.duration_since(SystemTime::UNIX_EPOCH) {
                         Ok(s) => {
-                            if tp.tv_sec < s.as_secs() as i64 {
+                            if (tp.tv_sec as u64) < s.as_secs() {
                                 // println!("tv_sec lower {} vs {}", tp.tv_sec, s.as_secs());
                                 return false;
                             }
-                            if (tp.tv_sec - s.as_secs() as i64) < secs {
+                            if ((tp.tv_sec as u64) - s.as_secs()) < secs {
                                 // check the atime isn't older than 600 too
 
                                 match SystemTime::now().duration_since(meta.accessed().unwrap()) {
-                                    Ok(a) => return a.as_secs() <= secs as u64,
+                                    Ok(a) => return a.as_secs() <= secs,
                                     Err(_) => return false,
                                 }
                             }
@@ -1314,7 +1346,7 @@ pub fn update_token(user: &str) {
     let tp = boot_secs();
 
     let tv_mtime = nix::sys::time::TimeVal::from(libc::timeval {
-        tv_sec: tp.tv_sec as i64,
+        tv_sec: tp.tv_sec,
         tv_usec: 0,
     });
 
@@ -1322,7 +1354,7 @@ pub fn update_token(user: &str) {
         tv_sec: SystemTime::now()
             .duration_since(SystemTime::UNIX_EPOCH)
             .unwrap()
-            .as_secs() as i64,
+            .as_secs() as libc::time_t,
         tv_usec: 0,
     });
 
