@@ -333,7 +333,6 @@ fn main() {
     let mut ro = RunOptions::new();
     let original_uid = get_current_uid();
     let original_user = get_user_by_uid(original_uid).unwrap();
-    let original_gid = original_user.primary_group_id();
     ro.name = original_user.name().to_string_lossy().to_string();
     ro.acl_type = ACLTYPE::EDIT;
     ro.syslog = true;
@@ -438,10 +437,6 @@ fn main() {
     std::env::set_var("PLEASE_EDIT_FILE", edit_file.to_string());
     std::env::set_var("PLEASE_SOURCE_FILE", source_file.to_str().unwrap());
 
-    if !esc_privs() {
-        std::process::exit(1);
-    }
-
     let mut good_edit = false;
 
     match unsafe { fork() } {
@@ -455,15 +450,6 @@ fn main() {
         Ok(ForkResult::Child) => {
             // drop privileges and execute editor
             let editor = get_editor();
-
-            if !set_privs(
-                &ro.name,
-                nix::unistd::Uid::from_raw(original_uid),
-                nix::unistd::Gid::from_raw(original_gid),
-            ) {
-                println!("I cannot set privs. Exiting as not installed correctly.");
-                std::process::exit(1);
-            }
 
             nix::sys::stat::umask(ro.old_umask.unwrap());
 
@@ -480,10 +466,6 @@ fn main() {
             std::process::exit(1);
         }
         Err(_) => println!("Fork failed"),
-    }
-
-    if !drop_privs(&ro) {
-        std::process::exit(1);
     }
 
     if !good_edit {
