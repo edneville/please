@@ -29,7 +29,7 @@ use users::*;
 
 /// walk through user ACL
 fn do_list(ro: &mut RunOptions, vec_eo: &[EnvOptions], service: &str) {
-    let name = if ro.target == ro.name || ro.target == "" {
+    let name = if ro.target == ro.name || ro.target.is_empty() {
         "You"
     } else {
         &ro.target
@@ -37,53 +37,12 @@ fn do_list(ro: &mut RunOptions, vec_eo: &[EnvOptions], service: &str) {
 
     let can_do = can(&vec_eo, &ro);
 
-    if let Ok(can_do) = can_do {
-        if !can_do.permit {
-            let dest = format!("{}'s", &ro.target);
-            log_action(&service, "deny", &ro, &ro.command);
-            println!(
-                "You may not view {} command list",
-                if ro.target == "" || ro.target == ro.name {
-                    "your"
-                } else {
-                    &dest
-                }
-            );
-            std::process::exit(1);
-        }
-
-        // check if a reason was given
-        if can_do.reason && ro.reason.is_none() {
-            log_action(&service, "no_reason", &ro, &ro.original_command.join(" "));
-            println!(
-                "Sorry but no reason was given to list on {} as {}",
-                &ro.hostname, &ro.target
-            );
-            std::process::exit(1);
-        }
-
-        // check if a password is required
-        if !challenge_password(&ro, can_do, &service) {
-            log_action(&service, "deny", &ro, &ro.original_command.join(" "));
-            std::process::exit(1);
-        }
-
-        log_action(&service, "permit", &ro, &ro.command);
-        println!("{} may run the following:", name);
-        ro.acl_type = ACLTYPE::RUN;
-        list(&vec_eo, &ro);
-        println!("{} may edit the following:", name);
-        ro.acl_type = ACLTYPE::EDIT;
-        list(&vec_eo, &ro);
-        println!("{} may list the following:", name);
-        ro.acl_type = ACLTYPE::LIST;
-        list(&vec_eo, &ro);
-    } else {
+    if !can_do.permit {
         let dest = format!("{}'s", &ro.target);
         log_action(&service, "deny", &ro, &ro.command);
         println!(
             "You may not view {} command list",
-            if ro.target == "" || ro.target == ro.name {
+            if ro.target.is_empty() || ro.target == ro.name {
                 "your"
             } else {
                 &dest
@@ -91,6 +50,33 @@ fn do_list(ro: &mut RunOptions, vec_eo: &[EnvOptions], service: &str) {
         );
         std::process::exit(1);
     }
+
+    // check if a reason was given
+    if can_do.reason && ro.reason.is_none() {
+        log_action(&service, "no_reason", &ro, &ro.original_command.join(" "));
+        println!(
+            "Sorry but no reason was given to list on {} as {}",
+            &ro.hostname, &ro.target
+        );
+        std::process::exit(1);
+    }
+
+    // check if a password is required
+    if !challenge_password(&ro, can_do, &service) {
+        log_action(&service, "deny", &ro, &ro.original_command.join(" "));
+        std::process::exit(1);
+    }
+
+    log_action(&service, "permit", &ro, &ro.command);
+    println!("{} may run the following:", name);
+    ro.acl_type = Acltype::Run;
+    list(&vec_eo, &ro);
+    println!("{} may edit the following:", name);
+    ro.acl_type = Acltype::Edit;
+    list(&vec_eo, &ro);
+    println!("{} may list the following:", name);
+    ro.acl_type = Acltype::List;
+    list(&vec_eo, &ro);
 }
 
 /// navigate to directory or exit 1
@@ -152,13 +138,13 @@ fn general_options(
         ro.directory = Some(matches.opt_str("d").unwrap());
     }
     if matches.opt_present("l") {
-        ro.acl_type = ACLTYPE::LIST;
+        ro.acl_type = Acltype::List;
     }
 
     let header = format!("{} [arguments] </path/to/executable>", &service);
     common_opt_arguments(&matches, &opts, &mut ro, &service, &header);
 
-    if ro.new_args.is_empty() && !ro.warm_token && !ro.purge_token && ro.acl_type != ACLTYPE::LIST {
+    if ro.new_args.is_empty() && !ro.warm_token && !ro.purge_token && ro.acl_type != Acltype::List {
         println!("No command given");
         print_usage(&opts, &header);
         print_version(&service);
@@ -215,15 +201,15 @@ fn main() {
         .expect("Hostname wasn't valid UTF-8")
         .to_string();
 
-    if ro.acl_type == ACLTYPE::LIST {
-        if ro.target == "" {
+    if ro.acl_type == Acltype::List {
+        if ro.target.is_empty() {
             ro.target = ro.name.to_string();
         }
         do_list(&mut ro, &vec_eo, &service);
         return;
     }
 
-    if ro.target == "" {
+    if ro.target.is_empty() {
         ro.target = "root".to_string();
     }
 
@@ -242,32 +228,23 @@ fn main() {
 
     let entry = can(&vec_eo, &ro);
 
-    match &entry {
-        Err(_) => {
-            log_action(&service, "deny", &ro, &original_command.join(" "));
-            print_may_not(&ro);
-            std::process::exit(1);
-        }
-        Ok(x) => {
-            ro.syslog = x.syslog;
-            if !x.permit {
-                log_action(&service, "deny", &ro, &original_command.join(" "));
-                print_may_not(&ro);
-                std::process::exit(1);
-            }
-            // check if a reason was given
-            if x.permit && x.reason && ro.reason.is_none() {
-                log_action(&service, "no_reason", &ro, &original_command.join(" "));
-                println!(
-                    "Sorry but no reason was given to execute \"{}\" on {} as {}",
-                    &ro.command, &ro.hostname, &ro.target
-                );
-                std::process::exit(1);
-            }
-        }
+    ro.syslog = entry.syslog;
+    if !entry.permit {
+        log_action(&service, "deny", &ro, &original_command.join(" "));
+        print_may_not(&ro);
+        std::process::exit(1);
+    }
+    // check if a reason was given
+    if entry.permit && entry.reason && ro.reason.is_none() {
+        log_action(&service, "no_reason", &ro, &original_command.join(" "));
+        println!(
+            "Sorry but no reason was given to execute \"{}\" on {} as {}",
+            &ro.command, &ro.hostname, &ro.target
+        );
+        std::process::exit(1);
     }
 
-    if !challenge_password(&ro, entry.unwrap(), &service) {
+    if !challenge_password(&ro, entry, &service) {
         log_action(&service, "deny", &ro, &original_command.join(" "));
         std::process::exit(1);
     }
@@ -306,7 +283,7 @@ fn main() {
         std::process::exit(1);
     }
 
-    if !set_privs(&ro.target.to_string(), target_uid, target_gid) {
+    if !set_privs(&ro.target, target_uid, target_gid) {
         std::process::exit(1);
     }
 

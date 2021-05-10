@@ -149,7 +149,7 @@ fn setup_temp_edit_file(
 fn build_exitcmd(entry: &EnvOptions, source_file: &str, edit_file: &str) -> Command {
     let cmd_re = Regex::new(r"\s+").unwrap();
 
-    let cmd_str = &(entry.exitcmd).as_ref().unwrap();
+    let cmd_str = &entry.exitcmd.as_ref().unwrap();
     let cmd_parts: Vec<&str> = cmd_re.split(&cmd_str).collect();
 
     if cmd_parts.is_empty() {
@@ -250,7 +250,7 @@ fn remove_tmp_edit(ro: &RunOptions, edit_file: &str) {
 fn rename_to_source(
     dir_parent_tmp: &str,
     source_file: &Path,
-    entry: &Result<EnvOptions, ()>,
+    entry: &EnvOptions,
     lookup_name: &User,
     dir_parent_tmp_file: &std::fs::File,
     target_uid: nix::unistd::Uid,
@@ -273,24 +273,19 @@ fn rename_to_source(
 
     fchmod(
         dir_parent_tmp_file.as_raw_fd(),
-        if entry.as_ref().unwrap().edit_mode.is_some() {
-            nix::sys::stat::Mode::from_bits(entry.as_ref().unwrap().edit_mode.unwrap() as u32)
-                .unwrap()
+        if entry.edit_mode.is_some() {
+            nix::sys::stat::Mode::from_bits(entry.edit_mode.unwrap() as u32).unwrap()
         } else {
             nix::sys::stat::Mode::S_IRUSR | nix::sys::stat::Mode::S_IWUSR
         },
     )
     .unwrap();
 
-    if entry.as_ref().unwrap().exitcmd.is_some() {
-        let mut cmd = build_exitcmd(
-            &entry.clone().unwrap(),
-            &source_file.to_str().unwrap(),
-            &dir_parent_tmp,
-        );
+    if entry.exitcmd.is_some() {
+        let mut cmd = build_exitcmd(&entry, &source_file.to_str().unwrap(), &dir_parent_tmp);
         let out = cmd.output().expect("could not execute");
-        io::stdout().write_all(&out.clone().stdout).unwrap();
-        io::stderr().write_all(&out.clone().stderr).unwrap();
+        io::stdout().write_all(&out.stdout).unwrap();
+        io::stderr().write_all(&out.stderr).unwrap();
         if !out.status.success() {
             println!("Aborting as exitcmd was non-zero, removing tmp file");
             if nix::unistd::unlink(dir_parent_tmp).is_err() {
@@ -334,7 +329,7 @@ fn main() {
     let original_uid = get_current_uid();
     let original_user = get_user_by_uid(original_uid).unwrap();
     ro.name = original_user.name().to_string_lossy().to_string();
-    ro.acl_type = ACLTYPE::EDIT;
+    ro.acl_type = Acltype::Edit;
     ro.syslog = true;
     let mut vec_eo: Vec<EnvOptions> = vec![];
 
@@ -352,7 +347,7 @@ fn main() {
     }
 
     general_options(&mut ro, args, &service);
-    if ro.target == "" {
+    if ro.target.is_empty() {
         ro.target = "root".to_string();
     }
     ro.command = ro.new_args.join(" ");
@@ -379,38 +374,26 @@ fn main() {
         .to_string();
     let entry = can(&vec_eo, &ro);
 
-    match &entry {
-        Err(_) => {
-            log_action(&service, "deny", &ro, &original_command.join(" "));
-            println!(
-                "You may not edit \"{}\" on {} as {}",
-                &ro.command, &ro.hostname, &ro.target
-            );
-            std::process::exit(1);
-        }
-        Ok(x) => {
-            ro.syslog = x.syslog;
-            if !x.permit {
-                log_action(&service, "deny", &ro, &original_command.join(" "));
-                println!(
-                    "You may not edit \"{}\" on {} as {}",
-                    &ro.command, &ro.hostname, &ro.target
-                );
-                std::process::exit(1);
-            }
-            // check if a reason was given
-            if x.permit && x.reason && ro.reason.is_none() {
-                log_action(&service, "no_reason", &ro, &original_command.join(" "));
-                println!(
-                    "Sorry but no reason was given to edit \"{}\" on {} as {}",
-                    &ro.command, &ro.hostname, &ro.target
-                );
-                std::process::exit(1);
-            }
-        }
+    ro.syslog = entry.syslog;
+    if !entry.permit {
+        log_action(&service, "deny", &ro, &original_command.join(" "));
+        println!(
+            "You may not edit \"{}\" on {} as {}",
+            &ro.command, &ro.hostname, &ro.target
+        );
+        std::process::exit(1);
+    }
+    // check if a reason was given
+    if entry.permit && entry.reason && ro.reason.is_none() {
+        log_action(&service, "no_reason", &ro, &original_command.join(" "));
+        println!(
+            "Sorry but no reason was given to edit \"{}\" on {} as {}",
+            &ro.command, &ro.hostname, &ro.target
+        );
+        std::process::exit(1);
     }
 
-    if !challenge_password(&ro, entry.clone().unwrap(), &service) {
+    if !challenge_password(&ro, entry.clone(), &service) {
         log_action(&service, "deny", &ro, &original_command.join(" "));
         std::process::exit(1);
     }
@@ -430,6 +413,7 @@ fn main() {
     if !esc_privs() {
         std::process::exit(1);
     }
+
     let edit_file = &setup_temp_edit_file(&service, source_file, &ro, target_uid, target_gid);
 
     set_environment(&ro, &original_user, original_uid, &lookup_name);

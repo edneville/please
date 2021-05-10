@@ -51,7 +51,7 @@ pub struct EnvOptions {
     pub hostname: Option<String>,
     pub permit: bool,
     pub require_pass: bool,
-    pub acl_type: ACLTYPE,
+    pub acl_type: Acltype,
     pub file_name: String,
     pub section: String,
     pub group: bool,
@@ -78,7 +78,7 @@ impl EnvOptions {
             section: "".to_string(),
             permit: true,
             require_pass: true,
-            acl_type: ACLTYPE::RUN,
+            acl_type: Acltype::Run,
             group: false,
             configured: false,
             dir: None,
@@ -94,7 +94,7 @@ impl EnvOptions {
         opt.permit = false;
         opt.rule = ".".to_string();
         opt.target = "^$".to_string();
-        opt.acl_type = ACLTYPE::LIST;
+        opt.acl_type = Acltype::List;
         opt
     }
 }
@@ -117,7 +117,7 @@ pub struct RunOptions {
     pub directory: Option<String>,
     pub groups: HashMap<String, u32>,
     pub date: NaiveDateTime,
-    pub acl_type: ACLTYPE,
+    pub acl_type: Acltype,
     pub reason: Option<String>,
     pub syslog: bool,
     pub prompt: bool,
@@ -140,7 +140,7 @@ impl RunOptions {
             date: Utc::now().naive_utc(),
             groups: HashMap::new(),
             directory: None,
-            acl_type: ACLTYPE::RUN,
+            acl_type: Acltype::Run,
             reason: None,
             syslog: true,
             prompt: true,
@@ -189,18 +189,18 @@ impl pam::Converse for PamConvo {
 }
 
 #[derive(PartialEq, Eq, Clone, Debug)]
-pub enum ACLTYPE {
-    RUN,
-    LIST,
-    EDIT,
+pub enum Acltype {
+    Run,
+    List,
+    Edit,
 }
 
-impl fmt::Display for ACLTYPE {
+impl fmt::Display for Acltype {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
-            ACLTYPE::RUN => write!(f, "run"),
-            ACLTYPE::LIST => write!(f, "list"),
-            ACLTYPE::EDIT => write!(f, "edit"),
+            Acltype::Run => write!(f, "run"),
+            Acltype::List => write!(f, "list"),
+            Acltype::Edit => write!(f, "edit"),
         }
     }
 }
@@ -208,7 +208,7 @@ impl fmt::Display for ACLTYPE {
 pub fn print_may_not(ro: &RunOptions) {
     println!(
         "You may not {} \"{}\" on {} as {}",
-        if ro.acl_type == ACLTYPE::RUN {
+        if ro.acl_type == Acltype::Run {
             "execute".to_string()
         } else {
             ro.acl_type.to_string()
@@ -279,7 +279,7 @@ pub fn credits(service: &str) {
 
     print_version(&service);
 
-    contributors.sort();
+    contributors.sort_unstable();
 
     println!("\nWith thanks to the following teams and people, you got us where we are today.\n");
     println!("If your name is missing, or incorrect, please get in contact.\n");
@@ -381,13 +381,11 @@ pub fn read_ini(
     let mut section = String::from("no section defined");
     let mut in_section = false;
     let mut opt = EnvOptions::new();
-    let mut line_number = 0;
 
-    for l in conf.split('\n') {
-        line_number += 1;
+    for (line_number, l) in conf.split('\n').enumerate() {
         let line = l.trim();
 
-        if line == "" || line.starts_with('#') {
+        if line.is_empty() || line.starts_with('#') {
             continue;
         }
 
@@ -463,7 +461,8 @@ pub fn read_ini(
                 opt.name = value.to_string();
                 opt.configured = true;
                 if fail_error
-                    && regex_build(value, user, config_path, &section, Some(line_number)).is_none()
+                    && regex_build(value, user, config_path, &section, Some(line_number as i32))
+                        .is_none()
                 {
                     faulty = true;
                 }
@@ -472,7 +471,8 @@ pub fn read_ini(
                 opt.hostname = Some(value.to_string());
                 opt.configured = true;
                 if fail_error
-                    && regex_build(value, user, config_path, &section, Some(line_number)).is_none()
+                    && regex_build(value, user, config_path, &section, Some(line_number as i32))
+                        .is_none()
                 {
                     faulty = true;
                 }
@@ -480,7 +480,8 @@ pub fn read_ini(
             "target" => {
                 opt.target = value.to_string();
                 if fail_error
-                    && regex_build(value, user, config_path, &section, Some(line_number)).is_none()
+                    && regex_build(value, user, config_path, &section, Some(line_number as i32))
+                        .is_none()
                 {
                     faulty = true;
                 }
@@ -488,15 +489,16 @@ pub fn read_ini(
             "permit" => opt.permit = value == "true",
             "require_pass" => opt.require_pass = value != "false",
             "type" => match value.to_lowercase().as_str() {
-                "edit" => opt.acl_type = ACLTYPE::EDIT,
-                "list" => opt.acl_type = ACLTYPE::LIST,
-                _ => opt.acl_type = ACLTYPE::RUN,
+                "edit" => opt.acl_type = Acltype::Edit,
+                "list" => opt.acl_type = Acltype::List,
+                _ => opt.acl_type = Acltype::Run,
             },
             "group" => opt.group = value == "true",
             "regex" | "rule" => {
                 opt.rule = value.to_string();
                 if fail_error
-                    && regex_build(value, user, config_path, &section, Some(line_number)).is_none()
+                    && regex_build(value, user, config_path, &section, Some(line_number as i32))
+                        .is_none()
                 {
                     faulty = true;
                 }
@@ -526,7 +528,8 @@ pub fn read_ini(
             "datematch" => {
                 opt.datematch = Some(value.to_string());
                 if fail_error
-                    && regex_build(value, user, config_path, &section, Some(line_number)).is_none()
+                    && regex_build(value, user, config_path, &section, Some(line_number as i32))
+                        .is_none()
                 {
                     faulty = true;
                 }
@@ -534,7 +537,8 @@ pub fn read_ini(
             "dir" => {
                 opt.dir = Some(value.to_string());
                 if fail_error
-                    && regex_build(value, user, config_path, &section, Some(line_number)).is_none()
+                    && regex_build(value, user, config_path, &section, Some(line_number as i32))
+                        .is_none()
                 {
                     faulty = true;
                 }
@@ -727,7 +731,7 @@ pub fn permitted_dates_ok(item: &EnvOptions, ro: &RunOptions, line: Option<i32>)
 }
 
 /// search the EnvOptions list for matching RunOptions and return the match
-pub fn can(vec_eo: &[EnvOptions], ro: &RunOptions) -> Result<EnvOptions, ()> {
+pub fn can(vec_eo: &[EnvOptions], ro: &RunOptions) -> EnvOptions {
     let mut opt = EnvOptions::new_deny();
     let mut matched = false;
 
@@ -788,7 +792,7 @@ pub fn can(vec_eo: &[EnvOptions], ro: &RunOptions) -> Result<EnvOptions, ()> {
                 }
             };
 
-        if item.acl_type == ACLTYPE::LIST {
+        if item.acl_type == Acltype::List {
             if target_re.is_match(&ro.target) {
                 // println!("{}: is list", item.section);
                 opt = item.clone();
@@ -823,7 +827,7 @@ pub fn can(vec_eo: &[EnvOptions], ro: &RunOptions) -> Result<EnvOptions, ()> {
         }
         // println!("didn't match");
     }
-    Ok(opt)
+    opt
 }
 
 /// find editor for user. return /usr/bin/vi if EDITOR and VISUAL are unset
@@ -929,7 +933,7 @@ pub fn challenge_password(ro: &RunOptions, entry: EnvOptions, service: &str) -> 
 
 /// produce output list of acl
 pub fn list(vec_eo: &[EnvOptions], ro: &RunOptions) {
-    let search_user = if ro.target != "" {
+    let search_user = if !ro.target.is_empty() {
         String::from(&ro.target)
     } else {
         String::from(&ro.name)
@@ -995,7 +999,7 @@ pub fn list(vec_eo: &[EnvOptions], ro: &RunOptions) {
 
         let mut prefix = prefixes.join(", ");
         if !prefix.is_empty() {
-            if item.acl_type != ACLTYPE::LIST {
+            if item.acl_type != Acltype::List {
                 prefix = format!(" {} as ", prefix);
             } else {
                 prefix = format!(" {} to ", prefix);
@@ -1006,7 +1010,7 @@ pub fn list(vec_eo: &[EnvOptions], ro: &RunOptions) {
             last_file = &item.file_name;
         }
 
-        if item.acl_type == ACLTYPE::LIST {
+        if item.acl_type == Acltype::List {
             println!("    {}:{}list: {}", item.section, prefix, item.target);
             continue;
         }
@@ -1068,7 +1072,7 @@ pub fn clean_environment(ro: &mut RunOptions) {
             continue;
         }
 
-        if ro.acl_type == ACLTYPE::EDIT && (key == "EDITOR" || key == "VISUAL") {
+        if ro.acl_type == Acltype::Edit && (key == "EDITOR" || key == "VISUAL") {
             continue;
         }
         std::env::remove_var(key);
@@ -1363,7 +1367,7 @@ pub fn update_token(user: &str) {
     }
 
     if std::fs::rename(&token_path_tmp.as_str(), token_path).is_err() {
-        return;
+        println!("Could not update token");
     }
 }
 
@@ -1453,9 +1457,9 @@ regex=^/bin/bash .*$
         ro.date = NaiveDate::from_ymd(2020, 1, 1).and_hms(0, 0, 0);
         ro.name = "ed".to_string();
         ro.target = "root".to_string();
-        ro.acl_type = ACLTYPE::RUN;
+        ro.acl_type = Acltype::Run;
         ro.command = "/bin/bash".to_string();
-        assert_eq!(can(&vec_eo, &ro).unwrap().permit, true);
+        assert_eq!(can(&vec_eo, &ro).permit, true);
     }
 
     #[test]
@@ -1480,9 +1484,9 @@ regex = /bin/bash
         let mut ro = RunOptions::new();
         ro.name = "ed".to_string();
         ro.target = "root".to_string();
-        ro.acl_type = ACLTYPE::RUN;
+        ro.acl_type = Acltype::Run;
         ro.command = "/bin/bash".to_string();
-        assert_eq!(can(&vec_eo, &ro).unwrap().permit, true);
+        assert_eq!(can(&vec_eo, &ro).permit, true);
     }
 
     #[test]
@@ -1514,25 +1518,25 @@ regex=^/bin/bash"
         ro.date = NaiveDate::from_ymd(2019, 12, 31).and_hms(0, 0, 0);
         ro.name = "ed".to_string();
         ro.target = "root".to_string();
-        ro.acl_type = ACLTYPE::RUN;
+        ro.acl_type = Acltype::Run;
         ro.command = "/bin/bash".to_string();
 
         let mut vec_eo: Vec<EnvOptions> = vec![];
         let mut bytes = 0;
         read_ini_config_str(&config, &mut vec_eo, &ro.name, false, &mut bytes);
-        assert_eq!(can(&vec_eo, &ro).unwrap().permit, false);
+        assert_eq!(can(&vec_eo, &ro).permit, false);
 
         ro.name = "other".to_string();
         ro.target = "thingy".to_string();
         let mut vec_eo: Vec<EnvOptions> = vec![];
         read_ini_config_str(&config, &mut vec_eo, &ro.name, false, &mut bytes);
-        assert_eq!(can(&vec_eo, &ro).unwrap().permit, true);
+        assert_eq!(can(&vec_eo, &ro).permit, true);
 
         ro.name = "other".to_string();
         ro.target = "oracle".to_string();
         let mut vec_eo: Vec<EnvOptions> = vec![];
         read_ini_config_str(&config, &mut vec_eo, &ro.name, false, &mut bytes);
-        assert_eq!(can(&vec_eo, &ro).unwrap().permit, false);
+        assert_eq!(can(&vec_eo, &ro).permit, false);
     }
 
     #[test]
@@ -1561,7 +1565,7 @@ target=^ "
         let mut ro = RunOptions::new();
         ro.name = "ed".to_string();
         ro.target = "root".to_string();
-        ro.acl_type = ACLTYPE::RUN;
+        ro.acl_type = Acltype::Run;
         ro.command = "/bin/bash".to_string();
 
         let mut vec_eo: Vec<EnvOptions> = vec![];
@@ -1569,16 +1573,16 @@ target=^ "
         read_ini_config_str(&config, &mut vec_eo, "ed", false, &mut bytes);
 
         ro.date = NaiveDate::from_ymd(2019, 12, 31).and_hms(0, 0, 0);
-        assert_eq!(can(&vec_eo, &ro).unwrap().permit, false);
+        assert_eq!(can(&vec_eo, &ro).permit, false);
 
         ro.date = NaiveDate::from_ymd(2020, 12, 25).and_hms(0, 0, 0);
-        assert_eq!(can(&vec_eo, &ro).unwrap().permit, true);
+        assert_eq!(can(&vec_eo, &ro).permit, true);
 
         ro.date = NaiveDate::from_ymd(2020, 01, 25).and_hms(0, 0, 0);
-        assert_eq!(can(&vec_eo, &ro).unwrap().permit, true);
+        assert_eq!(can(&vec_eo, &ro).permit, true);
 
         ro.date = NaiveDate::from_ymd(2020, 03, 25).and_hms(0, 0, 0);
-        assert_eq!(can(&vec_eo, &ro).unwrap().permit, true);
+        assert_eq!(can(&vec_eo, &ro).permit, true);
     }
 
     #[test]
@@ -1604,12 +1608,12 @@ require_pass = false
         read_ini_config_str(&config, &mut vec_eo, "ed", false, &mut bytes);
         let mut ro = RunOptions::new();
         ro.name = "ed".to_string();
-        ro.acl_type = ACLTYPE::LIST;
+        ro.acl_type = Acltype::List;
 
         ro.target = "ed".to_string();
-        assert_eq!(can(&vec_eo, &ro).unwrap().permit, true);
+        assert_eq!(can(&vec_eo, &ro).permit, true);
         ro.target = "root".to_string();
-        assert_eq!(can(&vec_eo, &ro).unwrap().permit, false);
+        assert_eq!(can(&vec_eo, &ro).permit, false);
     }
 
     #[test]
@@ -1636,19 +1640,19 @@ regex=^.*
         read_ini_config_str(&config, &mut vec_eo, "ed", false, &mut bytes);
 
         ro.date = NaiveDate::from_ymd(2020, 8, 8).and_hms(0, 0, 0);
-        assert_eq!(can(&vec_eo, &ro).unwrap().permit, true);
+        assert_eq!(can(&vec_eo, &ro).permit, true);
 
         ro.date = NaiveDate::from_ymd(2020, 8, 10).and_hms(0, 0, 0);
-        assert_eq!(can(&vec_eo, &ro).unwrap().permit, true);
+        assert_eq!(can(&vec_eo, &ro).permit, true);
 
         ro.date = NaiveDate::from_ymd(2020, 8, 10).and_hms(23, 59, 59);
-        assert_eq!(can(&vec_eo, &ro).unwrap().permit, true);
+        assert_eq!(can(&vec_eo, &ro).permit, true);
 
         ro.date = NaiveDate::from_ymd(2020, 8, 11).and_hms(0, 0, 0);
-        assert_eq!(can(&vec_eo, &ro).unwrap().permit, false);
+        assert_eq!(can(&vec_eo, &ro).permit, false);
 
         ro.date = NaiveDate::from_ymd(2020, 8, 7).and_hms(0, 0, 0);
-        assert_eq!(can(&vec_eo, &ro).unwrap().permit, false);
+        assert_eq!(can(&vec_eo, &ro).permit, false);
     }
 
     #[test]
@@ -1679,24 +1683,24 @@ regex=^/bin/bash .*$
         ro.date = NaiveDate::from_ymd(2019, 12, 31).and_hms(0, 0, 0);
 
         ro.command = "/bin/bash /usr/local/oracle/backup_script".to_string();
-        assert_eq!(can(&vec_eo, &ro).unwrap().permit, true);
+        assert_eq!(can(&vec_eo, &ro).permit, true);
 
         ro.command = "/bin/sh /usr/local/oracle/backup_script".to_string();
-        assert_eq!(can(&vec_eo, &ro).unwrap().permit, false);
+        assert_eq!(can(&vec_eo, &ro).permit, false);
 
         ro.hostname = "web1".to_string();
-        assert_eq!(can(&vec_eo, &ro).unwrap().permit, false);
+        assert_eq!(can(&vec_eo, &ro).permit, false);
 
         ro.hostname = "".to_string();
-        assert_eq!(can(&vec_eo, &ro).unwrap().permit, false);
+        assert_eq!(can(&vec_eo, &ro).permit, false);
 
         ro.hostname = "localhost".to_string();
         ro.target = "grid".to_string();
         ro.command = "/bin/bash /usr/local/oracle/backup_script".to_string();
-        assert_eq!(can(&vec_eo, &ro).unwrap().permit, false);
+        assert_eq!(can(&vec_eo, &ro).permit, false);
 
         ro.target = "root".to_string();
-        assert_eq!(can(&vec_eo, &ro).unwrap().permit, false);
+        assert_eq!(can(&vec_eo, &ro).permit, false);
     }
 
     #[test]
@@ -1718,19 +1722,19 @@ regex=^/bin/bash.*$
         ro.target = "oracle".to_string();
 
         ro.command = "/bin/bash /usr/local/oracle/backup_script".to_string();
-        assert_eq!(can(&vec_eo, &ro).unwrap().permit, true);
+        assert_eq!(can(&vec_eo, &ro).permit, true);
 
         ro.command = "/bin/sh /usr/local/oracle/backup_script".to_string();
-        assert_eq!(can(&vec_eo, &ro).unwrap().permit, false);
+        assert_eq!(can(&vec_eo, &ro).permit, false);
 
         ro.hostname = "web1".to_string();
-        assert_eq!(can(&vec_eo, &ro).unwrap().permit, false);
+        assert_eq!(can(&vec_eo, &ro).permit, false);
 
         ro.hostname = "".to_string();
-        assert_eq!(can(&vec_eo, &ro).unwrap().permit, false);
+        assert_eq!(can(&vec_eo, &ro).permit, false);
 
         ro.target = "grid".to_string();
-        assert_eq!(can(&vec_eo, &ro).unwrap().permit, false);
+        assert_eq!(can(&vec_eo, &ro).permit, false);
     }
 
     #[test]
@@ -1758,23 +1762,23 @@ regex=^/bin/sh.*$
         ro.target = "oracle".to_string();
 
         ro.command = "/bin/bash /usr/local/oracle/backup_script".to_string();
-        assert_eq!(can(&vec_eo, &ro).unwrap().permit, false);
+        assert_eq!(can(&vec_eo, &ro).permit, false);
 
         ro.hostname = "web1".to_string();
-        assert_eq!(can(&vec_eo, &ro).unwrap().permit, true);
+        assert_eq!(can(&vec_eo, &ro).permit, true);
 
         ro.hostname = "web2".to_string();
-        assert_eq!(can(&vec_eo, &ro).unwrap().permit, false);
+        assert_eq!(can(&vec_eo, &ro).permit, false);
 
         ro.hostname = "localhost".to_string();
         ro.command = "/bin/sh /usr/local/oracle/backup_script".to_string();
-        assert_eq!(can(&vec_eo, &ro).unwrap().permit, true);
+        assert_eq!(can(&vec_eo, &ro).permit, true);
 
         ro.hostname = "web1".to_string();
-        assert_eq!(can(&vec_eo, &ro).unwrap().permit, true);
+        assert_eq!(can(&vec_eo, &ro).permit, true);
 
         ro.hostname = "web2".to_string();
-        assert_eq!(can(&vec_eo, &ro).unwrap().permit, true);
+        assert_eq!(can(&vec_eo, &ro).permit, true);
     }
 
     #[test]
@@ -1794,7 +1798,7 @@ regex=/bin/sh\\b.*
         ro.name = "".to_string();
         ro.target = "oracle".to_string();
 
-        assert_eq!(can(&vec_eo, &ro).unwrap().permit, false);
+        assert_eq!(can(&vec_eo, &ro).permit, false);
     }
 
     #[test]
@@ -1816,7 +1820,7 @@ regex=.*
         ro.target = "oracle".to_string();
         ro.command = "/bin/bash".to_string();
 
-        assert_eq!(can(&vec_eo, &ro).unwrap().permit, true);
+        assert_eq!(can(&vec_eo, &ro).permit, true);
     }
 
     #[test]
@@ -1857,10 +1861,10 @@ regex = ^"
         ro.date = NaiveDate::from_ymd(2020, 1, 1).and_hms(0, 0, 0);
         ro.name = "ed".to_string();
         ro.target = "root".to_string();
-        ro.acl_type = ACLTYPE::EDIT;
+        ro.acl_type = Acltype::Edit;
         ro.command = "/etc/apache/httpd2.conf".to_string();
 
-        assert_eq!(can(&vec_eo, &ro).unwrap().permit, true);
+        assert_eq!(can(&vec_eo, &ro).permit, true);
     }
 
     #[test]
@@ -1881,10 +1885,10 @@ regex =^/bin/cat /etc/%{USER}"
         ro.target = "root".to_string();
         ro.command = "/bin/cat /etc/ed".to_string();
 
-        assert_eq!(can(&vec_eo, &ro).unwrap().permit, true);
+        assert_eq!(can(&vec_eo, &ro).permit, true);
 
         ro.name = "ned".to_string();
-        assert_eq!(can(&vec_eo, &ro).unwrap().permit, false);
+        assert_eq!(can(&vec_eo, &ro).permit, false);
     }
 
     #[test]
@@ -1942,15 +1946,15 @@ regex = ^.*$
         ro.target = "root".to_string();
         ro.command = "/bin/cat /etc/ed".to_string();
 
-        assert_eq!(can(&vec_eo, &ro).unwrap().permit, false);
+        assert_eq!(can(&vec_eo, &ro).permit, false);
 
         ro.groups.insert(String::from("users"), 1);
-        assert_eq!(can(&vec_eo, &ro).unwrap().permit, true);
+        assert_eq!(can(&vec_eo, &ro).permit, true);
 
         ro.groups = HashMap::new();
 
         ro.groups.insert(String::from("wwwadm"), 1);
-        assert_eq!(can(&vec_eo, &ro).unwrap().permit, false);
+        assert_eq!(can(&vec_eo, &ro).permit, false);
     }
 
     #[test]
@@ -2000,35 +2004,35 @@ target = ^(eng|dba|net)ops$
         ro.name = "ed".to_string();
         ro.target = "root".to_string();
         ro.command = "/bin/cat /etc/ed".to_string();
-        ro.acl_type = ACLTYPE::LIST;
+        ro.acl_type = Acltype::List;
 
-        assert_eq!(can(&vec_eo, &ro).unwrap().permit, true);
+        assert_eq!(can(&vec_eo, &ro).permit, true);
 
         ro.name = "meh".to_string();
         ro.target = "ed".to_string();
-        assert_eq!(can(&vec_eo, &ro).unwrap().permit, true);
+        assert_eq!(can(&vec_eo, &ro).permit, true);
 
         ro.target = "bob".to_string();
-        assert_eq!(can(&vec_eo, &ro).unwrap().permit, false);
+        assert_eq!(can(&vec_eo, &ro).permit, false);
 
         ro.target = "root".to_string();
-        assert_eq!(can(&vec_eo, &ro).unwrap().permit, false);
+        assert_eq!(can(&vec_eo, &ro).permit, false);
 
         ro.name = "bob".to_string();
         ro.target = "ed".to_string();
-        assert_eq!(can(&vec_eo, &ro).unwrap().permit, false);
+        assert_eq!(can(&vec_eo, &ro).permit, false);
 
         ro.name = "ben".to_string();
         ro.target = "dbaops".to_string();
-        assert_eq!(can(&vec_eo, &ro).unwrap().permit, true);
+        assert_eq!(can(&vec_eo, &ro).permit, true);
         ro.target = "engops".to_string();
-        assert_eq!(can(&vec_eo, &ro).unwrap().permit, true);
+        assert_eq!(can(&vec_eo, &ro).permit, true);
 
         ro.target = "netops".to_string();
-        assert_eq!(can(&vec_eo, &ro).unwrap().permit, true);
+        assert_eq!(can(&vec_eo, &ro).permit, true);
 
         ro.target = "wwwops".to_string();
-        assert_eq!(can(&vec_eo, &ro).unwrap().permit, false);
+        assert_eq!(can(&vec_eo, &ro).permit, false);
     }
 
     #[test]
@@ -2053,22 +2057,22 @@ regex = ^/var/www/html/%{USER}.html
         ro.name = "ed".to_string();
         ro.target = "root".to_string();
         ro.command = "/etc/please.ini".to_string();
-        ro.acl_type = ACLTYPE::EDIT;
+        ro.acl_type = Acltype::Edit;
 
-        assert_eq!(can(&vec_eo, &ro).unwrap().permit, false);
+        assert_eq!(can(&vec_eo, &ro).permit, false);
 
         ro.groups.insert(String::from("root"), 1);
-        assert_eq!(can(&vec_eo, &ro).unwrap().permit, false);
+        assert_eq!(can(&vec_eo, &ro).permit, false);
 
         ro.command = "/var/www/html/ed.html".to_string();
-        assert_eq!(can(&vec_eo, &ro).unwrap().permit, true);
+        assert_eq!(can(&vec_eo, &ro).permit, true);
 
         ro.command = "/var/www/html/%{USER}.html".to_string();
-        assert_eq!(can(&vec_eo, &ro).unwrap().permit, false);
+        assert_eq!(can(&vec_eo, &ro).permit, false);
 
         ro.groups = HashMap::new();
         ro.groups.insert(String::from("wwwadm"), 1);
-        assert_eq!(can(&vec_eo, &ro).unwrap().permit, false);
+        assert_eq!(can(&vec_eo, &ro).permit, false);
     }
 
     #[test]
@@ -2092,10 +2096,10 @@ regex = ^/var/www/html/%{USER}.html$
         ro.name = "ed".to_string();
         ro.target = "root".to_string();
         ro.command = "/var/www/html/ed.html".to_string();
-        ro.acl_type = ACLTYPE::EDIT;
+        ro.acl_type = Acltype::Edit;
         ro.groups.insert(String::from("root"), 1);
 
-        assert_eq!(can(&vec_eo, &ro).unwrap().permit, true);
+        assert_eq!(can(&vec_eo, &ro).permit, true);
     }
 
     #[test]
@@ -2116,11 +2120,11 @@ regex = ^/var/www/html/%USER.html$"
         let mut ro = RunOptions::new();
         ro.name = "ed".to_string();
         ro.target = "root".to_string();
-        ro.acl_type = ACLTYPE::EDIT;
+        ro.acl_type = Acltype::Edit;
         ro.command = "/var/www/html/ed.html".to_string();
 
         ro.groups.insert(String::from("root"), 1);
-        assert_eq!(can(&vec_eo, &ro).unwrap().permit, false);
+        assert_eq!(can(&vec_eo, &ro).permit, false);
     }
 
     #[test]
@@ -2141,11 +2145,11 @@ regex = ^/var/www/html/%{USER}.html$"
         let mut ro = RunOptions::new();
         ro.name = "ed".to_string();
         ro.target = "root".to_string();
-        ro.acl_type = ACLTYPE::EDIT;
+        ro.acl_type = Acltype::Edit;
         ro.command = "/var/www/html/ed.html".to_string();
 
         ro.groups.insert(String::from("root"), 1);
-        assert_eq!(can(&vec_eo, &ro).unwrap().permit, true);
+        assert_eq!(can(&vec_eo, &ro).permit, true);
     }
 
     #[test]
@@ -2168,19 +2172,19 @@ regex = /bin/bash"
         let mut ro = RunOptions::new();
         ro.name = "ed".to_string();
         ro.target = "root".to_string();
-        ro.acl_type = ACLTYPE::RUN;
+        ro.acl_type = Acltype::Run;
         ro.command = "/bin/bash".to_string();
-        assert_eq!(can(&vec_eo, &ro).unwrap().permit, false);
+        assert_eq!(can(&vec_eo, &ro).permit, false);
 
         ro.groups.insert(String::from("root"), 1);
         ro.command = "/bin/sh".to_string();
-        assert_eq!(can(&vec_eo, &ro).unwrap().permit, false);
+        assert_eq!(can(&vec_eo, &ro).permit, false);
 
         ro.command = "/bin/bash".to_string();
-        assert_eq!(can(&vec_eo, &ro).unwrap().permit, true);
+        assert_eq!(can(&vec_eo, &ro).permit, true);
 
         ro.target = "woot".to_string();
-        assert_eq!(can(&vec_eo, &ro).unwrap().permit, true);
+        assert_eq!(can(&vec_eo, &ro).permit, true);
     }
 
     #[test]
@@ -2192,9 +2196,9 @@ regex = /bin/bash"
         let mut ro = RunOptions::new();
         ro.name = "ed".to_string();
         ro.target = "root".to_string();
-        ro.acl_type = ACLTYPE::EDIT;
+        ro.acl_type = Acltype::Edit;
         ro.command = "/etc/please.ini".to_string();
-        assert_eq!(can(&vec_eo, &ro).unwrap().permit, false);
+        assert_eq!(can(&vec_eo, &ro).permit, false);
     }
 
     #[test]
@@ -2215,13 +2219,13 @@ dir=.*
         let mut ro = RunOptions::new();
         ro.name = "ed".to_string();
         ro.target = "oracle".to_string();
-        ro.acl_type = ACLTYPE::RUN;
+        ro.acl_type = Acltype::Run;
         ro.command = "/bin/bash".to_string();
 
-        assert_eq!(can(&vec_eo, &ro).unwrap().permit, false);
+        assert_eq!(can(&vec_eo, &ro).permit, false);
 
         ro.directory = Some("/".to_string());
-        assert_eq!(can(&vec_eo, &ro).unwrap().permit, true);
+        assert_eq!(can(&vec_eo, &ro).permit, true);
     }
 
     #[test]
@@ -2243,24 +2247,16 @@ dir=/var/www
         ro.date = NaiveDate::from_ymd(2020, 1, 1).and_hms(0, 0, 0);
         ro.name = "ed".to_string();
         ro.target = "oracle".to_string();
-        ro.acl_type = ACLTYPE::RUN;
+        ro.acl_type = Acltype::Run;
         ro.command = "/bin/bash".to_string();
 
-        assert_eq!(
-            can(&vec_eo, &ro).unwrap().permit,
-            false,
-            "no directory given",
-        );
+        assert_eq!(can(&vec_eo, &ro).permit, false, "no directory given",);
 
         ro.directory = Some("/".to_string());
-        assert_eq!(
-            can(&vec_eo, &ro).unwrap().permit,
-            false,
-            "change outside permitted",
-        );
+        assert_eq!(can(&vec_eo, &ro).permit, false, "change outside permitted",);
 
         ro.directory = Some("/var/www".to_string());
-        assert_eq!(can(&vec_eo, &ro).unwrap().permit, true, "permitted");
+        assert_eq!(can(&vec_eo, &ro).permit, true, "permitted");
     }
 
     #[test]
@@ -2281,11 +2277,11 @@ dir=/tmp
         ro.date = NaiveDate::from_ymd(2020, 1, 1).and_hms(0, 0, 0);
         ro.name = "ed".to_string();
         ro.target = "root".to_string();
-        ro.acl_type = ACLTYPE::RUN;
+        ro.acl_type = Acltype::Run;
         ro.command = "/bin/bash".to_string();
         ro.directory = Some("/tmp".to_string());
 
-        assert_eq!(can(&vec_eo, &ro).unwrap().permit, true, "dir_tmp",);
+        assert_eq!(can(&vec_eo, &ro).permit, true, "dir_tmp",);
     }
 
     #[test]
@@ -2306,14 +2302,14 @@ regex=.*
         ro.date = NaiveDate::from_ymd(2020, 1, 1).and_hms(0, 0, 0);
         ro.name = "ed".to_string();
         ro.target = "oracle".to_string();
-        ro.acl_type = ACLTYPE::RUN;
+        ro.acl_type = Acltype::Run;
         ro.command = "/bin/bash".to_string();
         ro.directory = Some("/".to_string());
 
-        assert_eq!(can(&vec_eo, &ro).unwrap().permit, false, "directory given",);
+        assert_eq!(can(&vec_eo, &ro).permit, false, "directory given",);
 
         ro.directory = Some("".to_string());
-        assert_eq!(can(&vec_eo, &ro).unwrap().permit, false, "directory given",);
+        assert_eq!(can(&vec_eo, &ro).permit, false, "directory given",);
     }
 
     #[test]
@@ -2335,13 +2331,13 @@ datematch=Fri.*UTC.*
         ro.name = "ed".to_string();
         ro.date = NaiveDate::from_ymd(2020, 10, 02).and_hms(22, 0, 0);
         ro.target = "root".to_string();
-        ro.acl_type = ACLTYPE::RUN;
+        ro.acl_type = Acltype::Run;
         ro.command = "/bin/bash".to_string();
 
-        assert_eq!(can(&vec_eo, &ro).unwrap().permit, true);
+        assert_eq!(can(&vec_eo, &ro).permit, true);
 
         ro.date = NaiveDate::from_ymd(2020, 10, 01).and_hms(22, 0, 0);
-        assert_eq!(can(&vec_eo, &ro).unwrap().permit, false);
+        assert_eq!(can(&vec_eo, &ro).permit, false);
 
         let config = "
 [regex_anchor]
@@ -2357,11 +2353,11 @@ datematch=Fri.*\\s22:00:00\\s+UTC\\s2020
         let mut bytes = 0;
         read_ini_config_str(&config, &mut vec_eo, "ed", false, &mut bytes);
         ro.date = NaiveDate::from_ymd(2020, 10, 02).and_hms(21, 0, 0);
-        assert_eq!(can(&vec_eo, &ro).unwrap().permit, false);
+        assert_eq!(can(&vec_eo, &ro).permit, false);
         ro.date = NaiveDate::from_ymd(2020, 10, 02).and_hms(23, 0, 0);
-        assert_eq!(can(&vec_eo, &ro).unwrap().permit, false);
+        assert_eq!(can(&vec_eo, &ro).permit, false);
         ro.date = NaiveDate::from_ymd(2020, 10, 02).and_hms(22, 0, 0);
-        assert_eq!(can(&vec_eo, &ro).unwrap().permit, true);
+        assert_eq!(can(&vec_eo, &ro).permit, true);
 
         let config = "
 [regex_anchor]
@@ -2377,11 +2373,11 @@ datematch=Thu\\s+1\\s+Oct\\s+22:00:00\\s+UTC\\s+2020
         let mut bytes = 0;
         read_ini_config_str(&config, &mut vec_eo, "ed", false, &mut bytes);
         ro.date = NaiveDate::from_ymd(2020, 10, 01).and_hms(21, 0, 0);
-        assert_eq!(can(&vec_eo, &ro).unwrap().permit, false);
+        assert_eq!(can(&vec_eo, &ro).permit, false);
         ro.date = NaiveDate::from_ymd(2020, 10, 01).and_hms(23, 0, 0);
-        assert_eq!(can(&vec_eo, &ro).unwrap().permit, false);
+        assert_eq!(can(&vec_eo, &ro).permit, false);
         ro.date = NaiveDate::from_ymd(2020, 10, 01).and_hms(22, 0, 0);
-        assert_eq!(can(&vec_eo, &ro).unwrap().permit, true);
+        assert_eq!(can(&vec_eo, &ro).permit, true);
     }
 
     #[test]
@@ -2402,10 +2398,10 @@ editmode=0644
         let mut ro = RunOptions::new();
         ro.name = "ed".to_string();
         ro.target = "root".to_string();
-        ro.acl_type = ACLTYPE::EDIT;
+        ro.acl_type = Acltype::Edit;
         ro.command = "/etc/please.ini".to_string();
 
-        let entry = can(&vec_eo, &ro).unwrap();
+        let entry = can(&vec_eo, &ro);
 
         assert_eq!(entry.edit_mode, Some(420));
     }
@@ -2454,7 +2450,7 @@ permit=true
         ro.target = "root".to_string();
         ro.command = "/bin/bash".to_string();
 
-        let entry = can(&vec_eo, &ro).unwrap();
+        let entry = can(&vec_eo, &ro);
 
         assert_eq!(entry.permit, false);
     }
@@ -2479,7 +2475,7 @@ reason=true
         ro.target = "root".to_string();
         ro.command = "/bin/bash".to_string();
 
-        let entry = can(&vec_eo, &ro).unwrap();
+        let entry = can(&vec_eo, &ro);
 
         assert_eq!(entry.reason, true);
     }
@@ -2512,7 +2508,7 @@ reason=true
         ro.target = "root".to_string();
         ro.command = "/bin/bash".to_string();
 
-        let entry = can(&vec_eo, &ro).unwrap();
+        let entry = can(&vec_eo, &ro);
 
         assert_eq!(entry.section, "first");
     }
@@ -2535,28 +2531,28 @@ regex=^/usr/bin/wc (/var/log/[a-zA-Z0-9-]+(\\.\\d+)?(\\s)?)+$
         ro.target = "root".to_string();
 
         ro.command = "/usr/bin/wc /var/log/messages /var/log/syslog /var/log/maillog".to_string();
-        assert_eq!(can(&vec_eo, &ro).unwrap().permit, true);
+        assert_eq!(can(&vec_eo, &ro).permit, true);
 
         ro.command = "/usr/bin/wc /var/log/messages /var/log/messages.1".to_string();
-        assert_eq!(can(&vec_eo, &ro).unwrap().permit, true);
+        assert_eq!(can(&vec_eo, &ro).permit, true);
 
         ro.command =
             "/usr/bin/wc /var/log/messages /var/log/syslog /var/log/maillog /var/log/../../shadow"
                 .to_string();
-        assert_eq!(can(&vec_eo, &ro).unwrap().permit, false);
+        assert_eq!(can(&vec_eo, &ro).permit, false);
 
         ro.command = "/usr/bin/wc".to_string();
-        assert_eq!(can(&vec_eo, &ro).unwrap().permit, false);
+        assert_eq!(can(&vec_eo, &ro).permit, false);
 
         ro.command = "/usr/bin/wc /etc/shadow".to_string();
-        assert_eq!(can(&vec_eo, &ro).unwrap().permit, false);
+        assert_eq!(can(&vec_eo, &ro).permit, false);
 
         ro.command = "/usr/bin/wc".to_string();
-        assert_eq!(can(&vec_eo, &ro).unwrap().permit, false);
+        assert_eq!(can(&vec_eo, &ro).permit, false);
 
         ro.command = "/usr/bin/wc /var/log/messages /var/log/messages.1 /var/log/../../etc/shadow"
             .to_string();
-        assert_eq!(can(&vec_eo, &ro).unwrap().permit, false);
+        assert_eq!(can(&vec_eo, &ro).permit, false);
     }
 
     #[test]
@@ -2578,9 +2574,9 @@ exitcmd = /usr/bin/please -c %{NEW}
         ro.name = "ed".to_string();
         ro.target = "root".to_string();
         ro.groups.insert(String::from("lpadmin"), 1);
-        ro.acl_type = ACLTYPE::EDIT;
+        ro.acl_type = Acltype::Edit;
         ro.command = "/etc/please.ini".to_string();
-        assert_eq!(can(&vec_eo, &ro).unwrap().permit, true);
+        assert_eq!(can(&vec_eo, &ro).permit, true);
     }
 
     #[test]
