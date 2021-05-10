@@ -16,7 +16,7 @@
 
 //! please.rs a sudo-like clone that implements regex all over the place
 
-use pleaser::util::*;
+use pleaser::*;
 
 use std::os::unix::process::CommandExt;
 use std::process::Command;

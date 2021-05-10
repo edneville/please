@@ -16,7 +16,7 @@
 
 //! please.rs a sudo-like clone that implements regex all over the place
 
-use pleaser::util::*;
+use pleaser::*;
 
 use std::fs::OpenOptions;
 use std::os::unix::fs::OpenOptionsExt;
