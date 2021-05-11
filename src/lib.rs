@@ -931,8 +931,19 @@ pub fn challenge_password(ro: &RunOptions, entry: EnvOptions, service: &str) -> 
     true
 }
 
-/// produce output list of acl
+/// print output list of acl
 pub fn list(vec_eo: &[EnvOptions], ro: &RunOptions) {
+    //let mut str_list: vec![];
+    let str_list = produce_list(&vec_eo, &ro);
+    for s in str_list {
+        println!("{}", s);
+    }
+}
+
+/// return EnvOptions as a vector of strings
+pub fn produce_list(vec_eo: &[EnvOptions], ro: &RunOptions) -> Vec<String> {
+    let mut str_list = vec![];
+
     let search_user = if !ro.target.is_empty() {
         String::from(&ro.target)
     } else {
@@ -946,7 +957,7 @@ pub fn list(vec_eo: &[EnvOptions], ro: &RunOptions) {
         {
             Some(check) => check,
             None => {
-                println!("Could not compile {}", &item.name);
+                str_list.push(format!("Could not compile {}", &item.name));
                 continue;
             }
         };
@@ -1006,16 +1017,19 @@ pub fn list(vec_eo: &[EnvOptions], ro: &RunOptions) {
             }
         }
         if last_file != item.file_name {
-            println!("  in file: {}", item.file_name);
+            str_list.push(format!("  in file: {}", item.file_name));
             last_file = &item.file_name;
         }
 
         if item.acl_type == Acltype::List {
-            println!("    {}:{}list: {}", item.section, prefix, item.target);
+            str_list.push(format!(
+                "    {}:{}list: {}",
+                item.section, prefix, item.target
+            ));
             continue;
         }
 
-        println!(
+        str_list.push(format!(
             "    {}:{}{} (pass={},dirs={}): {}",
             item.section,
             prefix,
@@ -1027,8 +1041,9 @@ pub fn list(vec_eo: &[EnvOptions], ro: &RunOptions) {
                 ""
             },
             item.rule
-        );
+        ));
     }
+    str_list
 }
 
 /// if binary is not an absolute/relative path, look for it in usual places
