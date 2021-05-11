@@ -1217,4 +1217,26 @@ includedir = /dev/null
     fn test_prng_alpha_num_string() {
         assert_eq!(prng_alpha_num_string(2).len(), 2);
     }
+
+    #[test]
+    fn test_list_output() {
+        let config = "
+[list]
+name = %{USER}
+reason = false
+type = list
+"
+        .to_string();
+        let mut vec_eo: Vec<EnvOptions> = vec![];
+        let mut bytes = 0;
+        read_ini_config_str(&config, &mut vec_eo, "ed", false, &mut bytes);
+        let mut ro = RunOptions::new();
+        ro.name = "ed".to_string();
+        ro.target = "ed".to_string();
+        ro.acl_type = Acltype::List;
+        ro.command = "".to_string();
+
+        let list = produce_list(&vec_eo, &ro);
+        assert_eq!(list, ["  in file: static", "    list:list: root"]);
+    }
 }
