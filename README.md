@@ -18,14 +18,14 @@ It might already be in the repo that you're using:
 
 If not, it is a simple install:
 
-```
-  git clone https://gitlab.com/edneville/please.git
-  cd please
-  cargo test && cargo build --release \
-  && install -oroot -groot -D -m4755 target/release/please target/release/pleaseedit /usr/local/bin
+````
+git clone https://gitlab.com/edneville/please.git
+cd please
+cargo test && cargo build --release \
+&& install -oroot -groot -D -m4755 target/release/please target/release/pleaseedit /usr/local/bin
 ```
 
-Arch, BTW:
+Arch:
 
 ```
 pacman -Syu git openssh fakeroot devtools make gcc rust
@@ -33,10 +33,30 @@ git clone https://aur@aur.archlinux.org/pleaser.git
 cd pleaser && makepkg -isr
 ```
 
-NetBSD, BTW:
+Debian (Bullseye)/Ubuntu (Hirsute):
+
+```
+apt-get install pleaser
+```
+
+Fedora (35):
+
+```
+dnf install pleaser
+```
+
+NetBSD:
 
 ```
 pkgin install pleaser
+```
+
+SUSE Tumbleweed:
+
+```
+zypper addrepo https://download.opensuse.org/repositories/security:idm/openSUSE_Tumbleweed/security:idm.repo
+zypper refresh
+zypper install pleaser
 ```
 
 Optionally, set `sudo` as an alias of `please`:

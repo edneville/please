@@ -125,6 +125,7 @@ pub struct RunOptions {
     pub warm_token: bool,
     pub new_args: Vec<String>,
     pub old_umask: Option<nix::sys::stat::Mode>,
+    pub old_envs: Option<HashMap<String, String>>,
 }
 
 impl RunOptions {
@@ -148,6 +149,7 @@ impl RunOptions {
             warm_token: false,
             new_args: vec![],
             old_umask: None,
+            old_envs: None,
         }
     }
 }
@@ -1075,7 +1077,20 @@ pub fn clean_environment(ro: &mut RunOptions) {
     ro.old_umask = Some(nix::sys::stat::umask(
         nix::sys::stat::Mode::from_bits(0o077).unwrap(),
     ));
-    for (key, _) in std::env::vars() {
+
+    for (key, val) in std::env::vars() {
+        if ro.acl_type == Acltype::Edit {
+            if ro.old_envs.is_none() {
+                ro.old_envs = Some(HashMap::new());
+            }
+
+            ro.old_envs
+                .as_mut()
+                .unwrap()
+                .entry(key.to_string())
+                .or_insert(val);
+        }
+
         if key == "LANGUAGE"
             || key == "XAUTHORITY"
             || key == "LANG"

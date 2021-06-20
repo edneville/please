@@ -18,6 +18,7 @@
 
 use pleaser::*;
 
+use std::convert::TryFrom;
 use std::fs::OpenOptions;
 use std::os::unix::fs::OpenOptionsExt;
 
@@ -31,10 +32,11 @@ use regex::Regex;
 
 use getopts::Options;
 
+use nix::sys::signal;
+use nix::sys::signal::Signal;
 use nix::sys::stat::fchmod;
 use nix::sys::wait::WaitStatus::Exited;
 use nix::unistd::{fchown, fork, gethostname, ForkResult};
-
 use users::*;
 
 /// return a path string to work on in /tmp
@@ -320,6 +322,24 @@ fn edit_file_to_memory(source_file: &Path, edit_file: &str) -> Result<String, st
     file_data
 }
 
+extern "C" fn handle_sigtstp(
+    child: libc::c_int,
+    info: *mut libc::siginfo_t,
+    _th: *mut libc::c_void,
+) {
+    let signal = Signal::try_from(child).unwrap();
+    unsafe {
+        // don't have a handy definition for "5" SI_MESGQ
+        if signal == Signal::SIGCHLD && (*info).si_code == 5 {
+            signal::kill(
+                nix::unistd::Pid::from_raw(std::process::id() as i32),
+                Signal::SIGTSTP,
+            )
+            .unwrap();
+        }
+    }
+}
+
 /// entry point
 fn main() {
     let args: Vec<String> = std::env::args().collect();
@@ -410,11 +430,11 @@ fn main() {
 
     let source_file = Path::new(&ro.new_args[0]);
 
-    if !esc_privs() {
+    let edit_file = &setup_temp_edit_file(&service, source_file, &ro, target_uid, target_gid);
+
+    if !drop_privs(&ro) {
         std::process::exit(1);
     }
-
-    let edit_file = &setup_temp_edit_file(&service, source_file, &ro, target_uid, target_gid);
 
     set_environment(&ro, &original_user, original_uid, &lookup_name);
 
@@ -423,19 +443,49 @@ fn main() {
 
     let mut good_edit = false;
 
+    let sig_action = signal::SigAction::new(
+        signal::SigHandler::SigAction(handle_sigtstp),
+        signal::SaFlags::SA_RESTART,
+        signal::SigSet::all(),
+    );
+
     match unsafe { fork() } {
-        Ok(ForkResult::Parent { .. }) => match nix::sys::wait::wait() {
-            Ok(Exited(_pid, ret)) if ret == 0 => {
-                good_edit = true;
+        Ok(ForkResult::Parent { .. }) => {
+            unsafe {
+                signal::sigaction(signal::SIGCHLD, &sig_action).unwrap();
+            };
+
+            match nix::sys::wait::wait() {
+                Ok(Exited(_pid, ret)) if ret == 0 => {
+                    good_edit = true;
+                }
+                Ok(_) => {}
+                Err(_x) => {}
             }
-            Ok(_) => {}
-            Err(_x) => {}
-        },
+            unsafe {
+                signal::signal(signal::SIGCHLD, signal::SigHandler::SigDfl).unwrap();
+            };
+        }
         Ok(ForkResult::Child) => {
-            // drop privileges and execute editor
+            if !esc_privs() {
+                std::process::exit(1);
+            }
+            if !set_privs(&ro.name, ro.original_uid, ro.original_gid) {
+                std::process::exit(1);
+            }
+
             let editor = get_editor();
 
             nix::sys::stat::umask(ro.old_umask.unwrap());
+
+            if ro.old_envs.is_some() {
+                for (key, _) in std::env::vars() {
+                    std::env::remove_var(key);
+                }
+                for (key, val) in ro.old_envs.as_ref().unwrap().iter() {
+                    std::env::set_var(key, val);
+                }
+            }
 
             let args: Vec<&str> = editor.as_str().split(' ').collect();
             if args.len() == 1 {
@@ -461,6 +511,7 @@ fn main() {
     log_action(&service, "permit", &ro, &original_command.join(" "));
     let dir_parent_tmp =
         source_tmp_file_name(&source_file, format!("{}.copy", service).as_str(), &ro.name);
+
     let file_data = edit_file_to_memory(&source_file, &edit_file);
 
     // become the target user and create file
