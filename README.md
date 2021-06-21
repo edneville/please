@@ -18,7 +18,7 @@ It might already be in the repo that you're using:
 
 If not, it is a simple install:
 
-````
+```
 git clone https://gitlab.com/edneville/please.git
 cd please
 cargo test && cargo build --release \
