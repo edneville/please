@@ -1239,4 +1239,142 @@ type = list
         let list = produce_list(&vec_eo, &ro);
         assert_eq!(list, ["  in file: static", "    list:list: root"]);
     }
+
+    #[test]
+    fn test_environment_provided_but_not_allowed() {
+        let config = "
+[env_nopes]
+name = %{USER}
+reason = false
+"
+        .to_string();
+        let mut vec_eo: Vec<EnvOptions> = vec![];
+        let mut bytes = 0;
+        read_ini_config_str(&config, &mut vec_eo, "ed", false, &mut bytes);
+        let mut ro = RunOptions::new();
+        ro.name = "ed".to_string();
+        ro.target = "root".to_string();
+        ro.command = "".to_string();
+        ro.allow_env_list = Some(vec!["PATH".to_string()]);
+
+        assert_eq!(can(&vec_eo, &ro).permit, false);
+    }
+
+    #[test]
+    fn test_environment_assign_env_list() {
+        let config = "
+[ed_part_allowed]
+name = %{USER}
+reason = false
+type = run
+env_assign.ILIKETO = moveitmoveit
+env_assign.JOE = 90
+regex = .*
+"
+        .to_string();
+        let mut vec_eo: Vec<EnvOptions> = vec![];
+        let mut bytes = 0;
+        read_ini_config_str(&config, &mut vec_eo, "ed", false, &mut bytes);
+        let mut ro = RunOptions::new();
+        ro.name = "ed".to_string();
+        ro.target = "root".to_string();
+        ro.command = "".to_string();
+        let entry = can(&vec_eo, &ro);
+
+        assert_eq!(
+            entry.env_assign.as_ref().unwrap().get("ILIKETO").unwrap(),
+            "moveitmoveit"
+        );
+        assert_eq!(entry.env_assign.as_ref().unwrap().get("JOE").unwrap(), "90");
+    }
+
+    #[test]
+    fn test_environment_provided_and_allowed() {
+        let config = "
+[ed_part_allowed]
+name = %{USER}
+reason = false
+type = run
+permit_env = (HOME|PATH)
+"
+        .to_string();
+        let mut vec_eo: Vec<EnvOptions> = vec![];
+        let mut bytes = 0;
+        read_ini_config_str(&config, &mut vec_eo, "ed", false, &mut bytes);
+        let mut ro = RunOptions::new();
+        ro.name = "ed".to_string();
+        ro.target = "root".to_string();
+        ro.command = "".to_string();
+        ro.allow_env_list = Some(vec!["PATH".to_string(), "HOME".to_string()]);
+
+        assert_eq!(can(&vec_eo, &ro).permit, true);
+    }
+
+    #[test]
+    fn test_environment_provided_but_some_allowed() {
+        let config = "
+[ed_part_allowed]
+name = %{USER}
+reason = false
+type = run
+permit_env = (HOME|PATH)
+"
+        .to_string();
+        let mut vec_eo: Vec<EnvOptions> = vec![];
+        let mut bytes = 0;
+        read_ini_config_str(&config, &mut vec_eo, "ed", false, &mut bytes);
+        let mut ro = RunOptions::new();
+        ro.name = "ed".to_string();
+        ro.target = "root".to_string();
+        ro.command = "".to_string();
+        ro.allow_env_list = Some(vec![
+            "PATH".to_string(),
+            "HOME".to_string(),
+            "DISASTER".to_string(),
+        ]);
+
+        assert_eq!(can(&vec_eo, &ro).permit, false);
+    }
+
+    #[test]
+    fn test_environment_not_provided_others_allowed() {
+        let config = "
+[ed_part_allowed]
+name = %{USER}
+type = run
+permit_env = (HOME|PATH)
+"
+        .to_string();
+        let mut vec_eo: Vec<EnvOptions> = vec![];
+        let mut bytes = 0;
+        read_ini_config_str(&config, &mut vec_eo, "ed", false, &mut bytes);
+        let mut ro = RunOptions::new();
+        ro.name = "ed".to_string();
+        ro.target = "root".to_string();
+        ro.command = "".to_string();
+        ro.allow_env_list = None;
+
+        assert_eq!(can(&vec_eo, &ro).permit, true);
+    }
+
+    #[test]
+    fn test_percent_user() {
+        let config = "
+[ed]
+name = ed
+type = run
+target = root
+regex = /bin/echo [%]\\{USER\\}
+"
+        .to_string();
+        let mut vec_eo: Vec<EnvOptions> = vec![];
+        let mut bytes = 0;
+        read_ini_config_str(&config, &mut vec_eo, "ed", false, &mut bytes);
+        let mut ro = RunOptions::new();
+        ro.name = "ed".to_string();
+        ro.target = "root".to_string();
+        ro.command = "/bin/echo %{USER}".to_string();
+
+        assert_eq!(can(&vec_eo, &ro).permit, true);
+    }
 }
