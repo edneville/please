@@ -62,6 +62,8 @@ pub struct EnvOptions {
     pub reason: bool,
     pub last: bool,
     pub syslog: bool,
+    pub env_permit: Option<String>,
+    pub env_assign: Option<HashMap<String, String>>,
 }
 
 impl EnvOptions {
@@ -87,6 +89,8 @@ impl EnvOptions {
             reason: false,
             last: false,
             syslog: true,
+            env_permit: None,
+            env_assign: None,
         }
     }
     fn new_deny() -> EnvOptions {
@@ -126,6 +130,7 @@ pub struct RunOptions {
     pub new_args: Vec<String>,
     pub old_umask: Option<nix::sys::stat::Mode>,
     pub old_envs: Option<HashMap<String, String>>,
+    pub allow_env_list: Option<Vec<String>>,
 }
 
 impl RunOptions {
@@ -150,6 +155,7 @@ impl RunOptions {
             new_args: vec![],
             old_umask: None,
             old_envs: None,
+            allow_env_list: None,
         }
     }
 }
@@ -362,7 +368,7 @@ pub fn common_opt_arguments(
 
     if ro.warm_token {
         if ro.prompt {
-            challenge_password(&ro, EnvOptions::new(), &service);
+            challenge_password(&ro, &EnvOptions::new(), &service);
         }
         std::process::exit(0);
     }
@@ -414,6 +420,24 @@ pub fn read_ini(
         if !in_section {
             println!("Error parsing {}:{}", config_path, line_number);
             faulty = true;
+            continue;
+        }
+
+        // env_assign is a special case as the key names are not known at compile time so do not fit in the match
+
+        if key.starts_with("env_assign.") {
+            let period_pos = key.find('.');
+            let env_name = key[period_pos.unwrap() + 1..].trim();
+            if !value.is_empty() {
+                if opt.clone().env_assign.is_none() {
+                    opt.env_assign = Some(HashMap::new());
+                }
+                opt.env_assign
+                    .as_mut()
+                    .unwrap()
+                    .entry(env_name.to_string())
+                    .or_insert_with(|| value.to_string());
+            }
             continue;
         }
 
@@ -545,6 +569,11 @@ pub fn read_ini(
                     faulty = true;
                 }
             }
+            "permit_env" => {
+                if !value.is_empty() {
+                    opt.env_permit = Some(value.to_string());
+                }
+            }
             "exitcmd" => {
                 if !value.is_empty() {
                     opt.exitcmd = Some(value.to_string());
@@ -567,7 +596,7 @@ pub fn read_ini(
             "last" => opt.last = value == "true",
             "syslog" => opt.syslog = value == "true",
             &_ => {
-                println!("Error parsing {}:{}", config_path, line_number);
+                println!("Error parsing {}:{}", config_path, line_number + 1);
                 faulty = true;
             }
         }
@@ -648,7 +677,7 @@ pub fn hostname_ok(item: &EnvOptions, ro: &RunOptions, line: Option<i32>) -> boo
         ) {
             Some(check) => check,
             None => {
-                println!("Could not compile {}", &item.name);
+                println!("Could not compile {}", &item.hostname.as_ref().unwrap());
                 return false;
             }
         };
@@ -676,7 +705,7 @@ pub fn directory_check_ok(item: &EnvOptions, ro: &RunOptions, line: Option<i32>)
         ) {
             Some(check) => check,
             None => {
-                println!("Could not compile {}", &item.name);
+                println!("Could not compile {}", &item.dir.as_ref().unwrap());
                 return false;
             }
         };
@@ -694,6 +723,43 @@ pub fn directory_check_ok(item: &EnvOptions, ro: &RunOptions, line: Option<i32>)
     if ro.directory.is_some() {
         return false;
     }
+    true
+}
+
+/// may we keep environment data
+pub fn environment_ok(item: &EnvOptions, ro: &RunOptions, line: Option<i32>) -> bool {
+    if ro.allow_env_list.is_none() {
+        // println!("allow_env_list is none");
+        return true;
+    }
+
+    if item.env_permit.is_none() && ro.allow_env_list.is_some() {
+        // println!("env_permit is none and allow_env_list is some");
+        return false;
+    }
+
+    let env_re = match regex_build(
+        &item.env_permit.as_ref().unwrap(),
+        &ro.name,
+        &item.file_name,
+        &item.section,
+        line,
+    ) {
+        Some(check) => check,
+        None => {
+            println!("Could not compile {}", &item.env_permit.as_ref().unwrap());
+            return false;
+        }
+    };
+
+    for permit_env in ro.allow_env_list.as_ref().unwrap() {
+        // println!("permit_env is {}", permit_env);
+        if !env_re.is_match(&permit_env) {
+            // println!( "{}: skipping as not a permitted env {} vs {}",    item.section, item.env_permit.clone().unwrap(), permit_env );
+            return false;
+        }
+    }
+
     true
 }
 
@@ -719,7 +785,7 @@ pub fn permitted_dates_ok(item: &EnvOptions, ro: &RunOptions, line: Option<i32>)
         ) {
             Some(check) => check,
             None => {
-                println!("Could not compile {}", &item.name);
+                println!("Could not compile {}", &item.datematch.as_ref().unwrap());
                 return false;
             }
         };
@@ -785,11 +851,15 @@ pub fn can(vec_eo: &[EnvOptions], ro: &RunOptions) -> EnvOptions {
             continue;
         }
 
+        if !environment_ok(&item, &ro, None) {
+            continue;
+        }
+
         let target_re =
             match regex_build(&item.target, &ro.name, &item.file_name, &item.section, None) {
                 Some(check) => check,
                 None => {
-                    println!("Could not compile {}", &item.name);
+                    println!("Could not compile {}", &item.target);
                     continue;
                 }
             };
@@ -810,7 +880,7 @@ pub fn can(vec_eo: &[EnvOptions], ro: &RunOptions) -> EnvOptions {
                 match regex_build(&item.rule, &ro.name, &item.file_name, &item.section, None) {
                     Some(check) => check,
                     None => {
-                        println!("Could not compile {}", &item.name);
+                        println!("Could not compile {}", &item.rule);
                         continue;
                     }
                 };
@@ -872,7 +942,7 @@ pub fn handler_shim<T: pam::Converse>(
 
 /// read password of user via rpassword
 /// should pam require a password, and it is successful, then we set a token
-pub fn challenge_password(ro: &RunOptions, entry: EnvOptions, service: &str) -> bool {
+pub fn challenge_password(ro: &RunOptions, entry: &EnvOptions, service: &str) -> bool {
     if entry.require_pass {
         if tty_name().is_none() {
             println!("Cannot read password without tty");
@@ -1102,6 +1172,20 @@ pub fn clean_environment(ro: &mut RunOptions) {
             continue;
         }
 
+        let mut skip = false;
+
+        if ro.allow_env_list.is_some() {
+            for env in ro.allow_env_list.as_ref().unwrap() {
+                if key == *env {
+                    skip = true;
+                    break;
+                }
+            }
+        }
+        if skip {
+            continue;
+        }
+
         if ro.acl_type == Acltype::Edit && (key == "EDITOR" || key == "VISUAL") {
             continue;
         }
@@ -1109,9 +1193,24 @@ pub fn clean_environment(ro: &mut RunOptions) {
     }
 }
 
+/// set the environment unless it is permitted to be kept and is specified
+pub fn set_env_if_not_passed_through(ro: &RunOptions, key: &str, value: &str) {
+    if ro.allow_env_list.is_some() {
+        for env in ro.allow_env_list.as_ref().unwrap() {
+            if key == *env {
+                // println!("Returning as {} = {}", key, *env );
+                return;
+            }
+        }
+    }
+
+    std::env::set_var(key, value);
+}
+
 /// set environment for helper scripts
 pub fn set_environment(
     ro: &RunOptions,
+    entry: &EnvOptions,
     original_user: &User,
     original_uid: u32,
     lookup_name: &User,
@@ -1126,15 +1225,23 @@ pub fn set_environment(
     std::env::set_var("SUDO_GID", original_user.primary_group_id().to_string());
     std::env::set_var("SUDO_COMMAND", &ro.command);
 
-    std::env::set_var(
+    set_env_if_not_passed_through(
+        &ro,
         "PATH",
-        "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin".to_string(),
+        "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
     );
-    std::env::set_var("HOME", lookup_name.home_dir().as_os_str());
-    std::env::set_var("MAIL", format!("/var/mail/{}", ro.target));
-    std::env::set_var("SHELL", lookup_name.shell());
-    std::env::set_var("USER", &ro.target);
-    std::env::set_var("LOGNAME", &ro.target);
+
+    set_env_if_not_passed_through(&ro, "HOME", lookup_name.home_dir().to_str().unwrap());
+    set_env_if_not_passed_through(&ro, "MAIL", &format!("/var/mail/{}", ro.target));
+    set_env_if_not_passed_through(&ro, "SHELL", lookup_name.shell().to_str().unwrap());
+    set_env_if_not_passed_through(&ro, "USER", &ro.target);
+    set_env_if_not_passed_through(&ro, "LOGNAME", &ro.target);
+
+    if entry.env_assign.is_some() {
+        for (k, v) in entry.env_assign.as_ref().unwrap() {
+            std::env::set_var(k, v);
+        }
+    }
 }
 
 pub fn bad_priv_msg() {

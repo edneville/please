@@ -4,7 +4,7 @@ section: 5
 header: User Manual
 footer: please 0.4.1
 author: Ed Neville (ed-please@s5h.net)
-date: 19 June 2021
+date: 25 June 2021
 ---
 
 # NAME
@@ -64,6 +64,9 @@ The properties permitted are described below and should appear at most once per 
 **dir=[regex]**
 : permitted directories to run within
 
+**permit_env=[regex]**
+: allow environments that match **regex** to be passed through
+
 **regex** is a regular expression, **%{USER}** will expand to the user who is currently running `please`. This enables a single rule for a group to modify/run something that matches their name.
 
 Spaces within arguments will be substituted as **'\\\ '** (backslash space). Use **^/bin/echo hello\\\\ world$** to match **/bin/echo "hello world"**, note that **\\** is a regex escape character so it must be escaped, therefore matching a space becomes **'\\\\\ '** (backslash backslash space).
@@ -84,6 +87,9 @@ Spaces within arguments will be substituted as **'\\\ '** (backslash space). Use
 
 **syslog=[true|false]**
 : log this activity to syslog, defaults to true
+
+**env_assign.[key]=[value]**
+: forcefully assign **value** to environment **key**.
 
 **editmode=[octal mode]**
 : (**type=edit**) set the file mode bits on replacement file to octal mode, defaults to 0600

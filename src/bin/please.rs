@@ -62,7 +62,7 @@ fn do_list(ro: &mut RunOptions, vec_eo: &[EnvOptions], service: &str) {
     }
 
     // check if a password is required
-    if !challenge_password(&ro, can_do, &service) {
+    if !challenge_password(&ro, &can_do, &service) {
         log_action(&service, "deny", &ro, &ro.original_command.join(" "));
         std::process::exit(1);
     }
@@ -103,6 +103,12 @@ fn general_options(
 ) {
     let mut opts = Options::new();
     opts.parsing_style(getopts::ParsingStyle::StopAtFirstFree);
+    opts.optopt(
+        "a",
+        "allowenv",
+        "allow permitted comma separated envs",
+        "LIST",
+    );
     opts.optopt("c", "check", "check config file", "FILE");
     opts.optopt("d", "dir", "change to directory prior to execution", "DIR");
     opts.optflag("h", "help", "print usage help");
@@ -132,6 +138,15 @@ fn general_options(
             true,
             &mut bytes,
         ) as i32);
+    }
+
+    if matches.opt_present("a") {
+        let mut vec = vec![];
+
+        for s in matches.opt_str("a").unwrap().split(',') {
+            vec.push(s.to_string());
+        }
+        ro.allow_env_list = Some(vec);
     }
 
     if matches.opt_present("d") {
@@ -167,8 +182,6 @@ fn main() {
     let root_uid = nix::unistd::Uid::from_raw(0);
     let root_gid = nix::unistd::Gid::from_raw(0);
 
-    clean_environment(&mut ro);
-
     if !set_privs("root", root_uid, root_gid) {
         std::process::exit(1);
     }
@@ -178,6 +191,8 @@ fn main() {
     }
 
     general_options(&mut ro, args, &service, &mut vec_eo);
+
+    clean_environment(&mut ro);
 
     ro.groups = group_hash(original_user.groups().unwrap());
     if !esc_privs() {
@@ -244,7 +259,7 @@ fn main() {
         std::process::exit(1);
     }
 
-    if !challenge_password(&ro, entry, &service) {
+    if !challenge_password(&ro, &entry, &service) {
         log_action(&service, "deny", &ro, &original_command.join(" "));
         std::process::exit(1);
     }
@@ -277,7 +292,7 @@ fn main() {
 
     log_action(&service, "permit", &ro, &original_command.join(" "));
 
-    set_environment(&ro, &original_user, original_uid, &lookup_name);
+    set_environment(&ro, &entry, &original_user, original_uid, &lookup_name);
 
     if !esc_privs() {
         std::process::exit(1);

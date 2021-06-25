@@ -413,7 +413,7 @@ fn main() {
         std::process::exit(1);
     }
 
-    if !challenge_password(&ro, entry.clone(), &service) {
+    if !challenge_password(&ro, &entry, &service) {
         log_action(&service, "deny", &ro, &original_command.join(" "));
         std::process::exit(1);
     }
@@ -430,13 +430,12 @@ fn main() {
 
     let source_file = Path::new(&ro.new_args[0]);
 
-    let edit_file = &setup_temp_edit_file(&service, source_file, &ro, target_uid, target_gid);
-
     if !drop_privs(&ro) {
         std::process::exit(1);
     }
 
-    set_environment(&ro, &original_user, original_uid, &lookup_name);
+    set_environment(&ro, &entry, &original_user, original_uid, &lookup_name);
+    let edit_file = &setup_temp_edit_file(&service, source_file, &ro, target_uid, target_gid);
 
     std::env::set_var("PLEASE_EDIT_FILE", edit_file.to_string());
     std::env::set_var("PLEASE_SOURCE_FILE", source_file.to_str().unwrap());
