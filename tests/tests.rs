@@ -1377,4 +1377,25 @@ regex = /bin/echo [%]\\{USER\\}
 
         assert_eq!(can(&vec_eo, &ro).permit, true);
     }
+
+    #[test]
+    fn test_internal_backslash() {
+        let config = "
+[ed]
+name = ed
+type = run
+target = root
+regex = /bin/echo hello\\x5cworld
+"
+        .to_string();
+        let mut vec_eo: Vec<EnvOptions> = vec![];
+        let mut bytes = 0;
+        read_ini_config_str(&config, &mut vec_eo, "ed", false, &mut bytes);
+        let mut ro = RunOptions::new();
+        ro.name = "ed".to_string();
+        ro.target = "root".to_string();
+        ro.command = "/bin/echo hello\\world".to_string();
+
+        assert_eq!(can(&vec_eo, &ro).permit, true);
+    }
 }

@@ -241,7 +241,7 @@ pub fn regex_build(
             "Error parsing {}{}",
             config_path,
             if line.is_some() {
-                format!(": {}:{}", section, line.unwrap())
+                format!(": {}:{}", section, line.unwrap() + 1)
             } else {
                 "".to_string()
             }
@@ -1006,8 +1006,7 @@ pub fn challenge_password(ro: &RunOptions, entry: &EnvOptions, service: &str) ->
 /// print output list of acl
 pub fn list(vec_eo: &[EnvOptions], ro: &RunOptions) {
     //let mut str_list: vec![];
-    let str_list = produce_list(&vec_eo, &ro);
-    for s in str_list {
+    for s in produce_list(&vec_eo, &ro) {
         println!("{}", s);
     }
 }

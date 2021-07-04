@@ -54,7 +54,6 @@ pkgin install pleaser
 SUSE Tumbleweed:
 
 ```
-zypper addrepo https://download.opensuse.org/repositories/security:idm/openSUSE_Tumbleweed/security:idm.repo
 zypper refresh
 zypper install pleaser
 ```
@@ -126,6 +125,7 @@ The options are as follows:
 | hostname=regex              | Hosts where this applies. Defaults to 'localhost'. |
 | dir=regex                   | Permit switching to regex defined directory prior to execution. |
 | reason=[true/false]         | when true, require a reason to be provided by `-r`, defaults to false |
+| permit_env=regex            | when combined with `-a`, permit matching environments keys |
 
 ## Actions
 
@@ -135,6 +135,7 @@ The options are as follows:
 | require_pass=[true/false]   | Defaults to true, mandatory in run and edit, become this user.   |
 | last=[true/false]           | when true, stop processing when matched, defaults to false |
 | syslog=[true/false]         | log this activity to syslog, default = true |
+| env_assign.key=value        | force environment **key** to be assigned **value** |
 | exitcmd=[program]           | (edit) continue with file replacement if `program` exits 0 |
 | editmode=[octal mode]       | (edit) set destination file mode to `octal mode` |
 
