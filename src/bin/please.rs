@@ -36,6 +36,7 @@ fn do_list(ro: &mut RunOptions, vec_eo: &[EnvOptions], service: &str) {
     };
 
     let can_do = can(&vec_eo, &ro);
+    ro.syslog = can_do.syslog;
 
     if !can_do.permit {
         let dest = format!("{}'s", &ro.target);

@@ -29,6 +29,7 @@ use std::fs;
 use std::fs::File;
 use std::io::prelude::*;
 use std::io::BufReader;
+use std::os::unix::io::AsRawFd;
 use std::time::SystemTime;
 use users::os::unix::UserExt;
 use users::*;
@@ -241,7 +242,7 @@ pub fn regex_build(
             "Error parsing {}{}",
             config_path,
             if line.is_some() {
-                format!(": {}:{}", section, line.unwrap() + 1)
+                format!(": {}:{}", section, line.unwrap())
             } else {
                 "".to_string()
             }
@@ -390,7 +391,8 @@ pub fn read_ini(
     let mut in_section = false;
     let mut opt = EnvOptions::new();
 
-    for (line_number, l) in conf.split('\n').enumerate() {
+    for (mut line_number, l) in conf.split('\n').enumerate() {
+        line_number += 1;
         let line = l.trim();
 
         if line.is_empty() || line.starts_with('#') {
@@ -596,7 +598,7 @@ pub fn read_ini(
             "last" => opt.last = value == "true",
             "syslog" => opt.syslog = value == "true",
             &_ => {
-                println!("Error parsing {}:{}", config_path, line_number + 1);
+                println!("Error parsing {}:{}", config_path, line_number);
                 faulty = true;
             }
         }
@@ -629,6 +631,24 @@ pub fn read_ini_config_file(
         Ok(file) => file,
     };
 
+    match nix::sys::stat::fstat(file.as_raw_fd()) {
+        Err(why) => {
+            println!("Could not stat {}: {}", display, why);
+            return true;
+        }
+        Ok(stat_data) => {
+            if stat_data.st_mode & libc::S_IFREG != libc::S_IFREG {
+                println!("Refusing to open non-regular file");
+                return true;
+            }
+
+            if (stat_data.st_mode & !libc::S_IFMT) & (0o022) != 0 {
+                println!("Refusing to parse file as group or other write permission bits are set");
+                return true;
+            }
+        }
+    }
+
     let byte_limit = 1024 * 1024 * 10;
 
     if *bytes >= byte_limit {
@@ -638,10 +658,10 @@ pub fn read_ini_config_file(
 
     let mut s = String::new();
     let reader = BufReader::new(file).take(byte_limit).read_to_string(&mut s);
-    *bytes += s.len() as u64;
 
     match reader {
         Ok(n) => {
+            *bytes += s.as_bytes().len() as u64;
             if n >= byte_limit as usize {
                 println!("Exiting as too much config has already been read.");
                 std::process::exit(1);
@@ -1296,19 +1316,24 @@ pub fn tty_name() -> Option<String> {
     let mut ttyname = None;
 
     /* sometimes a tty isn't attached for all pipes FIXME: make this testable */
-    unsafe {
-        for n in 0..3 {
-            let ptr = libc::ttyname(n);
-            if ptr.is_null() {
-                continue;
-            }
-
-            match CStr::from_ptr(ptr).to_str() {
-                Err(_x) => ttyname = None,
-                Ok(x) => ttyname = Some(x.to_string()),
-            }
-            break;
+    for n in 0..3 {
+        let ptr;
+        unsafe {
+            ptr = libc::ttyname(n);
         }
+        if ptr.is_null() {
+            continue;
+        }
+
+        let s;
+        unsafe {
+            s = CStr::from_ptr(ptr).to_str();
+        }
+        match s {
+            Err(_x) => ttyname = None,
+            Ok(x) => ttyname = Some(x.to_string()),
+        }
+        break;
     }
 
     ttyname

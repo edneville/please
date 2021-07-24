@@ -152,7 +152,7 @@ For example, using the two entries below:
 name=jim
 target=root
 permit=true
-regex = ^(/usr)?/bin/du\s.*
+regex = ^(/usr)?/bin/du (/home/[a-z0-9-]+\s?)+
 require_pass=false
 ```
 
@@ -198,7 +198,7 @@ name=l2users
 group=true
 target=root
 permit=true
-regex = /usr/local/housekeeping/.*
+regex = /usr/local/housekeeping/tidy_(logs|images|mail)
 datematch = ^Mon.*
 ```
 
@@ -265,7 +265,7 @@ Or, perhaps any user who's name starts `admin` may execute `useradd` and `userde
 name = admin_\S+
 permit = true
 require_pass = false
-regex = /usr/sbin/user(add|del)\s.*
+regex = /usr/sbin/user(add|del) -m \S+
 ```
 
 # Files
