@@ -4,7 +4,7 @@ section: 5
 header: User Manual
 footer: please 0.4.1
 author: Ed Neville (ed-please@s5h.net)
-date: 04 July 2021
+date: 25 July 2021
 ---
 
 # NAME
@@ -269,7 +269,7 @@ name=l2users
 group=true
 target=root
 permit=true
-regex = /usr/local/housekeeping/.*
+regex = /usr/local/housekeeping/tidy_(logs|images|mail)
 datematch = ^Mon\s+.*
 ```
 
