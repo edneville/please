@@ -265,7 +265,7 @@ Or, perhaps any user who's name starts `admin` may execute `useradd` and `userde
 name = admin_\S+
 permit = true
 require_pass = false
-regex = /usr/sbin/user(add|del) -m \S+
+regex = /usr/sbin/user(add -m|del) \S+
 ```
 
 # Files
