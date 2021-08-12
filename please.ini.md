@@ -4,7 +4,7 @@ section: 5
 header: User Manual
 footer: please 0.4.2
 author: Ed Neville (ed-please@s5h.net)
-date: 25 July 2021
+date: 12 August 2021
 ---
 
 # NAME
@@ -95,8 +95,8 @@ To match the string **%{USER}**, the sequence **\\x25\\{USER\\}** can be used.
 **env_assign.[key]=[value]**
 : assign **value** to environment **key**
 
-**editmode=[octal mode]**
-: (**type=edit**) set the file mode bits on replacement file to octal mode, defaults to 0600
+**editmode=[octal mode/keep]**
+: (**type=edit**) set the file mode bits on replacement file to octal mode. If the mode is set to **keep** and the file exists already then the mode of the existing file is used. Defaults to 0600 if the file is not present or mode is not set. The mode of the file is read prior to the final file move, it may change between editor start and file rename.
 
 **exitcmd=[program]**
 : (**type=edit**) run program after editor exits as the target user, if exit is zero, continue with file replacement. **%{NEW}** and **%{OLD}** placeholders expand to new and old edit files

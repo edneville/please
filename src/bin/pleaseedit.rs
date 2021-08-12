@@ -273,15 +273,19 @@ fn rename_to_source(
     )
     .unwrap();
 
-    fchmod(
-        dir_parent_tmp_file.as_raw_fd(),
-        if entry.edit_mode.is_some() {
-            nix::sys::stat::Mode::from_bits(entry.edit_mode.unwrap() as u32).unwrap()
-        } else {
-            nix::sys::stat::Mode::S_IRUSR | nix::sys::stat::Mode::S_IWUSR
-        },
-    )
-    .unwrap();
+    let edit_mode = if entry.edit_mode.is_some() {
+        match entry.edit_mode.as_ref().unwrap() {
+            EditMode::Mode(x) => nix::sys::stat::Mode::from_bits(*x as u32).unwrap(),
+            EditMode::Keep(_x) => match nix::sys::stat::stat(source_file) {
+                Ok(m) => nix::sys::stat::Mode::from_bits_truncate(m.st_mode),
+                _ => nix::sys::stat::Mode::from_bits(0o600).unwrap(),
+            },
+        }
+    } else {
+        nix::sys::stat::Mode::from_bits(0o600).unwrap()
+    };
+
+    fchmod(dir_parent_tmp_file.as_raw_fd(), edit_mode).unwrap();
 
     if entry.exitcmd.is_some() {
         let mut cmd = build_exitcmd(&entry, &source_file.to_str().unwrap(), &dir_parent_tmp);

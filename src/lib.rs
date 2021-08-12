@@ -42,6 +42,12 @@ use rand::distributions::Alphanumeric;
 use rand::{thread_rng, Rng};
 
 #[derive(Clone)]
+pub enum EditMode {
+    Mode(i32),
+    Keep(bool),
+}
+
+#[derive(Clone)]
 pub struct EnvOptions {
     pub name: String,
     pub rule: String,
@@ -59,7 +65,7 @@ pub struct EnvOptions {
     pub configured: bool,
     pub dir: Option<String>,
     pub exitcmd: Option<String>,
-    pub edit_mode: Option<i32>,
+    pub edit_mode: Option<EditMode>,
     pub reason: bool,
     pub last: bool,
     pub syslog: bool,
@@ -584,10 +590,12 @@ pub fn read_ini(
             "editmode" => {
                 if !value.is_empty() {
                     if value.parse::<i16>().is_ok() {
-                        opt.edit_mode = Some(
+                        opt.edit_mode = Some(EditMode::Mode(
                             i32::from_str_radix(value.trim_start_matches('0'), 8)
                                 .expect("unable to parse editmode"),
-                        );
+                        ));
+                    } else if value.to_lowercase() == "keep" {
+                        opt.edit_mode = Some(EditMode::Keep(true));
                     } else {
                         println!("Could not convert {} to numerical file mode", value);
                         faulty = true;
