@@ -982,7 +982,24 @@ editmode=0644
 
         let entry = can(&vec_eo, &ro);
 
-        assert_eq!(entry.edit_mode, Some(420));
+        assert!(matches!(entry.edit_mode, Some(EditMode::Mode(420))));
+
+        let config = "
+[edit_filemode]
+name=ed
+target=root
+regex=/etc/please.ini.*
+type=edit
+editmode=keep
+"
+        .to_string();
+
+        bytes = 0;
+        read_ini_config_str(&config, &mut vec_eo, "ed", false, &mut bytes);
+
+        let entry = can(&vec_eo, &ro);
+
+        assert!(matches!(entry.edit_mode, Some(EditMode::Keep(true))));
     }
 
     #[test]

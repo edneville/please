@@ -132,12 +132,12 @@ The options are as follows:
 | Part                        | Effect       |
 |-----------------------------|--------------|
 | permit=[true/false]         | Defaults to true |
-| require_pass=[true/false]   | Defaults to true, mandatory in run and edit, become this user.   |
+| require_pass=[true/false]   | Defaults to true, mandatory in run and edit, become this user   |
 | last=[true/false]           | when true, stop processing when matched, defaults to false |
 | syslog=[true/false]         | log this activity to syslog, default = true |
 | env_assign.key=value        | force environment **key** to be assigned **value** |
 | exitcmd=[program]           | (edit) continue with file replacement if `program` exits 0 |
-| editmode=[octal mode]       | (edit) set destination file mode to `octal mode` |
+| editmode=[octal mode]/[keep] | (edit) set destination file mode to `octal mode`, or keep the mode of an existing file. If the file is not present, or mode is not declared, then mode falls back to 0600. If there is a file present, then the mode is read and used just prior to file rename |
 
 Using a greedy `.*` for the regex field will be as good as saying the rule should match any command. In previous releases there was no anchor (`^` and `$`) however, it seems more sensible to follow `find`'s approach and insist that there are anchors around the regex. This avoids `/bin/bash` matching `/home/user/bin/bash` unless the rule permits something like `/home/%{USER}/bin/bash`.
 
