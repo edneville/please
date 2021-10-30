@@ -36,7 +36,7 @@ use nix::sys::signal;
 use nix::sys::signal::Signal;
 use nix::sys::stat::fchmod;
 use nix::sys::wait::WaitStatus::Exited;
-use nix::unistd::{fchown, fork, gethostname, ForkResult};
+use nix::unistd::{fchown, fork, ForkResult};
 use users::*;
 
 /// return a path string to work on in /tmp
@@ -289,15 +289,26 @@ fn rename_to_source(
 
     if entry.exitcmd.is_some() {
         let mut cmd = build_exitcmd(&entry, &source_file.to_str().unwrap(), &dir_parent_tmp);
-        let out = cmd.output().expect("could not execute");
-        io::stdout().write_all(&out.stdout).unwrap();
-        io::stderr().write_all(&out.stderr).unwrap();
-        if !out.status.success() {
-            println!("Aborting as exitcmd was non-zero, removing tmp file");
-            if nix::unistd::unlink(dir_parent_tmp).is_err() {
-                println!("Could not remove tmp file either, giving up");
+        match cmd.output() {
+            Err(x) => {
+                println!("Aborting as exitcmd was non-zero when executing, removing tmp file:");
+                println!("{}", x);
+                if nix::unistd::unlink(dir_parent_tmp).is_err() {
+                    println!("Could not remove tmp file either, giving up");
+                }
+                std::process::exit(1);
             }
-            std::process::exit(1);
+            Ok(out) => {
+                io::stdout().write_all(&out.stdout).unwrap();
+                io::stderr().write_all(&out.stderr).unwrap();
+                if !out.status.success() {
+                    println!("Aborting as exitcmd was non-zero, removing tmp file");
+                    if nix::unistd::unlink(dir_parent_tmp).is_err() {
+                        println!("Could not remove tmp file either, giving up");
+                    }
+                    std::process::exit(1);
+                }
+            }
         }
     }
 
@@ -390,12 +401,6 @@ fn main() {
         std::process::exit(1);
     }
 
-    let mut buf = [0u8; 64];
-    ro.hostname = gethostname(&mut buf)
-        .expect("Failed getting hostname")
-        .to_str()
-        .expect("Hostname wasn't valid UTF-8")
-        .to_string();
     let entry = can(&vec_eo, &ro);
 
     ro.syslog = entry.syslog;

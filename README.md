@@ -4,9 +4,9 @@ Great! This is what I need.
 
 The aim is to allow admins to delegate accurate least privilege access with ease. There are times when what is intended to be executed can be expressed easily with a regex to expose only what is needed and nothing more.
 
-The idea is to help you admin your box without giving users full root, just because that is easier. Most admins have experience of regex in one form or another, so lets configure access that way.
+The idea is to help you admin your box without giving users full root shells, just because that is easier. Most admins have experience of regex in one form or another, so lets configure access that way.
 
-I saw regex but don't like regex. No problem, you can still use please without regex, just treat each field/property as plain text, and escape control characters `?(){}[]+` etc.
+I saw regex but don't like regex. No problem, you can still use please without regex using `exact_` counterparts, or treat each field/property as plain text, and escape control characters `?(){}[]+` etc. Most of the regex match statements have `exact` counterparts.
 
 Please is written with memory safe rust. Traditional C memory unsafety is avoided, logic problems may still exist. Logic problems would exist in both systems, but I choose the smaller problem set.
 
@@ -28,15 +28,15 @@ cargo test && cargo build --release \
 Arch:
 
 ```
-pacman -Syu git openssh fakeroot devtools make gcc rust
+pacman -Syu git fakeroot devtools binutils gcc rust 
 git clone https://aur@aur.archlinux.org/pleaser.git
 cd pleaser && makepkg -isr
 ```
 
-Debian (Bullseye)/Ubuntu (Hirsute):
+Debian/Ubuntu:
 
 ```
-apt-get install pleaser
+apt install pleaser
 ```
 
 Fedora (35):
@@ -54,8 +54,15 @@ pkgin install pleaser
 SUSE Tumbleweed:
 
 ```
-zypper refresh
 zypper install pleaser
+```
+
+RHEL 7 (EPEL):
+```
+yum install cargo git pam-devel
+git clone 'https://gitlab.com/edneville/please.git'
+cd please/
+cargo test && cargo build --release && install -oroot -groot -D -m4755 target/release/please target/release/pleaseedit /usr/local/bin
 ```
 
 Optionally, set `sudo` as an alias of `please`:
@@ -73,7 +80,7 @@ cd /usr/local/bin && ln -s /usr/local/bin/please sudo && ln -s /usr/local/bin/pl
 
 # How do I set it up
 
-You'll need to configure PAM in order for `require_pass` to authenticate. Debian-based needs something similar to this in `/etc/pam.d/please` and `/etc/pam.d/pleaseedit`:
+You may need to configure PAM if you didn't use a distro package in order for `require_pass` to authenticate. Debian-based needs something similar to this in `/etc/pam.d/please` and `/etc/pam.d/pleaseedit`:
 
 ```
 #%PAM-1.0
@@ -116,7 +123,7 @@ The options are as follows:
 |-----------------------------|--------------|
 | name=regex                  | Mandatory, apply configuration to this entity. |
 | target=regex                | May become these users. |
-| regex=rule                  | This is the command regex for the section, default is ^$ |
+| rule=regex                  | This is the command regex for the section, default is ^$ |
 | notbefore=YYYYmmdd          | The date, or YYYYmmddHHMMSS when this rule becomes effective. |
 | notafter=YYYYmmdd           | The date, or YYYYmmddHHMMSS when this rule expires. |
 | datematch=[Day dd Mon HH:MM:SS UTC YYYY] | regex to match against a date string |
@@ -127,17 +134,27 @@ The options are as follows:
 | reason=[true/false]         | when true, require a reason to be provided by `-r`, defaults to false |
 | permit_env=regex            | when combined with `-a`, permit matching environments keys |
 
+Exact counterparts, which must match exactly. When both regex and exact rules are present, the exact rule match will have precedence.
+
+| Part                        | Effect       |
+|-----------------------------|--------------|
+| exact_name=string           | Match this exact name |
+| exact_hostname=string       | Match this exact hostname |
+| exact_target=string         | Match this exact target user |
+| exact_rule=string           | Match this exact rule |
+| exact_dir=string            | Match this exact directory |
+
 ## Actions
 
 | Part                        | Effect       |
 |-----------------------------|--------------|
 | permit=[true/false]         | Defaults to true |
-| require_pass=[true/false]   | Defaults to true, mandatory in run and edit, become this user   |
+| require_pass=[true/false]   | Defaults to true, mandatory in run and edit, become this user |
 | last=[true/false]           | when true, stop processing when matched, defaults to false |
 | syslog=[true/false]         | log this activity to syslog, default = true |
 | env_assign.key=value        | force environment **key** to be assigned **value** |
 | exitcmd=[program]           | (edit) continue with file replacement if `program` exits 0 |
-| editmode=[octal mode]/[keep] | (edit) set destination file mode to `octal mode`, or keep the mode of an existing file. If the file is not present, or mode is not declared, then mode falls back to 0600. If there is a file present, then the mode is read and used just prior to file rename |
+| editmode=[octal mode/keep]  | (edit) set destination file mode to `octal mode`, or keep the mode of an existing file. If the file is not present, or mode is not declared, then mode falls back to 0600. If there is a file present, then the mode is read and used just prior to file rename |
 
 Using a greedy `.*` for the regex field will be as good as saying the rule should match any command. In previous releases there was no anchor (`^` and `$`) however, it seems more sensible to follow `find`'s approach and insist that there are anchors around the regex. This avoids `/bin/bash` matching `/home/user/bin/bash` unless the rule permits something like `/home/%{USER}/bin/bash`.
 
@@ -152,7 +169,7 @@ For example, using the two entries below:
 name=jim
 target=root
 permit=true
-regex = ^(/usr)?/bin/du (/home/[a-z0-9-]+\s?)+
+rule = ^(/usr)?/bin/du (/home/[a-z0-9-]+\s?)+
 require_pass=false
 ```
 
@@ -161,7 +178,7 @@ require_pass=false
 name=jim
 target=postgres
 permit=true
-regex = /bin/bash
+rule = /bin/bash
 require_pass=false
 ```
 
@@ -198,7 +215,7 @@ name=l2users
 group=true
 target=root
 permit=true
-regex = /usr/local/housekeeping/tidy_(logs|images|mail)
+rule = /usr/local/housekeeping/tidy_(logs|images|mail)
 datematch = ^Mon.*
 ```
 
@@ -230,7 +247,7 @@ name = audio
 group = true
 permit = true
 require_pass = false
-regex = /usr/sbin/userdel -f -r %{USER}_tmp\.[a-zA-Z0-9]{10}
+rule = /usr/sbin/userdel -f -r %{USER}_tmp\.[a-zA-Z0-9]{10}
 ```
 
 How about, for the purpose of housekeeping, some users may be permitted to destroy zfs snapshots that look roughly like they're date stamped:
@@ -241,7 +258,7 @@ name = data
 group = true
 permit = true
 require_pass = false
-regex = /usr/sbin/zfs destroy storage/photos@\d{8}T\d{6}
+rule = /usr/sbin/zfs destroy storage/photos@\d{8}T\d{6}
 ```
 
 To list what you may or may not do:
@@ -265,7 +282,7 @@ Or, perhaps any user who's name starts `admin` may execute `useradd` and `userde
 name = admin_\S+
 permit = true
 require_pass = false
-regex = /usr/sbin/user(add -m|del) \S+
+rule = /usr/sbin/user(add -m|del) \S+
 ```
 
 # Files

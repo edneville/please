@@ -35,7 +35,7 @@ use users::os::unix::UserExt;
 use users::*;
 
 use getopts::{Matches, Options};
-use nix::unistd::{initgroups, setegid, seteuid, setgid, setuid};
+use nix::unistd::{gethostname, initgroups, setegid, seteuid, setgid, setuid};
 use pam::Authenticator;
 
 use rand::distributions::Alphanumeric;
@@ -49,13 +49,17 @@ pub enum EditMode {
 
 #[derive(Clone)]
 pub struct EnvOptions {
-    pub name: String,
-    pub rule: String,
+    pub name: Option<String>,
+    pub exact_name: Option<String>,
+    pub rule: Option<String>,
+    pub exact_rule: Option<String>,
     pub notbefore: Option<NaiveDateTime>,
     pub notafter: Option<NaiveDateTime>,
     pub datematch: Option<String>,
-    pub target: String,
+    pub target: Option<String>,
+    pub exact_target: Option<String>,
     pub hostname: Option<String>,
+    pub exact_hostname: Option<String>,
     pub permit: bool,
     pub require_pass: bool,
     pub acl_type: Acltype,
@@ -64,6 +68,7 @@ pub struct EnvOptions {
     pub group: bool,
     pub configured: bool,
     pub dir: Option<String>,
+    pub exact_dir: Option<String>,
     pub exitcmd: Option<String>,
     pub edit_mode: Option<EditMode>,
     pub reason: bool,
@@ -76,13 +81,17 @@ pub struct EnvOptions {
 impl EnvOptions {
     pub fn new() -> EnvOptions {
         EnvOptions {
-            name: "".to_string(),
-            rule: "^$".to_string(),
-            target: "root".to_string(),
+            name: None,
+            exact_name: None,
+            rule: Some("^$".to_string()),
+            exact_rule: None,
+            target: Some("root".to_string()),
+            exact_target: None,
             notbefore: None,
             notafter: None,
             datematch: None,
             hostname: None,
+            exact_hostname: None,
             file_name: "".to_string(),
             section: "".to_string(),
             permit: true,
@@ -91,6 +100,7 @@ impl EnvOptions {
             group: false,
             configured: false,
             dir: None,
+            exact_dir: None,
             exitcmd: None,
             edit_mode: None,
             reason: false,
@@ -103,8 +113,8 @@ impl EnvOptions {
     fn new_deny() -> EnvOptions {
         let mut opt = EnvOptions::new();
         opt.permit = false;
-        opt.rule = ".".to_string();
-        opt.target = "^$".to_string();
+        opt.rule = Some(".".to_string());
+        opt.target = Some("^$".to_string());
         opt.acl_type = Acltype::List;
         opt
     }
@@ -351,6 +361,7 @@ pub fn common_opt_arguments(
     if matches.opt_present("n") {
         ro.prompt = false;
     }
+
     if matches.opt_present("h") {
         if ro.new_args == ["credits"] {
             credits(&service);
@@ -379,6 +390,13 @@ pub fn common_opt_arguments(
         }
         std::process::exit(0);
     }
+
+    let mut buf = [0u8; 64];
+    ro.hostname = gethostname(&mut buf)
+        .expect("Failed getting hostname")
+        .to_str()
+        .expect("Hostname wasn't valid UTF-8")
+        .to_string();
 }
 
 /// read an ini file and traverse includes
@@ -492,7 +510,7 @@ pub fn read_ini(
                 continue;
             }
             "name" => {
-                opt.name = value.to_string();
+                opt.name = Some(value.to_string());
                 opt.configured = true;
                 if fail_error
                     && regex_build(value, user, config_path, &section, Some(line_number as i32))
@@ -500,6 +518,10 @@ pub fn read_ini(
                 {
                     faulty = true;
                 }
+            }
+            "exact_name" => {
+                opt.exact_name = Some(value.to_string());
+                opt.configured = true;
             }
             "hostname" => {
                 opt.hostname = Some(value.to_string());
@@ -511,14 +533,21 @@ pub fn read_ini(
                     faulty = true;
                 }
             }
+            "exact_hostname" => {
+                opt.exact_hostname = Some(value.to_string());
+                opt.configured = true;
+            }
             "target" => {
-                opt.target = value.to_string();
+                opt.target = Some(value.to_string());
                 if fail_error
                     && regex_build(value, user, config_path, &section, Some(line_number as i32))
                         .is_none()
                 {
                     faulty = true;
                 }
+            }
+            "exact_target" => {
+                opt.exact_target = Some(value.to_string());
             }
             "permit" => opt.permit = value == "true",
             "require_pass" => opt.require_pass = value != "false",
@@ -529,13 +558,17 @@ pub fn read_ini(
             },
             "group" => opt.group = value == "true",
             "regex" | "rule" => {
-                opt.rule = value.to_string();
+                opt.rule = Some(value.to_string());
                 if fail_error
                     && regex_build(value, user, config_path, &section, Some(line_number as i32))
                         .is_none()
                 {
                     faulty = true;
                 }
+            }
+            "exact_regex" | "exact_rule" => {
+                opt.exact_rule = Some(value.to_string());
+                opt.configured = true;
             }
             "notbefore" if value.len() == 8 => {
                 opt.notbefore = Some(
@@ -570,6 +603,15 @@ pub fn read_ini(
             }
             "dir" => {
                 opt.dir = Some(value.to_string());
+                if fail_error
+                    && regex_build(value, user, config_path, &section, Some(line_number as i32))
+                        .is_none()
+                {
+                    faulty = true;
+                }
+            }
+            "exact_dir" => {
+                opt.exact_dir = Some(value.to_string());
                 if fail_error
                     && regex_build(value, user, config_path, &section, Some(line_number as i32))
                         .is_none()
@@ -695,6 +737,19 @@ pub fn read_ini_config_str(
 
 /// may we execute with this hostname
 pub fn hostname_ok(item: &EnvOptions, ro: &RunOptions, line: Option<i32>) -> bool {
+    if item.exact_hostname.is_some() {
+        let hostname = item.exact_hostname.as_ref().unwrap();
+
+        if hostname != &ro.hostname
+            && hostname.ne(&"any".to_string())
+            && hostname.ne(&"localhost".to_string())
+        {
+            // println!("{}: hostname mismatch: {}", item.section, hostname);
+            return false;
+        }
+        return true;
+    }
+
     if item.hostname.is_some() {
         let hostname_re = match regex_build(
             &item.hostname.as_ref().unwrap(),
@@ -721,9 +776,95 @@ pub fn hostname_ok(item: &EnvOptions, ro: &RunOptions, line: Option<i32>) -> boo
     true
 }
 
+pub fn target_ok(item: &EnvOptions, ro: &RunOptions, line: Option<i32>) -> bool {
+    if item.exact_target.is_some() {
+        let exact_target = item.exact_target.as_ref().unwrap();
+        if exact_target == &ro.target {
+            return true;
+        }
+
+        // println!("{}: target mismatch: {} != {}", item.section, exact_target, ro.target);
+        return false;
+    }
+
+    if item.target.is_some() {
+        let target_re = match regex_build(
+            &item.target.as_ref().unwrap(),
+            &ro.name,
+            &item.file_name,
+            &item.section,
+            line,
+        ) {
+            Some(check) => check,
+            None => {
+                println!("Could not compile {}", &item.target.as_ref().unwrap());
+                return false;
+            }
+        };
+
+        if target_re.is_match(&ro.target) {
+            return true;
+        }
+        return false;
+    }
+    false
+}
+
+pub fn rule_match(item: &EnvOptions, ro: &RunOptions, line: Option<i32>) -> bool {
+    if item.exact_rule.is_some() {
+        let exact_rule = item.exact_rule.as_ref().unwrap();
+        if exact_rule == &ro.command {
+            return true;
+        }
+        // println!("{}: exact rule mismatch: {} != {}", item.section, exact_rule, ro.command);
+        return false;
+    }
+
+    if item.rule.is_some() {
+        let rule_re = match regex_build(
+            &item.rule.as_ref().unwrap(),
+            &ro.name,
+            &item.file_name,
+            &item.section,
+            line,
+        ) {
+            Some(check) => check,
+            None => {
+                println!("Could not compile {}", &item.rule.as_ref().unwrap());
+                return false;
+            }
+        };
+
+        if rule_re.is_match(&ro.command) {
+            // println!("{}: item rule is match", item.section);
+            // opt = item.clone();
+            return true;
+        }
+        return false;
+    }
+    false
+}
+
 /// may we execute with this directory
 pub fn directory_check_ok(item: &EnvOptions, ro: &RunOptions, line: Option<i32>) -> bool {
+    if item.exact_dir.is_some() {
+        if ro.directory.as_ref().is_none() {
+            return false;
+        }
+
+        let exact_dir = item.exact_dir.as_ref().unwrap();
+
+        if (&ro.directory.as_ref()).is_some() && exact_dir != ro.directory.as_ref().unwrap() {
+            return false;
+        }
+        return true;
+    }
+
     if item.dir.is_some() {
+        if ro.directory.as_ref().is_none() {
+            return false;
+        }
+
         let dir_re = match regex_build(
             &item.dir.as_ref().unwrap(),
             &ro.name,
@@ -737,10 +878,6 @@ pub fn directory_check_ok(item: &EnvOptions, ro: &RunOptions, line: Option<i32>)
                 return false;
             }
         };
-
-        if ro.directory.as_ref().is_none() {
-            return false;
-        }
 
         if (&ro.directory.as_ref()).is_some() && !dir_re.is_match(&ro.directory.as_ref().unwrap()) {
             // && ro.directory != "." {
@@ -826,10 +963,85 @@ pub fn permitted_dates_ok(item: &EnvOptions, ro: &RunOptions, line: Option<i32>)
     true
 }
 
+pub fn name_matches(item: &EnvOptions, ro: &RunOptions, line: Option<i32>) -> bool {
+    if item.exact_name.is_some() {
+        let name = item.exact_name.as_ref().unwrap();
+        if name == &ro.name {
+            return true;
+        }
+        //println!("{}: exact name mismatch: {} != {}", item.section, name, ro.name);
+        return false;
+    }
+
+    if item.name.is_some() {
+        let name_re = match regex_build(
+            &item.name.as_ref().unwrap(),
+            &ro.name,
+            &item.file_name,
+            &item.section,
+            line,
+        ) {
+            Some(check) => check,
+            None => {
+                println!("Could not compile {}", &item.name.as_ref().unwrap());
+                return false;
+            }
+        };
+
+        if name_re.is_match(&ro.name) {
+            // println!("{}: skipping as not a name match ({}), group={}", item.section, item.name.as_ref().unwrap(), item.group);
+            return true;
+        }
+
+        return false;
+    }
+    false
+}
+
+pub fn group_matches(item: &EnvOptions, ro: &RunOptions, line: Option<i32>) -> bool {
+    if item.exact_name.is_some() {
+        let name = item.exact_name.as_ref().unwrap();
+        for (k, _) in ro.groups.iter() {
+            if name == k {
+                // println!("{}: {} matches group {}", item.section,item.name.as_ref().unwrap(), k);
+                return true;
+            }
+        }
+        // println!("{}: does not match group", item.section);
+        return false;
+    }
+
+    if item.name.is_some() {
+        let name_re = match regex_build(
+            &item.name.as_ref().unwrap(),
+            &ro.name,
+            &item.file_name,
+            &item.section,
+            line,
+        ) {
+            Some(check) => check,
+            None => {
+                println!("Could not compile {}", &item.name.as_ref().unwrap());
+                return false;
+            }
+        };
+
+        for (k, _) in ro.groups.iter() {
+            if name_re.is_match(&k.to_string()) {
+                // println!("{}: {} matches group {}", item.section, item.name.as_ref().unwrap(), k);
+                return true;
+            }
+        }
+        return false;
+    }
+
+    false
+}
+
 /// search the EnvOptions list for matching RunOptions and return the match
 pub fn can(vec_eo: &[EnvOptions], ro: &RunOptions) -> EnvOptions {
     let mut opt = EnvOptions::new_deny();
-    let mut matched = false;
+    let mut matched;
 
     for item in vec_eo {
         // println!("{}:", item.section);
@@ -842,33 +1054,12 @@ pub fn can(vec_eo: &[EnvOptions], ro: &RunOptions) -> EnvOptions {
             continue;
         }
 
-        let name_re = match regex_build(&item.name, &ro.name, &item.file_name, &item.section, None)
-        {
-            Some(check) => check,
-            None => {
-                println!("Could not compile {}", &item.name);
-                continue;
-            }
-        };
-
-        if !item.group && !name_re.is_match(&ro.name) {
-            // println!("{}: skipping as not a name match ({}), group={}", item.section, item.name, item.group);
+        if !item.group && !name_matches(&item, &ro, None) {
             continue;
         }
 
-        if item.group {
-            let mut found = false;
-            for (k, _) in ro.groups.iter() {
-                if name_re.is_match(&k.to_string()) {
-                    // println!("{}: {} matches group {}", item.section,item.name, k);
-                    found = true;
-                    break;
-                }
-            }
-            if !found {
-                // println!("{}: did not find a group name match",item.section);
-                continue;
-            }
+        if item.group && !group_matches(&item, &ro, None) {
+            continue;
         }
 
         if !hostname_ok(&item, &ro, None) {
@@ -883,43 +1074,22 @@ pub fn can(vec_eo: &[EnvOptions], ro: &RunOptions) -> EnvOptions {
             continue;
         }
 
-        let target_re =
-            match regex_build(&item.target, &ro.name, &item.file_name, &item.section, None) {
-                Some(check) => check,
-                None => {
-                    println!("Could not compile {}", &item.target);
-                    continue;
-                }
-            };
+        if !target_ok(&item, &ro, None) {
+            continue;
+        }
 
         if item.acl_type == Acltype::List {
-            if target_re.is_match(&ro.target) {
-                // println!("{}: is list", item.section);
-                opt = item.clone();
-                matched = true;
-            }
+            // println!("{}: is list", item.section);
+            opt = item.clone();
+            matched = true;
         } else {
-            if !target_re.is_match(&ro.target) {
-                // println!("{}: item target {} != target {}", item.section, item.target, ro.target);
+            if !rule_match(&item, &ro, None) {
                 continue;
             }
+            matched = true;
+            opt = item.clone();
 
-            let rule_re =
-                match regex_build(&item.rule, &ro.name, &item.file_name, &item.section, None) {
-                    Some(check) => check,
-                    None => {
-                        println!("Could not compile {}", &item.rule);
-                        continue;
-                    }
-                };
-
-            if rule_re.is_match(&ro.command) {
-                // println!("{}: item rule is match", item.section);
-                opt = item.clone();
-                matched = true;
-            } else {
-                // println!("{}: item rule ({}) is not a match for {}", item.section, item.rule, ro.command);
-            }
+            // else { println!("{}: item rule ({}) is not a match for {}", item.section, item.rule, ro.command); }
         }
 
         if opt.last && matched {
@@ -1031,6 +1201,39 @@ pub fn challenge_password(ro: &RunOptions, entry: &EnvOptions, service: &str) ->
     true
 }
 
+/// return rule or exact_rule
+pub fn list_rule(eo: &EnvOptions) -> String {
+    if eo.exact_rule.is_some() {
+        return format!("exact({})", eo.exact_rule.as_ref().unwrap());
+    }
+    if eo.rule.is_some() {
+        return eo.rule.as_ref().unwrap().to_string();
+    }
+    "".to_string()
+}
+
+/// return target or exact_target
+pub fn list_target(eo: &EnvOptions) -> String {
+    if eo.exact_target.is_some() {
+        return format!("exact({})", eo.exact_target.as_ref().unwrap());
+    }
+    if eo.target.is_some() {
+        return eo.target.as_ref().unwrap().to_string();
+    }
+    "".to_string()
+}
+
+/// return dir or exact_dir
+pub fn list_dir(eo: &EnvOptions) -> String {
+    if eo.exact_dir.is_some() {
+        return format!("exact({})", eo.exact_dir.as_ref().unwrap());
+    }
+    if eo.dir.is_some() {
+        return eo.dir.as_ref().unwrap().to_string();
+    }
+    "".to_string()
+}
+
 /// print output list of acl
 pub fn list(vec_eo: &[EnvOptions], ro: &RunOptions) {
     //let mut str_list: vec![];
@@ -1042,40 +1245,21 @@ pub fn list(vec_eo: &[EnvOptions], ro: &RunOptions) {
 /// return EnvOptions as a vector of strings
 pub fn produce_list(vec_eo: &[EnvOptions], ro: &RunOptions) -> Vec<String> {
     let mut str_list = vec![];
+    let mut ro = ro.clone();
 
-    let search_user = if !ro.target.is_empty() {
-        String::from(&ro.target)
-    } else {
-        String::from(&ro.name)
-    };
+    if !ro.target.is_empty() {
+        ro.name = ro.target.clone();
+    }
 
     let mut last_file = "";
 
     for item in vec_eo {
-        let name_re = match regex_build(&item.name, &ro.name, &item.file_name, &item.section, None)
-        {
-            Some(check) => check,
-            None => {
-                str_list.push(format!("Could not compile {}", &item.name));
-                continue;
-            }
-        };
-
-        if !item.group && !name_re.is_match(&search_user) {
+        if !item.group && !name_matches(&item, &ro, None) {
             continue;
         }
 
-        if item.group {
-            let mut found = false;
-            for (k, _) in ro.groups.iter() {
-                if name_re.is_match(&k) {
-                    found = true;
-                    break;
-                }
-            }
-            if !found {
-                continue;
-            }
+        if item.group && !group_matches(&item, &ro, None) {
+            continue;
         }
 
         let mut prefixes = vec![];
@@ -1123,7 +1307,9 @@ pub fn produce_list(vec_eo: &[EnvOptions], ro: &RunOptions) -> Vec<String> {
         if item.acl_type == Acltype::List {
             str_list.push(format!(
                 "    {}:{}list: {}",
-                item.section, prefix, item.target
+                item.section,
+                prefix,
+                item.target.as_ref().unwrap()
             ));
             continue;
         }
@@ -1132,14 +1318,10 @@ pub fn produce_list(vec_eo: &[EnvOptions], ro: &RunOptions) -> Vec<String> {
             "    {}:{}{} (pass={},dirs={}): {}",
             item.section,
             prefix,
-            item.target,
+            list_target(&item),
             item.require_pass,
-            if item.dir.is_some() {
-                item.dir.as_ref().unwrap()
-            } else {
-                ""
-            },
-            item.rule
+            list_dir(&item),
+            list_rule(&item)
         ));
     }
     str_list
@@ -1523,6 +1705,8 @@ pub fn update_token(user: &str) {
         tv_usec: 0,
     });
 
+    // https://github.com/rust-lang/libc/issues/1848
+    #[cfg_attr(target_env = "musl", allow(deprecated))]
     let tv_atime = nix::sys::time::TimeVal::from(libc::timeval {
         tv_sec: SystemTime::now()
             .duration_since(SystemTime::UNIX_EPOCH)
@@ -1572,11 +1756,12 @@ pub fn group_hash(groups: Vec<Group>) -> HashMap<String, u32> {
     hm
 }
 
+/// escape '\' within an argument
 /// escape ' ' within an argument
 pub fn replace_new_args(new_args: Vec<String>) -> String {
     let mut args = vec![];
     for arg in &new_args {
-        args.push(arg.replace(" ", "\\ "));
+        args.push(arg.replace("\\", "\\\\").replace(" ", "\\ "));
     }
 
     args.join(" ")

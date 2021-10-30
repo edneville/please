@@ -23,8 +23,6 @@ use std::process::Command;
 
 use getopts::Options;
 
-use nix::unistd::gethostname;
-
 use users::*;
 
 /// walk through user ACL
@@ -209,13 +207,6 @@ fn main() {
     if !drop_privs(&ro) {
         std::process::exit(1);
     }
-
-    let mut buf = [0u8; 64];
-    ro.hostname = gethostname(&mut buf)
-        .expect("Failed getting hostname")
-        .to_str()
-        .expect("Hostname wasn't valid UTF-8")
-        .to_string();
 
     if ro.acl_type == Acltype::List {
         if ro.target.is_empty() {

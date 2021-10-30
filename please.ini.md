@@ -2,9 +2,9 @@
 title: please.ini
 section: 5
 header: User Manual
-footer: please 0.4.2
+footer: please 0.5.0
 author: Ed Neville (ed-please@s5h.net)
-date: 12 August 2021
+date: 07 November 2021
 ---
 
 # NAME
@@ -40,7 +40,7 @@ The properties permitted are described below and should appear at most once per 
 **target=[regex]**
 : user to execute or list as, defaults to **root**
 
-**regex=[regex]**
+**rule=[regex]**
 : the regular expression that the command or edit path matches against, defaults to ^$
 
 **notbefore=[YYYYmmdd|YYYYmmddHHMMSS]**
@@ -59,7 +59,7 @@ The properties permitted are described below and should appear at most once per 
 : defaults to false, when true, the **name** (above) refers to a group rather than a user
 
 **hostname=[regex]**
-: permitted hostnames where this may apply, defaults to localhost
+: permitted hostnames where this may apply. A hostname defined as **any** or **localhost** will always match. Defaults to localhost
 
 **dir=[regex]**
 : permitted directories to run within
@@ -74,6 +74,23 @@ Spaces within arguments will be substituted as **'\\\ '** (backslash space). Use
 To match a **\\** (backslash), the hex code **\\x5c** can be used.
 
 To match the string **%{USER}**, the sequence **\\x25\\{USER\\}** can be used.
+
+Rules starting **exact** are string matches and not **regex** processed.
+
+**exact_name=[string]**
+: only permit a user/group name that matches exactly
+
+**exact_hostname=[string]**
+: only permit a hostname that matches exactly
+
+**exact_target=[string]**
+: only permit a target that matches exactly
+
+**exact_rule=[string]**
+: only permit a command rule that matches exactly
+
+**exact_dir=[string]**
+: only permit a dir that matches exactly
 
 # ACTIONS
 
@@ -95,8 +112,8 @@ To match the string **%{USER}**, the sequence **\\x25\\{USER\\}** can be used.
 **env_assign.[key]=[value]**
 : assign **value** to environment **key**
 
-**editmode=[octal mode/keep]**
-: (**type=edit**) set the file mode bits on replacement file to octal mode. If the mode is set to **keep** and the file exists already then the mode of the existing file is used. Defaults to 0600 if the file is not present or mode is not set. The mode of the file is read prior to the final file move, it may change between editor start and file rename.
+**editmode=[octal mode|keep]**
+: (**type=edit**) set the file mode bits on replacement file to octal mode. When set to **keep** use the existing file mode. If the file is not present, or mode is not declared, then mode falls back to 0600. If there is a file present, then the mode is read and used just prior to file rename.
 
 **exitcmd=[program]**
 : (**type=edit**) run program after editor exits as the target user, if exit is zero, continue with file replacement. **%{NEW}** and **%{OLD}** placeholders expand to new and old edit files
@@ -109,7 +126,7 @@ To allow all commands, you can use a greedy match (**^.\*$**). You should reduce
 [user_jim_root]
 name=jim
 target=root
-regex=^.*$
+rule=^.*$
 ```
 
 If you wish to permit a user to view another's command set, then you may do this using **type=list** (**run** by default). To list another user, they must match the **target** regex.
@@ -128,7 +145,7 @@ target=root
 name=jim
 type=edit
 target=root
-regex=^/etc/hosts$
+rule=^/etc/hosts$
 ```
 
 Naming sections should help later when listing permissions.
@@ -138,15 +155,15 @@ Below, user **mandy** may run **du** without needing a password, but must enter 
 ```
 [mandy_du]
 name = mandy
-regex = ^(/usr)?/bin/du\s+.*$
+rule = ^(/usr)?/bin/du .*$
 require_pass = false
 [mandy_some]
 name = mandy
-regex = ^(/usr)?/bin/bash$
+rule = ^(/usr)?/bin/bash$
 require_pass = true
 ```
 
-**regex** can include repetitions. To permit running **wc** to count the lines in the log files (we don't know how many there are) in **/var/log**. This sort of regex will allow multiple instances of a **()** group with **+**, which is used to define the character class **[a-zA-Z0-9-]+**, the numeric class **\d+** and the group near the end of the line. In other words, multiple instances of files in **/var/log** that may end in common log rotate forms **-YYYYMMDD** or **.N**.
+The rule **regex** can include repetitions. To permit running **wc** to count the lines in the log files (we don't know how many there are) in **/var/log**. This sort of regex will allow multiple instances of a **()** group with **+**, which is used to define the character class **[a-zA-Z0-9-]+**, the numeric class **\d+** and the group near the end of the line. In other words, multiple instances of files in **/var/log** that may end in common log rotate forms **-YYYYMMDD** or **.N**.
 
 This will permit commands such as the following, note how for efficiency find will combine arguments with **\+** into fewer invocations. **xargs** could have been used in place of **find**.
 
@@ -161,7 +178,7 @@ Here is a sample for the above scenario:
 name=jim
 target=root
 permit=true
-regex=^/usr/bin/wc (/var/log/[a-zA-Z0-9-]+(\.\d+)?(\s)?)+$
+rule=^/usr/bin/wc (/var/log/[a-zA-Z0-9-]+(\.\d+)?(\s)?)+$
 ```
 
 User jim may only start or stop a docker container:
@@ -171,7 +188,7 @@ User jim may only start or stop a docker container:
 name=jim
 target=root
 permit=true
-regex=^/usr/bin/docker (start|stop) \S+
+rule=^/usr/bin/docker (start|stop) \S+
 ```
 
 User ben may only edit **/etc/fstab**:
@@ -182,7 +199,7 @@ name=ben
 target=root
 permit=true
 type=edit
-regex=^/etc/fstab$
+rule=^/etc/fstab$
 ```
 
 User ben may list only users **eng**, **net** and **dba**:
@@ -216,7 +233,7 @@ When the user completes their edit, and the editor exits cleanly, if **exitcmd**
 name=ben
 permit=true
 type=edit
-regex=^/etc/hosts$
+rule=^/etc/hosts$
 exitcmd=/usr/local/bin/check_hosts %{OLD} %{NEW}
 ```
 
@@ -229,7 +246,7 @@ A common **exitcmd** is to check the validity of **please.ini**, shown below. Th
 name = admins
 group = true
 reason = true
-regex = /etc/please.ini
+rule = /etc/please.ini
 type = edit
 editmode = 600
 exitcmd = /usr/bin/please -c %{NEW}
@@ -252,7 +269,7 @@ target=root
 permit=true
 notbefore=20210401
 notafter=20210401
-regex=^/bin/bash
+rule=^/bin/bash
 ```
 
 # DATEMATCHES
@@ -269,7 +286,7 @@ name=l2users
 group=true
 target=root
 permit=true
-regex = /usr/local/housekeeping/tidy_(logs|images|mail)
+rule = /usr/local/housekeeping/tidy_(logs|images|mail)
 datematch = ^Mon\s+.*
 ```
 
@@ -284,7 +301,18 @@ group=true
 target=root
 permit=true
 reason=true
-regex = ^/usr/sbin/useradd\s+-m\s+\w+$
+rule = ^/usr/sbin/useradd -m \w+$
+```
+
+Perhaps you want to add a mini mollyguard:
+
+```
+[user_poweroff]
+name = l2users
+group = true
+rule = (/usr)?/s?bin/(shutdown( -h now)?|poweroff|reboot)
+require_pass = true
+reason = true
 ```
 
 # DIR
@@ -296,7 +324,7 @@ In some situations you may only want a command to run within a set of directorie
 name=l2users
 group=true
 dir=^/etc/mail$
-regex = ^/usr/local/bin/build_aliases$
+rule = ^/usr/local/bin/build_aliases$
 ```
 
 # LAST
@@ -310,7 +338,7 @@ group=true
 target=root
 permit=true
 reason=true
-regex = ^/sbin/mkfs.(ext[234]|xfs) /dev/sd[bcdefg]\d?$
+rule = ^/sbin/mkfs.(ext[234]|xfs) /dev/sd[bcdefg]\d?$
 last=true
 ```
 
@@ -324,7 +352,7 @@ By default entries are logged to syslog. If you do not wish an entry to be logge
 [maverick]
 syslog = false
 name = jim
-regex = /usr/bin/.*
+rule = /usr/bin/.*
 reason = false
 ```
 
