@@ -746,7 +746,17 @@ regex = /bin/bash"
         let mut vec_eo: Vec<EnvOptions> = vec![];
         let mut bytes = 0;
         read_ini_config_str(&config, &mut vec_eo, "ed", false, &mut bytes);
-        assert_eq!(vec_eo.iter().next().unwrap().rule.as_str(), "/bin/bash");
+        assert_eq!(
+            vec_eo
+                .iter()
+                .next()
+                .unwrap()
+                .rule
+                .as_ref()
+                .unwrap()
+                .as_str(),
+            "/bin/bash"
+        );
 
         let mut ro = RunOptions::new();
         ro.name = "ed".to_string();
@@ -1454,6 +1464,69 @@ regex = /bin/echo hello[\\\\]world
         ro.name = "ed".to_string();
         ro.target = "root".to_string();
         ro.command = "/bin/echo hello\\world".to_string();
+
+        assert_eq!(can(&vec_eo, &ro).permit, true);
+    }
+
+    #[test]
+    fn test_replace_new_args_spaces_exact_rule() {
+        let config = r#"
+[ed]
+name = ed
+type = run
+target = root
+exact_rule = /bin/echo hello\ world
+"#
+        .to_string();
+        let mut vec_eo: Vec<EnvOptions> = vec![];
+        let mut bytes = 0;
+        read_ini_config_str(&config, &mut vec_eo, "ed", false, &mut bytes);
+        let mut ro = RunOptions::new();
+        ro.name = "ed".to_string();
+        ro.target = "root".to_string();
+        ro.command = replace_new_args(vec!["/bin/echo".to_string(), "hello world".to_string()]);
+
+        assert_eq!(can(&vec_eo, &ro).permit, true);
+    }
+
+    #[test]
+    fn test_replace_new_args_spaces_rule() {
+        let config = r#"
+[ed]
+name = ed
+type = run
+target = root
+rule = /bin/echo hello\\ world
+"#
+        .to_string();
+        let mut vec_eo: Vec<EnvOptions> = vec![];
+        let mut bytes = 0;
+        read_ini_config_str(&config, &mut vec_eo, "ed", false, &mut bytes);
+        let mut ro = RunOptions::new();
+        ro.name = "ed".to_string();
+        ro.target = "root".to_string();
+        ro.command = replace_new_args(vec!["/bin/echo".to_string(), "hello world".to_string()]);
+
+        assert_eq!(can(&vec_eo, &ro).permit, true);
+    }
+
+    #[test]
+    fn test_replace_new_args_internal_backslash_spaces_rule() {
+        let config = r#"
+[ed]
+name = ed
+type = run
+target = root
+rule = /bin/echo hello\\ \\\\\\ world
+"#
+        .to_string();
+        let mut vec_eo: Vec<EnvOptions> = vec![];
+        let mut bytes = 0;
+        read_ini_config_str(&config, &mut vec_eo, "ed", false, &mut bytes);
+        let mut ro = RunOptions::new();
+        ro.name = "ed".to_string();
+        ro.target = "root".to_string();
+        ro.command = replace_new_args(vec!["/bin/echo".to_string(), "hello \\ world".to_string()]);
 
         assert_eq!(can(&vec_eo, &ro).permit, true);
     }

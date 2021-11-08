@@ -2,9 +2,9 @@
 title: please
 section: 1
 header: User Manual
-footer: please 0.4.2
+footer: please 0.5.0
 author: Ed Neville (ed-please@s5h.net)
-date: 12 August 2021
+date: 07 November 2021
 ---
 
 # NAME
