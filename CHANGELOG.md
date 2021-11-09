@@ -4,6 +4,7 @@
 * editmode=keep to preserve the file permission bits from an existing file
 * exact_{rule,target,name,hostname,dir} which are literal
 * nix bump to 0.23.0
+* deprecating regex term in favour of rule
 
 0.4.2
 
