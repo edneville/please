@@ -1,3 +1,8 @@
+0.5.1
+
+* editmode=keep now default if no other mode is specified
+* only include files in includedir when they do not start with .
+
 0.5.0
 
 * backslashes within arguments now require escaping

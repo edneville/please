@@ -540,6 +540,3 @@ fn main() {
         target_gid,
     );
 }
-
-#[cfg(test)]
-mod test {}

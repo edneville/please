@@ -127,9 +127,9 @@ The options are as follows:
 | notbefore=YYYYmmdd          | The date, or YYYYmmddHHMMSS when this rule becomes effective. |
 | notafter=YYYYmmdd           | The date, or YYYYmmddHHMMSS when this rule expires. |
 | datematch=[Day dd Mon HH:MM:SS UTC YYYY] | regex to match against a date string |
-| type=[edit/run/list]        | Set the entry type. Run = execution, edit = pleaseedit, list = show user rights |
+| type=[edit/run/list]        | Set the entry type, run = execution, edit = pleaseedit, list = show user rights |
 | group=[true/false]          | True to signify that name= refers to a group rather than a user. |
-| hostname=regex              | Hosts where this applies. Defaults to 'localhost'. |
+| hostname=regex              | Hosts where this applies, defaults to 'localhost'. |
 | dir=regex                   | Permit switching to regex defined directory prior to execution. |
 | reason=[true/false]         | when true, require a reason to be provided by `-r`, defaults to false |
 | permit_env=regex            | when combined with `-a`, permit matching environments keys |
@@ -221,15 +221,17 @@ datematch = ^Mon.*
 
 # pleaseedit
 
-`pleaseedit` enables editing of files as another user. Enable editing rather than execution with `edit=true`. The first argument will be passed to `EDITOR`.
+`pleaseedit` enables editing of files as another user. Enable editing rather than execution with `type=edit`. The first argument will be passed to `EDITOR`.
+
+By default file permission bits will mirror existing file permissions.
 
 This is performed as follows:
 
 1. user runs edit as `pleaseedit -u root /etc/fstab`
-2. `/etc/fstab` is copied to `/tmp/pleaseedit.$USER._etc_fstab`
-3. user's `EDITOR` is executed against `/tmp/pleaseedit.$USER._etc_fstab`
-4. if `EDITOR` exits 0, and `exitcmd` exits 0, then `/tmp/pleaseedit.$USER._etc_fstab` is copied to `/etc/fstab.pleaseedit.$USER`
-5.  `/etc/fstab.pleaseedit.$USER` is set as (target) root owned and `renamed` to `/etc/fstab`
+2. `/etc/fstab` is copied to `/tmp/pleaseedit.$USER.r8cYph9h._etc_fstab`
+3. user's `EDITOR` is executed against `/tmp/pleaseedit.$USER.r8cYph9h._etc_fstab`
+4. if `EDITOR` exits 0, and `exitcmd` exits 0, then `/tmp/pleaseedit.$USER.r8cYph9h._etc_fstab` is copied to `/etc/fstab.llD3wRQB.pleaseedit.copy.$USER`
+5.  `/etc/fstab.llD3wRQB.pleaseedit.copy.$USER` is set as (target) root owned and `renamed` to `/etc/fstab`
 
 # exitcmd
 
@@ -291,7 +293,7 @@ rule = /usr/sbin/user(add -m|del) \S+
 
 # Big installs
 
-For big installs I suggest consider the following:
+For big installs, consider the following:
 
 ## Consolidate
 

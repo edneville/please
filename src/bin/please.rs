@@ -304,6 +304,3 @@ fn main() {
         Command::new(&ro.new_args[0]).exec();
     }
 }
-
-#[cfg(test)]
-mod test {}
