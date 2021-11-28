@@ -1221,6 +1221,23 @@ includedir = /dev/null
     }
 
     #[test]
+    fn test_can_include() {
+        assert_eq!(can_dir_include("/etc/please.ini.z"), false);
+        assert_eq!(can_dir_include("/etc/.please.ini"), false);
+        assert_eq!(can_dir_include("/etc/.please.ini."), false);
+    }
+
+    #[test]
+    fn test_can_include_pattern() {
+        assert_eq!(can_include_file_pattern("/etc/please.ini"), true);
+        assert_eq!(can_include_file_pattern("/etc/please.please.ini"), true);
+        assert_eq!(can_include_file_pattern("/etc/please.d/ini.z"), false);
+        assert_eq!(can_include_file_pattern("/etc/please.d/file.ini"), true);
+        assert_eq!(can_include_file_pattern("/etc/please.d/.file.ini"), false);
+        assert_eq!(can_include_file_pattern("/etc/please.d/.file"), false);
+    }
+
+    #[test]
     fn test_argument_replace() {
         assert_eq!(
             replace_new_args(vec![
@@ -1529,5 +1546,26 @@ rule = /bin/echo hello\\ \\\\\\ world
         ro.command = replace_new_args(vec!["/bin/echo".to_string(), "hello \\ world".to_string()]);
 
         assert_eq!(can(&vec_eo, &ro).permit, true);
+    }
+
+    #[test]
+    fn test_default_edit_file_mode() {
+        let config = r#"
+[ed]
+name = ed
+type = edit
+target = root
+rule = /etc/fstab
+"#
+        .to_string();
+        let mut vec_eo: Vec<EnvOptions> = vec![];
+        let mut bytes = 0;
+        read_ini_config_str(&config, &mut vec_eo, "ed", false, &mut bytes);
+        let mut ro = RunOptions::new();
+        ro.name = "ed".to_string();
+        ro.target = "root".to_string();
+        ro.command = replace_new_args(vec!["/bin/echo".to_string(), "hello \\ world".to_string()]);
+
+        assert_eq!(can(&vec_eo, &ro).edit_mode, Some(EditMode::Keep(true)));
     }
 }

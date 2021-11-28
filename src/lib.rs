@@ -41,7 +41,7 @@ use pam::Authenticator;
 use rand::distributions::Alphanumeric;
 use rand::{thread_rng, Rng};
 
-#[derive(Clone)]
+#[derive(PartialEq, Eq, Clone, Debug)]
 pub enum EditMode {
     Mode(i32),
     Keep(bool),
@@ -102,7 +102,7 @@ impl EnvOptions {
             dir: None,
             exact_dir: None,
             exitcmd: None,
-            edit_mode: None,
+            edit_mode: Some(EditMode::Keep(true)),
             reason: false,
             last: false,
             syslog: true,
@@ -270,15 +270,36 @@ pub fn regex_build(
 
 /// return true if the inclusion exists and ends with .ini
 pub fn can_dir_include(file: &str) -> bool {
+    let p = Path::new(file);
+
+    if !p.is_file() {
+        return false;
+    }
+    can_include_file_pattern(file)
+}
+
+pub fn can_include_file_pattern(file: &str) -> bool {
     let dir_pattern = Regex::new(r".*\.ini$").unwrap();
 
     if dir_pattern.is_match(file) {
         let p = Path::new(file);
-        if p.is_file() {
-            return true;
-        }
-    }
 
+        if p.file_name().is_none() {
+            return false;
+        }
+
+        match p.file_name().unwrap().to_str() {
+            None => {
+                return false;
+            }
+            Some(f) => {
+                if f.starts_with('.') {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
     false
 }
 
@@ -1553,7 +1574,7 @@ pub fn log_action(service: &str, result: &str, ro: &RunOptions, command: &str) -
     };
 
     match syslog::unix(formatter) {
-        Err(e) => println!("Could not connect to syslog: {:?}", e),
+        Err(_e) => println!("Could not connect to syslog"),
         Ok(mut writer) => {
             let tty_name = tty_name();
 

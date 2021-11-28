@@ -2,9 +2,9 @@
 title: please.ini
 section: 5
 header: User Manual
-footer: please 0.5.0
+footer: please 0.5.1
 author: Ed Neville (ed-please@s5h.net)
-date: 07 November 2021
+date: 28 November 2021
 ---
 
 # NAME
@@ -75,7 +75,7 @@ To match a **\\** (backslash), the hex code **\\x5c** can be used.
 
 To match the string **%{USER}**, the sequence **\\x25\\{USER\\}** can be used.
 
-Rules starting **exact** are string matches and not **regex** processed.
+Rules starting **exact** are string matches and not **regex** processed and take precedence over **regex** matches.
 
 **exact_name=[string]**
 : only permit a user/group name that matches exactly
@@ -146,6 +146,7 @@ name=jim
 type=edit
 target=root
 rule=^/etc/hosts$
+editmode=644
 ```
 
 Naming sections should help later when listing permissions.
@@ -191,7 +192,7 @@ permit=true
 rule=^/usr/bin/docker (start|stop) \S+
 ```
 
-User ben may only edit **/etc/fstab**:
+User ben may only edit **/etc/fstab**, and afterwards check the fstab file:
 
 ```
 [ben_fstab]
@@ -199,7 +200,9 @@ name=ben
 target=root
 permit=true
 type=edit
+editmode=644
 rule=^/etc/fstab$
+exitcmd=/bin/findmnt --verify --tab-file %{NEW}
 ```
 
 User ben may list only users **eng**, **net** and **dba**:
@@ -233,6 +236,7 @@ When the user completes their edit, and the editor exits cleanly, if **exitcmd**
 name=ben
 permit=true
 type=edit
+editmode=644
 rule=^/etc/hosts$
 exitcmd=/usr/local/bin/check_hosts %{OLD} %{NEW}
 ```
@@ -292,7 +296,7 @@ datematch = ^Mon\s+.*
 
 # REASONS
 
-When **reason=true**, require a reason before permitting edits or execution with the **-r** option to **please** and **pleaseedit**. Some organisations may prefer a reason to be logged when a command is executed. This can be helpful for some situations where something such as **mkfs** or **useradd** might be preferable to be logged against a ticket.
+When **reason=true**, a user must pass a reason with the **-r** option to **please** and **pleaseedit**. Some organisations may prefer a reason to be logged when a command is executed. This can be helpful for some situations where something such as **mkfs** or **useradd** might be preferable to be logged against a ticket.
 
 ```
 [l2_user_admin]
