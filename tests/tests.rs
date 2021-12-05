@@ -1564,7 +1564,8 @@ rule = /etc/fstab
         let mut ro = RunOptions::new();
         ro.name = "ed".to_string();
         ro.target = "root".to_string();
-        ro.command = replace_new_args(vec!["/bin/echo".to_string(), "hello \\ world".to_string()]);
+        ro.acl_type = Acltype::Edit;
+        ro.command = replace_new_args(vec!["/etc/fstab".to_string()]);
 
         assert_eq!(can(&vec_eo, &ro).edit_mode, Some(EditMode::Keep(true)));
     }
