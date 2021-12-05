@@ -1,7 +1,8 @@
 0.5.1
 
 * editmode=keep now default if no other mode is specified
-* only include files in includedir when they do not start with .
+* only include files in includedir if they do not start with .
+* trimmed error when unable to communicate with syslog
 
 0.5.0
 
