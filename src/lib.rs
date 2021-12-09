@@ -47,6 +47,12 @@ pub enum EditMode {
     Keep(bool),
 }
 
+#[derive(PartialEq, Eq, Clone, Debug)]
+pub enum ReasonType {
+    Need(bool),
+    Text(String),
+}
+
 #[derive(Clone)]
 pub struct EnvOptions {
     pub name: Option<String>,
@@ -71,7 +77,7 @@ pub struct EnvOptions {
     pub exact_dir: Option<String>,
     pub exitcmd: Option<String>,
     pub edit_mode: Option<EditMode>,
-    pub reason: bool,
+    pub reason: ReasonType,
     pub last: bool,
     pub syslog: bool,
     pub env_permit: Option<String>,
@@ -103,7 +109,7 @@ impl EnvOptions {
             exact_dir: None,
             exitcmd: None,
             edit_mode: Some(EditMode::Keep(true)),
-            reason: false,
+            reason: ReasonType::Need(false),
             last: false,
             syslog: true,
             env_permit: None,
@@ -247,12 +253,16 @@ pub fn print_may_not(ro: &RunOptions) {
 /// build a regex and replace %{USER} with the user str, prefix with ^ and suffix with $
 pub fn regex_build(
     v: &str,
-    user: &str,
+    ro: &RunOptions,
     config_path: &str,
     section: &str,
     line: Option<i32>,
 ) -> Option<Regex> {
-    let rule = Regex::new(&format!("^{}$", &v.replace("%{USER}", &user)));
+    let rule = Regex::new(&format!(
+        "^{}$",
+        &v.replace("%{USER}", &ro.name)
+            .replace("%{HOSTNAME}", &ro.hostname)
+    ));
     if rule.is_err() {
         println!(
             "Error parsing {}{}",
@@ -424,10 +434,11 @@ pub fn common_opt_arguments(
 pub fn read_ini(
     conf: &str,
     vec_eo: &mut Vec<EnvOptions>,
-    user: &str,
+    ro: &RunOptions,
     fail_error: bool,
     config_path: &str,
     bytes: &mut u64,
+    ini_list: &mut HashMap<String, bool>,
 ) -> bool {
     let parse_datetime_from_str = NaiveDateTime::parse_from_str;
     let parse_date_from_str = NaiveDate::parse_from_str;
@@ -435,6 +446,13 @@ pub fn read_ini(
     let mut section = String::from("no section defined");
     let mut in_section = false;
     let mut opt = EnvOptions::new();
+
+    if ini_list.contains_key(config_path) {
+        println!("Error parsing already read file {}", config_path);
+        return false;
+    }
+
+    ini_list.insert(config_path.to_string(), true);
 
     for (mut line_number, l) in conf.split('\n').enumerate() {
         line_number += 1;
@@ -494,7 +512,7 @@ pub fn read_ini(
                     println!("Includes should start with /");
                     return true;
                 }
-                if read_ini_config_file(&value, vec_eo, &user, fail_error, bytes) {
+                if read_ini_config_file(&value, vec_eo, ro, fail_error, bytes, ini_list) {
                     println!("Could not include file");
                     return true;
                 }
@@ -520,7 +538,8 @@ pub fn read_ini(
                             if !can_dir_include(&incf) {
                                 continue;
                             }
-                            if read_ini_config_file(&incf, vec_eo, &user, fail_error, bytes) {
+                            if read_ini_config_file(&incf, vec_eo, &ro, fail_error, bytes, ini_list)
+                            {
                                 println!("Could not include file");
                                 return true;
                             }
@@ -534,7 +553,7 @@ pub fn read_ini(
                 opt.name = Some(value.to_string());
                 opt.configured = true;
                 if fail_error
-                    && regex_build(value, user, config_path, &section, Some(line_number as i32))
+                    && regex_build(value, ro, config_path, &section, Some(line_number as i32))
                         .is_none()
                 {
                     faulty = true;
@@ -548,7 +567,7 @@ pub fn read_ini(
                 opt.hostname = Some(value.to_string());
                 opt.configured = true;
                 if fail_error
-                    && regex_build(value, user, config_path, &section, Some(line_number as i32))
+                    && regex_build(value, ro, config_path, &section, Some(line_number as i32))
                         .is_none()
                 {
                     faulty = true;
@@ -561,7 +580,7 @@ pub fn read_ini(
             "target" => {
                 opt.target = Some(value.to_string());
                 if fail_error
-                    && regex_build(value, user, config_path, &section, Some(line_number as i32))
+                    && regex_build(value, ro, config_path, &section, Some(line_number as i32))
                         .is_none()
                 {
                     faulty = true;
@@ -581,7 +600,7 @@ pub fn read_ini(
             "regex" | "rule" => {
                 opt.rule = Some(value.to_string());
                 if fail_error
-                    && regex_build(value, user, config_path, &section, Some(line_number as i32))
+                    && regex_build(value, ro, config_path, &section, Some(line_number as i32))
                         .is_none()
                 {
                     faulty = true;
@@ -616,7 +635,7 @@ pub fn read_ini(
             "datematch" => {
                 opt.datematch = Some(value.to_string());
                 if fail_error
-                    && regex_build(value, user, config_path, &section, Some(line_number as i32))
+                    && regex_build(value, ro, config_path, &section, Some(line_number as i32))
                         .is_none()
                 {
                     faulty = true;
@@ -625,7 +644,7 @@ pub fn read_ini(
             "dir" => {
                 opt.dir = Some(value.to_string());
                 if fail_error
-                    && regex_build(value, user, config_path, &section, Some(line_number as i32))
+                    && regex_build(value, ro, config_path, &section, Some(line_number as i32))
                         .is_none()
                 {
                     faulty = true;
@@ -634,7 +653,7 @@ pub fn read_ini(
             "exact_dir" => {
                 opt.exact_dir = Some(value.to_string());
                 if fail_error
-                    && regex_build(value, user, config_path, &section, Some(line_number as i32))
+                    && regex_build(value, ro, config_path, &section, Some(line_number as i32))
                         .is_none()
                 {
                     faulty = true;
@@ -665,7 +684,14 @@ pub fn read_ini(
                     }
                 }
             }
-            "reason" => opt.reason = value == "true",
+            /* TODO */
+            "reason" => {
+                if value == "true" || value == "false" {
+                    opt.reason = ReasonType::Need(value == "true");
+                } else {
+                    opt.reason = ReasonType::Text(value.to_string());
+                }
+            }
             "last" => opt.last = value == "true",
             "syslog" => opt.syslog = value == "true",
             &_ => {
@@ -687,9 +713,10 @@ pub fn read_ini(
 pub fn read_ini_config_file(
     config_path: &str,
     vec_eo: &mut Vec<EnvOptions>,
-    user: &str,
+    ro: &RunOptions,
     fail_error: bool,
     bytes: &mut u64,
+    ini_list: &mut HashMap<String, bool>,
 ) -> bool {
     let path = Path::new(config_path);
     let display = path.display();
@@ -743,17 +770,19 @@ pub fn read_ini_config_file(
             return true;
         }
     }
-    read_ini(&s, vec_eo, &user, fail_error, config_path, bytes)
+
+    read_ini(&s, vec_eo, &ro, fail_error, config_path, bytes, ini_list)
 }
 
 pub fn read_ini_config_str(
     config: &str,
     vec_eo: &mut Vec<EnvOptions>,
-    user: &str,
+    ro: &RunOptions,
     fail_error: bool,
     bytes: &mut u64,
+    ini_list: &mut HashMap<String, bool>,
 ) -> bool {
-    read_ini(&config, vec_eo, &user, fail_error, "static", bytes)
+    read_ini(&config, vec_eo, ro, fail_error, "static", bytes, ini_list)
 }
 
 /// may we execute with this hostname
@@ -774,7 +803,7 @@ pub fn hostname_ok(item: &EnvOptions, ro: &RunOptions, line: Option<i32>) -> boo
     if item.hostname.is_some() {
         let hostname_re = match regex_build(
             &item.hostname.as_ref().unwrap(),
-            &ro.name,
+            &ro,
             &item.file_name,
             &item.section,
             line,
@@ -811,7 +840,7 @@ pub fn target_ok(item: &EnvOptions, ro: &RunOptions, line: Option<i32>) -> bool 
     if item.target.is_some() {
         let target_re = match regex_build(
             &item.target.as_ref().unwrap(),
-            &ro.name,
+            &ro,
             &item.file_name,
             &item.section,
             line,
@@ -844,7 +873,7 @@ pub fn rule_match(item: &EnvOptions, ro: &RunOptions, line: Option<i32>) -> bool
     if item.rule.is_some() {
         let rule_re = match regex_build(
             &item.rule.as_ref().unwrap(),
-            &ro.name,
+            &ro,
             &item.file_name,
             &item.section,
             line,
@@ -888,7 +917,7 @@ pub fn directory_check_ok(item: &EnvOptions, ro: &RunOptions, line: Option<i32>)
 
         let dir_re = match regex_build(
             &item.dir.as_ref().unwrap(),
-            &ro.name,
+            &ro,
             &item.file_name,
             &item.section,
             line,
@@ -926,7 +955,7 @@ pub fn environment_ok(item: &EnvOptions, ro: &RunOptions, line: Option<i32>) -> 
 
     let env_re = match regex_build(
         &item.env_permit.as_ref().unwrap(),
-        &ro.name,
+        &ro,
         &item.file_name,
         &item.section,
         line,
@@ -964,7 +993,7 @@ pub fn permitted_dates_ok(item: &EnvOptions, ro: &RunOptions, line: Option<i32>)
     if item.datematch.is_some() {
         let datematch_re = match regex_build(
             &item.datematch.as_ref().unwrap(),
-            &ro.name,
+            &ro,
             &item.file_name,
             &item.section,
             line,
@@ -997,7 +1026,7 @@ pub fn name_matches(item: &EnvOptions, ro: &RunOptions, line: Option<i32>) -> bo
     if item.name.is_some() {
         let name_re = match regex_build(
             &item.name.as_ref().unwrap(),
-            &ro.name,
+            &ro,
             &item.file_name,
             &item.section,
             line,
@@ -1035,7 +1064,7 @@ pub fn group_matches(item: &EnvOptions, ro: &RunOptions, line: Option<i32>) -> b
     if item.name.is_some() {
         let name_re = match regex_build(
             &item.name.as_ref().unwrap(),
-            &ro.name,
+            &ro,
             &item.file_name,
             &item.section,
             line,
@@ -1119,6 +1148,60 @@ pub fn can(vec_eo: &[EnvOptions], ro: &RunOptions) -> EnvOptions {
         // println!("didn't match");
     }
     opt
+}
+
+/// check reason. this happens post authorize in order to provide feedback
+pub fn reason_ok(item: &EnvOptions, ro: &RunOptions, service: &str) -> bool {
+    if item.reason == ReasonType::Need(false) {
+        return true;
+    }
+
+    match &item.reason {
+        ReasonType::Text(value) => {
+            let m_re = match regex_build(&value, &ro, &item.file_name, &item.section, None) {
+                Some(check) => check,
+                None => {
+                    println!("Could not compile {}", &value);
+                    return false;
+                }
+            };
+
+            if ro.reason.is_some() && m_re.is_match(&ro.reason.as_ref().unwrap()) {
+                return true;
+            }
+
+            log_action(
+                &service,
+                "no_reason_match",
+                &ro,
+                &ro.original_command.join(" "),
+            );
+            println!(
+                "Sorry but there is no reason match to {} \"{}\" on {} as {}",
+                &ro.acl_type, &ro.command, &ro.hostname, &ro.target
+            );
+
+            false
+        }
+        ReasonType::Need(value) => {
+            if value == &true && ro.reason.is_none() {
+                log_action(&service, "no_reason", &ro, &ro.original_command.join(" "));
+                println!(
+                    "Sorry but no reason was given to {} \"{}\" on {} as {}",
+                    &ro.acl_type,
+                    if ro.acl_type == Acltype::List {
+                        &ro.target
+                    } else {
+                        &ro.command
+                    },
+                    &ro.hostname,
+                    &ro.target
+                );
+                return false;
+            }
+            true
+        }
+    }
 }
 
 /// find editor for user. return /usr/bin/vi if EDITOR and VISUAL are unset
@@ -1292,7 +1375,7 @@ pub fn produce_list(vec_eo: &[EnvOptions], ro: &RunOptions) -> Vec<String> {
             prefixes.push(format!("expired({})", item.notafter.unwrap()));
         }
 
-        if item.reason {
+        if item.reason != ReasonType::Need(false) {
             prefixes.push(String::from("reason_required"));
         }
 

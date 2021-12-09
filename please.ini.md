@@ -4,7 +4,7 @@ section: 5
 header: User Manual
 footer: please 0.5.1
 author: Ed Neville (ed-please@s5h.net)
-date: 04 December 2021
+date: 17 December 2021
 ---
 
 # NAME
@@ -67,7 +67,7 @@ The properties permitted are described below and should appear at most once per 
 **permit_env=[regex]**
 : allow environments that match **regex** to optionally pass through
 
-**regex** is a regular expression, **%{USER}** will expand to the user who is currently running `please`. This enables a single rule for a group to modify/run something that matches their name.
+**regex** is a regular expression, **%{USER}** will expand to the user who is currently running `please`, **%{HOSTNAME}** expands to the hostname. See below for examples. Other **%{}** expansions may be added at a later date.
 
 Spaces within arguments will be substituted as **'\\\ '** (backslash space). Use **^/bin/echo hello\\\\ world$** to match **/bin/echo "hello world"**, note that **\\** is a regex escape character so it must be escaped, therefore matching a space becomes **'\\\\\ '** (backslash backslash space).
 
@@ -100,11 +100,11 @@ Rules starting **exact** are string matches and not **regex** processed and take
 **require_pass=[true|false]**
 : if entry matches, require a password, defaults to true
 
-**reason=[true|false]**
-: require a reason for execution/edit, defaults to false
-
 **last=[true|false]**
 : if true, stop processing when entry is matched, defaults to false
+
+**reason=[true|false|regex]**
+: require a reason for execution/edit. If reason is *true* then any reason will satisfy. Any string other than *true* or *false* will be treated as a regex match. Defaults to false
 
 **syslog=[true|false]**
 : log this activity to syslog, defaults to true
@@ -308,7 +308,13 @@ reason=true
 rule = ^/usr/sbin/useradd -m \w+$
 ```
 
-Perhaps you want to add a mini mollyguard:
+Or, if tickets has a known prefix:
+
+```
+reason=.*(bug|incident|ticket|change)\d+.*
+```
+
+Perhaps you want to add a mini mollyguard where the hostname must appear in the reason:
 
 ```
 [user_poweroff]
@@ -316,7 +322,7 @@ name = l2users
 group = true
 rule = (/usr)?/s?bin/(shutdown( -h now)?|poweroff|reboot)
 require_pass = true
-reason = true
+reason = .*%{HOSTNAME}.*
 ```
 
 # DIR

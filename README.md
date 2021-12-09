@@ -131,7 +131,6 @@ The options are as follows:
 | group=[true/false]          | True to signify that name= refers to a group rather than a user. |
 | hostname=regex              | Hosts where this applies, defaults to 'localhost'. |
 | dir=regex                   | Permit switching to regex defined directory prior to execution. |
-| reason=[true/false]         | when true, require a reason to be provided by `-r`, defaults to false |
 | permit_env=regex            | when combined with `-a`, permit matching environments keys |
 
 Exact counterparts, which must match exactly. When both regex and exact rules are present, the exact rule match will have precedence.
@@ -151,12 +150,13 @@ Exact counterparts, which must match exactly. When both regex and exact rules ar
 | permit=[true/false]         | Defaults to true |
 | require_pass=[true/false]   | Defaults to true, mandatory in run and edit, become this user |
 | last=[true/false]           | when true, stop processing when matched, defaults to false |
+| reason=[true/false/regex]   | when not false, require a reason to be provided by `-r`, defaults to false |
 | syslog=[true/false]         | log this activity to syslog, default = true |
 | env_assign.key=value        | force environment **key** to be assigned **value** |
 | exitcmd=[program]           | (edit) continue with file replacement if `program` exits 0 |
 | editmode=[octal mode/keep]  | (edit) set destination file mode to `octal mode`, or keep the mode of an existing file. If the file is not present, or mode is not declared, then mode falls back to 0600. If there is a file present, then the mode is read and used just prior to file rename |
 
-Using a greedy `.*` for the regex field will be as good as saying the rule should match any command. In previous releases there was no anchor (`^` and `$`) however, it seems more sensible to follow `find`'s approach and insist that there are anchors around the regex. This avoids `/bin/bash` matching `/home/user/bin/bash` unless the rule permits something like `/home/%{USER}/bin/bash`.
+Using a greedy `.*` for the regex field will be as good as saying the rule should match any command. In previous releases there was no anchor (`^` and `$`) however, it seems more sensible to follow `find`'s approach and insist that there are anchors around the regex. This avoids `/bin/bash` matching `/home/user/bin/bash`.
 
 If a `include` directive is met, no other entries in the section will be processed. The same goes for `includedir`.
 

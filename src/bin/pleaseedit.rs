@@ -29,6 +29,7 @@ use std::path::Path;
 use std::process::{Command, Stdio};
 
 use regex::Regex;
+use std::collections::HashMap;
 
 use getopts::Options;
 
@@ -392,7 +393,15 @@ fn main() {
         std::process::exit(1);
     }
     let mut bytes = 0;
-    if read_ini_config_file("/etc/please.ini", &mut vec_eo, &ro.name, true, &mut bytes) {
+    let mut ini_list: HashMap<String, bool> = HashMap::new();
+    if read_ini_config_file(
+        "/etc/please.ini",
+        &mut vec_eo,
+        &ro,
+        true,
+        &mut bytes,
+        &mut ini_list,
+    ) {
         println!("Exiting due to error, cannot fully process /etc/please.ini");
         std::process::exit(1);
     }
@@ -412,13 +421,10 @@ fn main() {
         );
         std::process::exit(1);
     }
+
     // check if a reason was given
-    if entry.permit && entry.reason && ro.reason.is_none() {
+    if !reason_ok(&entry, &ro, &service) {
         log_action(&service, "no_reason", &ro, &original_command.join(" "));
-        println!(
-            "Sorry but no reason was given to edit \"{}\" on {} as {}",
-            &ro.command, &ro.hostname, &ro.target
-        );
         std::process::exit(1);
     }
 
