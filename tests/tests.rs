@@ -30,14 +30,15 @@ regex=^/bin/bash .*$
         .to_string();
 
         let mut bytes = 0;
+        let mut ini_list: HashMap<String, bool> = HashMap::new();
         let mut vec_eo: Vec<EnvOptions> = vec![];
-        read_ini_config_str(&config, &mut vec_eo, "ed", false, &mut bytes);
         let mut ro = RunOptions::new();
         ro.date = NaiveDate::from_ymd(2020, 1, 1).and_hms(0, 0, 0);
         ro.name = "ed".to_string();
         ro.target = "root".to_string();
         ro.acl_type = Acltype::Run;
         ro.command = "/bin/bash".to_string();
+        read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
         assert_eq!(can(&vec_eo, &ro).permit, true);
     }
 
@@ -59,12 +60,13 @@ regex = /bin/bash
 
         let mut vec_eo: Vec<EnvOptions> = vec![];
         let mut bytes = 0;
-        read_ini_config_str(&config, &mut vec_eo, "ed", false, &mut bytes);
+        let mut ini_list: HashMap<String, bool> = HashMap::new();
         let mut ro = RunOptions::new();
         ro.name = "ed".to_string();
         ro.target = "root".to_string();
         ro.acl_type = Acltype::Run;
         ro.command = "/bin/bash".to_string();
+        read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
         assert_eq!(can(&vec_eo, &ro).permit, true);
     }
 
@@ -102,19 +104,22 @@ regex=^/bin/bash"
 
         let mut vec_eo: Vec<EnvOptions> = vec![];
         let mut bytes = 0;
-        read_ini_config_str(&config, &mut vec_eo, &ro.name, false, &mut bytes);
+        let mut ini_list: HashMap<String, bool> = HashMap::new();
+        read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
         assert_eq!(can(&vec_eo, &ro).permit, false);
 
         ro.name = "other".to_string();
         ro.target = "thingy".to_string();
         let mut vec_eo: Vec<EnvOptions> = vec![];
-        read_ini_config_str(&config, &mut vec_eo, &ro.name, false, &mut bytes);
+        let mut ini_list: HashMap<String, bool> = HashMap::new();
+        read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
         assert_eq!(can(&vec_eo, &ro).permit, true);
 
         ro.name = "other".to_string();
         ro.target = "oracle".to_string();
         let mut vec_eo: Vec<EnvOptions> = vec![];
-        read_ini_config_str(&config, &mut vec_eo, &ro.name, false, &mut bytes);
+        let mut ini_list: HashMap<String, bool> = HashMap::new();
+        read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
         assert_eq!(can(&vec_eo, &ro).permit, false);
     }
 
@@ -149,7 +154,8 @@ target=^ "
 
         let mut vec_eo: Vec<EnvOptions> = vec![];
         let mut bytes = 0;
-        read_ini_config_str(&config, &mut vec_eo, "ed", false, &mut bytes);
+        let mut ini_list: HashMap<String, bool> = HashMap::new();
+        read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
 
         ro.date = NaiveDate::from_ymd(2019, 12, 31).and_hms(0, 0, 0);
         assert_eq!(can(&vec_eo, &ro).permit, false);
@@ -184,12 +190,13 @@ require_pass = false
 
         let mut vec_eo: Vec<EnvOptions> = vec![];
         let mut bytes = 0;
-        read_ini_config_str(&config, &mut vec_eo, "ed", false, &mut bytes);
+        let mut ini_list: HashMap<String, bool> = HashMap::new();
         let mut ro = RunOptions::new();
         ro.name = "ed".to_string();
         ro.acl_type = Acltype::List;
 
         ro.target = "ed".to_string();
+        read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
         assert_eq!(can(&vec_eo, &ro).permit, true);
         ro.target = "root".to_string();
         assert_eq!(can(&vec_eo, &ro).permit, false);
@@ -209,14 +216,16 @@ regex=^.*
 
         let mut vec_eo: Vec<EnvOptions> = vec![];
         let mut bytes = 0;
-        read_ini_config_str(&config, &mut vec_eo, "ed", false, &mut bytes);
+        let mut ini_list: HashMap<String, bool> = HashMap::new();
         let mut ro = RunOptions::new();
         ro.name = "ed".to_string();
         ro.target = "root".to_string();
+        read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
 
         let mut vec_eo: Vec<EnvOptions> = vec![];
         let mut bytes = 0;
-        read_ini_config_str(&config, &mut vec_eo, "ed", false, &mut bytes);
+        let mut ini_list: HashMap<String, bool> = HashMap::new();
+        read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
 
         ro.date = NaiveDate::from_ymd(2020, 8, 8).and_hms(0, 0, 0);
         assert_eq!(can(&vec_eo, &ro).permit, true);
@@ -255,11 +264,12 @@ regex=^/bin/bash .*$
 
         let mut vec_eo: Vec<EnvOptions> = vec![];
         let mut bytes = 0;
-        read_ini_config_str(&config, &mut vec_eo, "ed", false, &mut bytes);
+        let mut ini_list: HashMap<String, bool> = HashMap::new();
         let mut ro = RunOptions::new();
         ro.name = "ed".to_string();
         ro.target = "oracle".to_string();
         ro.date = NaiveDate::from_ymd(2019, 12, 31).and_hms(0, 0, 0);
+        read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
 
         ro.command = "/bin/bash /usr/local/oracle/backup_script".to_string();
         assert_eq!(can(&vec_eo, &ro).permit, true);
@@ -295,10 +305,11 @@ regex=^/bin/bash.*$
 
         let mut vec_eo: Vec<EnvOptions> = vec![];
         let mut bytes = 0;
-        read_ini_config_str(&config, &mut vec_eo, "ed", false, &mut bytes);
+        let mut ini_list: HashMap<String, bool> = HashMap::new();
         let mut ro = RunOptions::new();
         ro.name = "ed".to_string();
         ro.target = "oracle".to_string();
+        read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
 
         ro.command = "/bin/bash /usr/local/oracle/backup_script".to_string();
         assert_eq!(can(&vec_eo, &ro).permit, true);
@@ -335,10 +346,11 @@ regex=^/bin/sh.*$
 
         let mut vec_eo: Vec<EnvOptions> = vec![];
         let mut bytes = 0;
-        read_ini_config_str(&config, &mut vec_eo, "ed", false, &mut bytes);
+        let mut ini_list: HashMap<String, bool> = HashMap::new();
         let mut ro = RunOptions::new();
         ro.name = "ed".to_string();
         ro.target = "oracle".to_string();
+        read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
 
         ro.command = "/bin/bash /usr/local/oracle/backup_script".to_string();
         assert_eq!(can(&vec_eo, &ro).permit, false);
@@ -372,10 +384,11 @@ regex=/bin/sh\\b.*
 
         let mut vec_eo: Vec<EnvOptions> = vec![];
         let mut bytes = 0;
-        read_ini_config_str(&config, &mut vec_eo, "ed", false, &mut bytes);
+        let mut ini_list: HashMap<String, bool> = HashMap::new();
         let mut ro = RunOptions::new();
         ro.name = "".to_string();
         ro.target = "oracle".to_string();
+        read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
 
         assert_eq!(can(&vec_eo, &ro).permit, false);
     }
@@ -393,11 +406,12 @@ regex=.*
 
         let mut vec_eo: Vec<EnvOptions> = vec![];
         let mut bytes = 0;
-        read_ini_config_str(&config, &mut vec_eo, "ed", false, &mut bytes);
+        let mut ini_list: HashMap<String, bool> = HashMap::new();
         let mut ro = RunOptions::new();
         ro.name = "ed".to_string();
         ro.target = "oracle".to_string();
         ro.command = "/bin/bash".to_string();
+        read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
 
         assert_eq!(can(&vec_eo, &ro).permit, true);
     }
@@ -435,13 +449,14 @@ regex = ^"
 
         let mut vec_eo: Vec<EnvOptions> = vec![];
         let mut bytes = 0;
-        read_ini_config_str(&config, &mut vec_eo, "ed", false, &mut bytes);
+        let mut ini_list: HashMap<String, bool> = HashMap::new();
         let mut ro = RunOptions::new();
         ro.date = NaiveDate::from_ymd(2020, 1, 1).and_hms(0, 0, 0);
         ro.name = "ed".to_string();
         ro.target = "root".to_string();
         ro.acl_type = Acltype::Edit;
         ro.command = "/etc/apache/httpd2.conf".to_string();
+        read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
 
         assert_eq!(can(&vec_eo, &ro).permit, true);
     }
@@ -457,12 +472,13 @@ regex =^/bin/cat /etc/%{USER}"
 
         let mut vec_eo: Vec<EnvOptions> = vec![];
         let mut bytes = 0;
-        read_ini_config_str(&config, &mut vec_eo, "ed", false, &mut bytes);
+        let mut ini_list: HashMap<String, bool> = HashMap::new();
         let mut ro = RunOptions::new();
         ro.date = NaiveDate::from_ymd(2020, 1, 1).and_hms(0, 0, 0);
         ro.name = "ed".to_string();
         ro.target = "root".to_string();
         ro.command = "/bin/cat /etc/ed".to_string();
+        read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
 
         assert_eq!(can(&vec_eo, &ro).permit, true);
 
@@ -482,8 +498,15 @@ regex = ^/bin/cat /etc/("
             .to_string();
 
         let mut bytes = 0;
+        let mut ini_list: HashMap<String, bool> = HashMap::new();
+        let mut ro = RunOptions::new();
+        ro.date = NaiveDate::from_ymd(2020, 1, 1).and_hms(0, 0, 0);
+        ro.name = "ed".to_string();
+        ro.target = "root".to_string();
+        ro.command = "/bin/cat /etc/ed".to_string();
+
         assert_eq!(
-            read_ini_config_str(&config, &mut vec_eo, "ed", true, &mut bytes),
+            read_ini_config_str(&config, &mut vec_eo, &ro, true, &mut bytes, &mut ini_list),
             true
         );
 
@@ -497,8 +520,15 @@ regex = ^/bin/cat /etc/
         .to_string();
 
         let mut bytes = 0;
+        let mut ini_list: HashMap<String, bool> = HashMap::new();
+        let mut ro = RunOptions::new();
+        ro.date = NaiveDate::from_ymd(2020, 1, 1).and_hms(0, 0, 0);
+        ro.name = "ed".to_string();
+        ro.target = "root".to_string();
+        ro.command = "/bin/cat /etc/ed".to_string();
+
         assert_eq!(
-            read_ini_config_str(&config, &mut vec_eo, "ed", true, &mut bytes),
+            read_ini_config_str(&config, &mut vec_eo, &ro, true, &mut bytes, &mut ini_list),
             false
         );
     }
@@ -518,12 +548,13 @@ regex = ^.*$
 
         let mut vec_eo: Vec<EnvOptions> = vec![];
         let mut bytes = 0;
-        read_ini_config_str(&config, &mut vec_eo, "ed", false, &mut bytes);
+        let mut ini_list: HashMap<String, bool> = HashMap::new();
         let mut ro = RunOptions::new();
         ro.date = NaiveDate::from_ymd(2020, 1, 1).and_hms(0, 0, 0);
         ro.name = "ed".to_string();
         ro.target = "root".to_string();
         ro.command = "/bin/cat /etc/ed".to_string();
+        read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
 
         assert_eq!(can(&vec_eo, &ro).permit, false);
 
@@ -577,13 +608,14 @@ target = ^(eng|dba|net)ops$
 
         let mut vec_eo: Vec<EnvOptions> = vec![];
         let mut bytes = 0;
-        read_ini_config_str(&config, &mut vec_eo, "ed", false, &mut bytes);
+        let mut ini_list: HashMap<String, bool> = HashMap::new();
         let mut ro = RunOptions::new();
         ro.date = NaiveDate::from_ymd(2020, 1, 1).and_hms(0, 0, 0);
         ro.name = "ed".to_string();
         ro.target = "root".to_string();
         ro.command = "/bin/cat /etc/ed".to_string();
         ro.acl_type = Acltype::List;
+        read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
 
         assert_eq!(can(&vec_eo, &ro).permit, true);
 
@@ -629,7 +661,7 @@ regex = ^/var/www/html/%{USER}.html
 
         let mut vec_eo: Vec<EnvOptions> = vec![];
         let mut bytes = 0;
-        read_ini_config_str(&config, &mut vec_eo, "ed", false, &mut bytes);
+        let mut ini_list: HashMap<String, bool> = HashMap::new();
 
         let mut ro = RunOptions::new();
         ro.date = NaiveDate::from_ymd(2020, 1, 1).and_hms(0, 0, 0);
@@ -638,6 +670,7 @@ regex = ^/var/www/html/%{USER}.html
         ro.command = "/etc/please.ini".to_string();
         ro.acl_type = Acltype::Edit;
 
+        read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
         assert_eq!(can(&vec_eo, &ro).permit, false);
 
         ro.groups.insert(String::from("root"), 1);
@@ -669,7 +702,7 @@ regex = ^/var/www/html/%{USER}.html$
 
         let mut vec_eo: Vec<EnvOptions> = vec![];
         let mut bytes = 0;
-        read_ini_config_str(&config, &mut vec_eo, "ed", false, &mut bytes);
+        let mut ini_list: HashMap<String, bool> = HashMap::new();
 
         let mut ro = RunOptions::new();
         ro.name = "ed".to_string();
@@ -677,6 +710,7 @@ regex = ^/var/www/html/%{USER}.html$
         ro.command = "/var/www/html/ed.html".to_string();
         ro.acl_type = Acltype::Edit;
         ro.groups.insert(String::from("root"), 1);
+        read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
 
         assert_eq!(can(&vec_eo, &ro).permit, true);
     }
@@ -694,7 +728,7 @@ regex = ^/var/www/html/%USER.html$"
             .to_string();
         let mut vec_eo: Vec<EnvOptions> = vec![];
         let mut bytes = 0;
-        read_ini_config_str(&config, &mut vec_eo, "ed", false, &mut bytes);
+        let mut ini_list: HashMap<String, bool> = HashMap::new();
 
         let mut ro = RunOptions::new();
         ro.name = "ed".to_string();
@@ -703,6 +737,7 @@ regex = ^/var/www/html/%USER.html$"
         ro.command = "/var/www/html/ed.html".to_string();
 
         ro.groups.insert(String::from("root"), 1);
+        read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
         assert_eq!(can(&vec_eo, &ro).permit, false);
     }
 
@@ -719,14 +754,14 @@ regex = ^/var/www/html/%{USER}.html$"
             .to_string();
         let mut vec_eo: Vec<EnvOptions> = vec![];
         let mut bytes = 0;
-        read_ini_config_str(&config, &mut vec_eo, "ed", false, &mut bytes);
+        let mut ini_list: HashMap<String, bool> = HashMap::new();
 
         let mut ro = RunOptions::new();
         ro.name = "ed".to_string();
         ro.target = "root".to_string();
         ro.acl_type = Acltype::Edit;
         ro.command = "/var/www/html/ed.html".to_string();
-
+        read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
         ro.groups.insert(String::from("root"), 1);
         assert_eq!(can(&vec_eo, &ro).permit, true);
     }
@@ -745,7 +780,13 @@ regex = /bin/bash"
 
         let mut vec_eo: Vec<EnvOptions> = vec![];
         let mut bytes = 0;
-        read_ini_config_str(&config, &mut vec_eo, "ed", false, &mut bytes);
+        let mut ini_list: HashMap<String, bool> = HashMap::new();
+        let mut ro = RunOptions::new();
+        ro.name = "ed".to_string();
+        ro.target = "root".to_string();
+        ro.acl_type = Acltype::Run;
+        ro.command = "/bin/bash".to_string();
+        read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
         assert_eq!(
             vec_eo
                 .iter()
@@ -758,11 +799,6 @@ regex = /bin/bash"
             "/bin/bash"
         );
 
-        let mut ro = RunOptions::new();
-        ro.name = "ed".to_string();
-        ro.target = "root".to_string();
-        ro.acl_type = Acltype::Run;
-        ro.command = "/bin/bash".to_string();
         assert_eq!(can(&vec_eo, &ro).permit, false);
 
         ro.groups.insert(String::from("root"), 1);
@@ -781,12 +817,13 @@ regex = /bin/bash"
         let mut vec_eo: Vec<EnvOptions> = vec![];
         let config = "".to_string();
         let mut bytes = 0;
-        read_ini_config_str(&config, &mut vec_eo, "ed", false, &mut bytes);
+        let mut ini_list: HashMap<String, bool> = HashMap::new();
         let mut ro = RunOptions::new();
         ro.name = "ed".to_string();
         ro.target = "root".to_string();
         ro.acl_type = Acltype::Edit;
         ro.command = "/etc/please.ini".to_string();
+        read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
         assert_eq!(can(&vec_eo, &ro).permit, false);
     }
 
@@ -804,12 +841,13 @@ dir=.*
 
         let mut vec_eo: Vec<EnvOptions> = vec![];
         let mut bytes = 0;
-        read_ini_config_str(&config, &mut vec_eo, "ed", false, &mut bytes);
+        let mut ini_list: HashMap<String, bool> = HashMap::new();
         let mut ro = RunOptions::new();
         ro.name = "ed".to_string();
         ro.target = "oracle".to_string();
         ro.acl_type = Acltype::Run;
         ro.command = "/bin/bash".to_string();
+        read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
 
         assert_eq!(can(&vec_eo, &ro).permit, false);
 
@@ -831,13 +869,14 @@ dir=/var/www
 
         let mut vec_eo: Vec<EnvOptions> = vec![];
         let mut bytes = 0;
-        read_ini_config_str(&config, &mut vec_eo, "ed", false, &mut bytes);
+        let mut ini_list: HashMap<String, bool> = HashMap::new();
         let mut ro = RunOptions::new();
         ro.date = NaiveDate::from_ymd(2020, 1, 1).and_hms(0, 0, 0);
         ro.name = "ed".to_string();
         ro.target = "oracle".to_string();
         ro.acl_type = Acltype::Run;
         ro.command = "/bin/bash".to_string();
+        read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
 
         assert_eq!(can(&vec_eo, &ro).permit, false, "no directory given",);
 
@@ -861,7 +900,7 @@ dir=/tmp
 
         let mut vec_eo: Vec<EnvOptions> = vec![];
         let mut bytes = 0;
-        read_ini_config_str(&config, &mut vec_eo, "ed", false, &mut bytes);
+        let mut ini_list: HashMap<String, bool> = HashMap::new();
         let mut ro = RunOptions::new();
         ro.date = NaiveDate::from_ymd(2020, 1, 1).and_hms(0, 0, 0);
         ro.name = "ed".to_string();
@@ -869,6 +908,7 @@ dir=/tmp
         ro.acl_type = Acltype::Run;
         ro.command = "/bin/bash".to_string();
         ro.directory = Some("/tmp".to_string());
+        read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
 
         assert_eq!(can(&vec_eo, &ro).permit, true, "dir_tmp",);
     }
@@ -886,7 +926,7 @@ regex=.*
 
         let mut vec_eo: Vec<EnvOptions> = vec![];
         let mut bytes = 0;
-        read_ini_config_str(&config, &mut vec_eo, "ed", false, &mut bytes);
+        let mut ini_list: HashMap<String, bool> = HashMap::new();
         let mut ro = RunOptions::new();
         ro.date = NaiveDate::from_ymd(2020, 1, 1).and_hms(0, 0, 0);
         ro.name = "ed".to_string();
@@ -894,6 +934,7 @@ regex=.*
         ro.acl_type = Acltype::Run;
         ro.command = "/bin/bash".to_string();
         ro.directory = Some("/".to_string());
+        read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
 
         assert_eq!(can(&vec_eo, &ro).permit, false, "directory given",);
 
@@ -915,13 +956,14 @@ datematch=Fri.*UTC.*
 
         let mut vec_eo: Vec<EnvOptions> = vec![];
         let mut bytes = 0;
-        read_ini_config_str(&config, &mut vec_eo, "ed", false, &mut bytes);
+        let mut ini_list: HashMap<String, bool> = HashMap::new();
         let mut ro = RunOptions::new();
         ro.name = "ed".to_string();
         ro.date = NaiveDate::from_ymd(2020, 10, 02).and_hms(22, 0, 0);
         ro.target = "root".to_string();
         ro.acl_type = Acltype::Run;
         ro.command = "/bin/bash".to_string();
+        read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
 
         assert_eq!(can(&vec_eo, &ro).permit, true);
 
@@ -940,7 +982,8 @@ datematch=Fri.*\\s22:00:00\\s+UTC\\s2020
 
         let mut vec_eo: Vec<EnvOptions> = vec![];
         let mut bytes = 0;
-        read_ini_config_str(&config, &mut vec_eo, "ed", false, &mut bytes);
+        let mut ini_list: HashMap<String, bool> = HashMap::new();
+        read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
         ro.date = NaiveDate::from_ymd(2020, 10, 02).and_hms(21, 0, 0);
         assert_eq!(can(&vec_eo, &ro).permit, false);
         ro.date = NaiveDate::from_ymd(2020, 10, 02).and_hms(23, 0, 0);
@@ -960,7 +1003,8 @@ datematch=Thu\\s+1\\s+Oct\\s+22:00:00\\s+UTC\\s+2020
 
         let mut vec_eo: Vec<EnvOptions> = vec![];
         let mut bytes = 0;
-        read_ini_config_str(&config, &mut vec_eo, "ed", false, &mut bytes);
+        let mut ini_list: HashMap<String, bool> = HashMap::new();
+        read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
         ro.date = NaiveDate::from_ymd(2020, 10, 01).and_hms(21, 0, 0);
         assert_eq!(can(&vec_eo, &ro).permit, false);
         ro.date = NaiveDate::from_ymd(2020, 10, 01).and_hms(23, 0, 0);
@@ -983,12 +1027,13 @@ editmode=0644
 
         let mut vec_eo: Vec<EnvOptions> = vec![];
         let mut bytes = 0;
-        read_ini_config_str(&config, &mut vec_eo, "ed", false, &mut bytes);
+        let mut ini_list: HashMap<String, bool> = HashMap::new();
         let mut ro = RunOptions::new();
         ro.name = "ed".to_string();
         ro.target = "root".to_string();
         ro.acl_type = Acltype::Edit;
         ro.command = "/etc/please.ini".to_string();
+        read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
 
         let entry = can(&vec_eo, &ro);
 
@@ -1005,7 +1050,8 @@ editmode=keep
         .to_string();
 
         bytes = 0;
-        read_ini_config_str(&config, &mut vec_eo, "ed", false, &mut bytes);
+        let mut ini_list: HashMap<String, bool> = HashMap::new();
+        read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
 
         let entry = can(&vec_eo, &ro);
 
@@ -1015,17 +1061,33 @@ editmode=keep
     #[test]
     fn test_read_ini_config_file() {
         let mut vec_eo: Vec<EnvOptions> = vec![];
+        let mut ro = RunOptions::new();
+        ro.name = "ed".to_string();
+        ro.target = "root".to_string();
+        ro.acl_type = Acltype::Edit;
+        ro.command = "/etc/please.ini".to_string();
+
         let mut bytes = 0;
+        let mut ini_list: HashMap<String, bool> = HashMap::new();
         assert_eq!(
-            read_ini_config_file(".", &mut vec_eo, "ed", true, &mut bytes),
+            read_ini_config_file(".", &mut vec_eo, &ro, true, &mut bytes, &mut ini_list),
             true
         );
+        let mut ini_list: HashMap<String, bool> = HashMap::new();
         assert_eq!(
-            read_ini_config_file("", &mut vec_eo, "ed", true, &mut bytes),
+            read_ini_config_file("", &mut vec_eo, &ro, true, &mut bytes, &mut ini_list),
             true
         );
+        let mut ini_list: HashMap<String, bool> = HashMap::new();
         assert_eq!(
-            read_ini_config_file("./faulty", &mut vec_eo, "ed", true, &mut bytes),
+            read_ini_config_file(
+                "./faulty",
+                &mut vec_eo,
+                &ro,
+                true,
+                &mut bytes,
+                &mut ini_list
+            ),
             true
         );
     }
@@ -1050,11 +1112,12 @@ permit=true
 
         let mut vec_eo: Vec<EnvOptions> = vec![];
         let mut bytes = 0;
-        read_ini_config_str(&config, &mut vec_eo, "ed", false, &mut bytes);
+        let mut ini_list: HashMap<String, bool> = HashMap::new();
         let mut ro = RunOptions::new();
         ro.name = "ed".to_string();
         ro.target = "root".to_string();
         ro.command = "/bin/bash".to_string();
+        read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
 
         let entry = can(&vec_eo, &ro);
 
@@ -1075,21 +1138,27 @@ reason=true
 
         let mut vec_eo: Vec<EnvOptions> = vec![];
         let mut bytes = 0;
-        read_ini_config_str(&config, &mut vec_eo, "ed", false, &mut bytes);
+        let mut ini_list: HashMap<String, bool> = HashMap::new();
+        let mut ro = RunOptions::new();
+        ro.name = "ed".to_string();
+        ro.target = "root".to_string();
+        ro.command = "/bin/bash".to_string();
+        read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
+
+        let entry = can(&vec_eo, &ro);
+
+        assert_eq!(entry.reason, ReasonType::Need(true));
+    }
+
+    #[test]
+    fn test_regex_build_user_expansion() {
         let mut ro = RunOptions::new();
         ro.name = "ed".to_string();
         ro.target = "root".to_string();
         ro.command = "/bin/bash".to_string();
 
-        let entry = can(&vec_eo, &ro);
-
-        assert_eq!(entry.reason, true);
-    }
-
-    #[test]
-    fn test_regex_build_user_expansion() {
         let regex_re =
-            regex_build("/var/www/html/%{USER}/page.html", "ed", "/", "none", None).unwrap();
+            regex_build("/var/www/html/%{USER}/page.html", &ro, "/", "none", None).unwrap();
 
         assert_eq!(regex_re.as_str(), "^/var/www/html/ed/page.html$");
     }
@@ -1108,11 +1177,12 @@ reason=true
 
         let mut vec_eo: Vec<EnvOptions> = vec![];
         let mut bytes = 0;
-        read_ini_config_str(&config, &mut vec_eo, "ed", false, &mut bytes);
+        let mut ini_list: HashMap<String, bool> = HashMap::new();
         let mut ro = RunOptions::new();
         ro.name = "ed".to_string();
         ro.target = "root".to_string();
         ro.command = "/bin/bash".to_string();
+        read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
 
         let entry = can(&vec_eo, &ro);
 
@@ -1131,12 +1201,14 @@ regex=^/usr/bin/wc (/var/log/[a-zA-Z0-9-]+(\\.\\d+)?(\\s)?)+$
 
         let mut vec_eo: Vec<EnvOptions> = vec![];
         let mut bytes = 0;
-        read_ini_config_str(&config, &mut vec_eo, "ed", false, &mut bytes);
+        let mut ini_list: HashMap<String, bool> = HashMap::new();
         let mut ro = RunOptions::new();
         ro.name = "ed".to_string();
         ro.target = "root".to_string();
 
         ro.command = "/usr/bin/wc /var/log/messages /var/log/syslog /var/log/maillog".to_string();
+
+        read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
         assert_eq!(can(&vec_eo, &ro).permit, true);
 
         ro.command = "/usr/bin/wc /var/log/messages /var/log/messages.1".to_string();
@@ -1175,13 +1247,14 @@ exitcmd = /usr/bin/please -c %{NEW}
         .to_string();
         let mut vec_eo: Vec<EnvOptions> = vec![];
         let mut bytes = 0;
-        read_ini_config_str(&config, &mut vec_eo, "ed", false, &mut bytes);
+        let mut ini_list: HashMap<String, bool> = HashMap::new();
         let mut ro = RunOptions::new();
         ro.name = "ed".to_string();
         ro.target = "root".to_string();
         ro.groups.insert(String::from("lpadmin"), 1);
         ro.acl_type = Acltype::Edit;
         ro.command = "/etc/please.ini".to_string();
+        read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
         assert_eq!(can(&vec_eo, &ro).permit, true);
     }
 
@@ -1193,9 +1266,16 @@ exitcmd = /usr/bin/please -c %{NEW}
 include = ./some.ini
 "
         .to_string();
-        let mut bytes: u64 = 0;
+        let mut ro = RunOptions::new();
+        ro.name = "ed".to_string();
+        ro.target = "ed".to_string();
+        ro.acl_type = Acltype::List;
+        ro.command = "".to_string();
+
+        let mut bytes = 0;
+        let mut ini_list: HashMap<String, bool> = HashMap::new();
         assert_eq!(
-            read_ini_config_str(&config, &mut vec_eo, "ed", false, &mut bytes),
+            read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list),
             true
         );
 
@@ -1204,8 +1284,9 @@ include = ./some.ini
 includedir = ./dir.d/some.ini
 "
         .to_string();
+        let mut ini_list: HashMap<String, bool> = HashMap::new();
         assert_eq!(
-            read_ini_config_str(&config, &mut vec_eo, "ed", false, &mut bytes),
+            read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list),
             true
         );
 
@@ -1214,10 +1295,44 @@ includedir = ./dir.d/some.ini
 includedir = /dev/null
 "
         .to_string();
+        let mut ini_list: HashMap<String, bool> = HashMap::new();
         assert_eq!(
-            read_ini_config_str(&config, &mut vec_eo, "ed", false, &mut bytes),
+            read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list),
             false
         );
+    }
+
+    #[test]
+    fn test_ini_repeat() {
+        let mut vec_eo: Vec<EnvOptions> = vec![];
+        let config = "
+[ed]
+name=ed
+rule=.*
+syslog=false
+reason=false
+"
+        .to_string();
+        let mut bytes = 0;
+        let mut ini_list: HashMap<String, bool> = HashMap::new();
+
+        let mut ro = RunOptions::new();
+        ro.name = "ed".to_string();
+        ro.target = "ed".to_string();
+        ro.acl_type = Acltype::List;
+        ro.command = "".to_string();
+
+        let _ = read_ini(
+            &config,
+            &mut vec_eo,
+            &ro,
+            false,
+            "/etc/please.ini",
+            &mut bytes,
+            &mut ini_list,
+        );
+
+        assert_eq!(ini_list.contains_key("/etc/please.ini"), true);
     }
 
     #[test]
@@ -1273,12 +1388,13 @@ type = list
         .to_string();
         let mut vec_eo: Vec<EnvOptions> = vec![];
         let mut bytes = 0;
-        read_ini_config_str(&config, &mut vec_eo, "ed", false, &mut bytes);
+        let mut ini_list: HashMap<String, bool> = HashMap::new();
         let mut ro = RunOptions::new();
         ro.name = "ed".to_string();
         ro.target = "ed".to_string();
         ro.acl_type = Acltype::List;
         ro.command = "".to_string();
+        read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
 
         let list = produce_list(&vec_eo, &ro);
         assert_eq!(list, ["  in file: static", "    list:list: root"]);
@@ -1294,12 +1410,13 @@ reason = false
         .to_string();
         let mut vec_eo: Vec<EnvOptions> = vec![];
         let mut bytes = 0;
-        read_ini_config_str(&config, &mut vec_eo, "ed", false, &mut bytes);
+        let mut ini_list: HashMap<String, bool> = HashMap::new();
         let mut ro = RunOptions::new();
         ro.name = "ed".to_string();
         ro.target = "root".to_string();
         ro.command = "".to_string();
         ro.allow_env_list = Some(vec!["PATH".to_string()]);
+        read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
 
         assert_eq!(can(&vec_eo, &ro).permit, false);
     }
@@ -1318,11 +1435,12 @@ regex = .*
         .to_string();
         let mut vec_eo: Vec<EnvOptions> = vec![];
         let mut bytes = 0;
-        read_ini_config_str(&config, &mut vec_eo, "ed", false, &mut bytes);
+        let mut ini_list: HashMap<String, bool> = HashMap::new();
         let mut ro = RunOptions::new();
         ro.name = "ed".to_string();
         ro.target = "root".to_string();
         ro.command = "".to_string();
+        read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
         let entry = can(&vec_eo, &ro);
 
         assert_eq!(
@@ -1344,12 +1462,13 @@ permit_env = (HOME|PATH)
         .to_string();
         let mut vec_eo: Vec<EnvOptions> = vec![];
         let mut bytes = 0;
-        read_ini_config_str(&config, &mut vec_eo, "ed", false, &mut bytes);
+        let mut ini_list: HashMap<String, bool> = HashMap::new();
         let mut ro = RunOptions::new();
         ro.name = "ed".to_string();
         ro.target = "root".to_string();
         ro.command = "".to_string();
         ro.allow_env_list = Some(vec!["PATH".to_string(), "HOME".to_string()]);
+        read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
 
         assert_eq!(can(&vec_eo, &ro).permit, true);
     }
@@ -1366,7 +1485,7 @@ permit_env = (HOME|PATH)
         .to_string();
         let mut vec_eo: Vec<EnvOptions> = vec![];
         let mut bytes = 0;
-        read_ini_config_str(&config, &mut vec_eo, "ed", false, &mut bytes);
+        let mut ini_list: HashMap<String, bool> = HashMap::new();
         let mut ro = RunOptions::new();
         ro.name = "ed".to_string();
         ro.target = "root".to_string();
@@ -1376,6 +1495,7 @@ permit_env = (HOME|PATH)
             "HOME".to_string(),
             "DISASTER".to_string(),
         ]);
+        read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
 
         assert_eq!(can(&vec_eo, &ro).permit, false);
     }
@@ -1391,12 +1511,13 @@ permit_env = (HOME|PATH)
         .to_string();
         let mut vec_eo: Vec<EnvOptions> = vec![];
         let mut bytes = 0;
-        read_ini_config_str(&config, &mut vec_eo, "ed", false, &mut bytes);
+        let mut ini_list: HashMap<String, bool> = HashMap::new();
         let mut ro = RunOptions::new();
         ro.name = "ed".to_string();
         ro.target = "root".to_string();
         ro.command = "".to_string();
         ro.allow_env_list = None;
+        read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
 
         assert_eq!(can(&vec_eo, &ro).permit, true);
     }
@@ -1413,11 +1534,12 @@ regex = /bin/echo [%]\\{USER\\}
         .to_string();
         let mut vec_eo: Vec<EnvOptions> = vec![];
         let mut bytes = 0;
-        read_ini_config_str(&config, &mut vec_eo, "ed", false, &mut bytes);
+        let mut ini_list: HashMap<String, bool> = HashMap::new();
         let mut ro = RunOptions::new();
         ro.name = "ed".to_string();
         ro.target = "root".to_string();
         ro.command = "/bin/echo %{USER}".to_string();
+        read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
 
         assert_eq!(can(&vec_eo, &ro).permit, true);
     }
@@ -1434,11 +1556,12 @@ regex = /bin/echo \\x25\\{USER\\}
         .to_string();
         let mut vec_eo: Vec<EnvOptions> = vec![];
         let mut bytes = 0;
-        read_ini_config_str(&config, &mut vec_eo, "ed", false, &mut bytes);
+        let mut ini_list: HashMap<String, bool> = HashMap::new();
         let mut ro = RunOptions::new();
         ro.name = "ed".to_string();
         ro.target = "root".to_string();
         ro.command = "/bin/echo %{USER}".to_string();
+        read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
 
         assert_eq!(can(&vec_eo, &ro).permit, true);
     }
@@ -1455,11 +1578,12 @@ regex = /bin/echo hello\\x5cworld
         .to_string();
         let mut vec_eo: Vec<EnvOptions> = vec![];
         let mut bytes = 0;
-        read_ini_config_str(&config, &mut vec_eo, "ed", false, &mut bytes);
+        let mut ini_list: HashMap<String, bool> = HashMap::new();
         let mut ro = RunOptions::new();
         ro.name = "ed".to_string();
         ro.target = "root".to_string();
         ro.command = "/bin/echo hello\\world".to_string();
+        read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
 
         assert_eq!(can(&vec_eo, &ro).permit, true);
     }
@@ -1476,11 +1600,12 @@ regex = /bin/echo hello[\\\\]world
         .to_string();
         let mut vec_eo: Vec<EnvOptions> = vec![];
         let mut bytes = 0;
-        read_ini_config_str(&config, &mut vec_eo, "ed", false, &mut bytes);
+        let mut ini_list: HashMap<String, bool> = HashMap::new();
         let mut ro = RunOptions::new();
         ro.name = "ed".to_string();
         ro.target = "root".to_string();
         ro.command = "/bin/echo hello\\world".to_string();
+        read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
 
         assert_eq!(can(&vec_eo, &ro).permit, true);
     }
@@ -1497,11 +1622,12 @@ exact_rule = /bin/echo hello\ world
         .to_string();
         let mut vec_eo: Vec<EnvOptions> = vec![];
         let mut bytes = 0;
-        read_ini_config_str(&config, &mut vec_eo, "ed", false, &mut bytes);
+        let mut ini_list: HashMap<String, bool> = HashMap::new();
         let mut ro = RunOptions::new();
         ro.name = "ed".to_string();
         ro.target = "root".to_string();
         ro.command = replace_new_args(vec!["/bin/echo".to_string(), "hello world".to_string()]);
+        read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
 
         assert_eq!(can(&vec_eo, &ro).permit, true);
     }
@@ -1518,11 +1644,12 @@ rule = /bin/echo hello\\ world
         .to_string();
         let mut vec_eo: Vec<EnvOptions> = vec![];
         let mut bytes = 0;
-        read_ini_config_str(&config, &mut vec_eo, "ed", false, &mut bytes);
+        let mut ini_list: HashMap<String, bool> = HashMap::new();
         let mut ro = RunOptions::new();
         ro.name = "ed".to_string();
         ro.target = "root".to_string();
         ro.command = replace_new_args(vec!["/bin/echo".to_string(), "hello world".to_string()]);
+        read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
 
         assert_eq!(can(&vec_eo, &ro).permit, true);
     }
@@ -1539,11 +1666,12 @@ rule = /bin/echo hello\\ \\\\\\ world
         .to_string();
         let mut vec_eo: Vec<EnvOptions> = vec![];
         let mut bytes = 0;
-        read_ini_config_str(&config, &mut vec_eo, "ed", false, &mut bytes);
+        let mut ini_list: HashMap<String, bool> = HashMap::new();
         let mut ro = RunOptions::new();
         ro.name = "ed".to_string();
         ro.target = "root".to_string();
         ro.command = replace_new_args(vec!["/bin/echo".to_string(), "hello \\ world".to_string()]);
+        read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
 
         assert_eq!(can(&vec_eo, &ro).permit, true);
     }
@@ -1560,12 +1688,13 @@ rule = /etc/fstab
         .to_string();
         let mut vec_eo: Vec<EnvOptions> = vec![];
         let mut bytes = 0;
-        read_ini_config_str(&config, &mut vec_eo, "ed", false, &mut bytes);
+        let mut ini_list: HashMap<String, bool> = HashMap::new();
         let mut ro = RunOptions::new();
         ro.name = "ed".to_string();
         ro.target = "root".to_string();
         ro.acl_type = Acltype::Edit;
         ro.command = replace_new_args(vec!["/etc/fstab".to_string()]);
+        read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
 
         assert_eq!(can(&vec_eo, &ro).edit_mode, Some(EditMode::Keep(true)));
     }

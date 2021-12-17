@@ -21,6 +21,8 @@ use pleaser::*;
 use std::os::unix::process::CommandExt;
 use std::process::Command;
 
+use std::collections::HashMap;
+
 use getopts::Options;
 
 use users::*;
@@ -51,12 +53,7 @@ fn do_list(ro: &mut RunOptions, vec_eo: &[EnvOptions], service: &str) {
     }
 
     // check if a reason was given
-    if can_do.reason && ro.reason.is_none() {
-        log_action(&service, "no_reason", &ro, &ro.original_command.join(" "));
-        println!(
-            "Sorry but no reason was given to list on {} as {}",
-            &ro.hostname, &ro.target
-        );
+    if !reason_ok(&can_do, &ro, &service) {
         std::process::exit(1);
     }
 
@@ -130,12 +127,14 @@ fn general_options(
 
     if matches.opt_present("c") {
         let mut bytes = 0;
+        let mut ini_list: HashMap<String, bool> = HashMap::new();
         std::process::exit(read_ini_config_file(
             &matches.opt_str("c").unwrap(),
             &mut vec_eo,
-            &ro.name,
+            &ro,
             true,
             &mut bytes,
+            &mut ini_list,
         ) as i32);
     }
 
@@ -199,7 +198,15 @@ fn main() {
     }
 
     let mut bytes = 0;
-    if read_ini_config_file("/etc/please.ini", &mut vec_eo, &ro.name, true, &mut bytes) {
+    let mut ini_list: HashMap<String, bool> = HashMap::new();
+    if read_ini_config_file(
+        "/etc/please.ini",
+        &mut vec_eo,
+        &ro,
+        true,
+        &mut bytes,
+        &mut ini_list,
+    ) {
         println!("Exiting due to error, cannot fully process /etc/please.ini");
         std::process::exit(1);
     }
@@ -225,6 +232,16 @@ fn main() {
     match search_path(&ro.new_args[0]) {
         None => {
             println!("[{}]: command not found", service);
+            if &ro.new_args[0] == "cd" {
+                println!("{} is a shell feature.", &ro.new_args[0]);
+                if ro.new_args.len() > 1 {
+                    println!(
+                        "Try either changing to {} first or using {} -d {} instead",
+                        &ro.new_args[1], service, &ro.new_args[1]
+                    );
+                }
+            }
+
             std::process::exit(1);
         }
         Some(x) => {
@@ -241,13 +258,10 @@ fn main() {
         print_may_not(&ro);
         std::process::exit(1);
     }
+
     // check if a reason was given
-    if entry.permit && entry.reason && ro.reason.is_none() {
+    if !reason_ok(&entry, &ro, &service) {
         log_action(&service, "no_reason", &ro, &original_command.join(" "));
-        println!(
-            "Sorry but no reason was given to execute \"{}\" on {} as {}",
-            &ro.command, &ro.hostname, &ro.target
-        );
         std::process::exit(1);
     }
 

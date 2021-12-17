@@ -1,4 +1,5 @@
 use chrono::NaiveDate;
+use std::collections::HashMap;
 
 #[cfg(test)]
 mod test {
@@ -15,13 +16,15 @@ exact_rule = /bin/bash
         .to_string();
 
         let mut bytes = 0;
+        let mut ini_list: HashMap<String, bool> = HashMap::new();
         let mut vec_eo: Vec<EnvOptions> = vec![];
-        read_ini_config_str(&config, &mut vec_eo, "ed", false, &mut bytes);
         let mut ro = RunOptions::new();
         ro.date = NaiveDate::from_ymd(2020, 1, 1).and_hms(0, 0, 0);
         ro.name = "ed".to_string();
         ro.target = "root".to_string();
         ro.acl_type = Acltype::Run;
+
+        read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
 
         ro.command = "/bin/bash".to_string();
         assert_eq!(can(&vec_eo, &ro).permit, true);
@@ -43,8 +46,8 @@ exact_rule = /bin/bash
         .to_string();
 
         let mut bytes = 0;
+        let mut ini_list: HashMap<String, bool> = HashMap::new();
         let mut vec_eo: Vec<EnvOptions> = vec![];
-        read_ini_config_str(&config, &mut vec_eo, "ed", false, &mut bytes);
         let mut ro = RunOptions::new();
         ro.date = NaiveDate::from_ymd(2020, 1, 1).and_hms(0, 0, 0);
         ro.name = "ed".to_string();
@@ -52,6 +55,7 @@ exact_rule = /bin/bash
         ro.acl_type = Acltype::Run;
 
         ro.command = "/bin/bash".to_string();
+        read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
         assert_eq!(can(&vec_eo, &ro).permit, true);
 
         ro.command = "/bin/bash file".to_string();
@@ -64,7 +68,8 @@ exact_rule = /bin/bash file
 "
         .to_string();
         let mut vec_eo: Vec<EnvOptions> = vec![];
-        read_ini_config_str(&config, &mut vec_eo, "ed", false, &mut bytes);
+        let mut ini_list: HashMap<String, bool> = HashMap::new();
+        read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
 
         ro.command = "/bin/bash".to_string();
         assert_eq!(can(&vec_eo, &ro).permit, false);
@@ -79,7 +84,8 @@ exact_rule = /bin/bash echo\\ hello\\ world
 "
         .to_string();
         let mut vec_eo: Vec<EnvOptions> = vec![];
-        read_ini_config_str(&config, &mut vec_eo, "ed", false, &mut bytes);
+        let mut ini_list: HashMap<String, bool> = HashMap::new();
+        read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
 
         ro.command = "/bin/bash".to_string();
         assert_eq!(can(&vec_eo, &ro).permit, false);
@@ -98,8 +104,8 @@ exact_rule = /bin/bash
         .to_string();
 
         let mut bytes = 0;
+        let mut ini_list: HashMap<String, bool> = HashMap::new();
         let mut vec_eo: Vec<EnvOptions> = vec![];
-        read_ini_config_str(&config, &mut vec_eo, "ed", false, &mut bytes);
         let mut ro = RunOptions::new();
         ro.date = NaiveDate::from_ymd(2020, 1, 1).and_hms(0, 0, 0);
         ro.name = "ed".to_string();
@@ -107,6 +113,7 @@ exact_rule = /bin/bash
         ro.acl_type = Acltype::Run;
 
         ro.command = "/bin/bash".to_string();
+        read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
         assert_eq!(can(&vec_eo, &ro).permit, true);
 
         ro.name = "jim".to_string();
@@ -126,8 +133,8 @@ exact_rule = /bin/bash
         .to_string();
 
         let mut bytes = 0;
+        let mut ini_list: HashMap<String, bool> = HashMap::new();
         let mut vec_eo: Vec<EnvOptions> = vec![];
-        read_ini_config_str(&config, &mut vec_eo, "ed", false, &mut bytes);
         let mut ro = RunOptions::new();
         ro.date = NaiveDate::from_ymd(2020, 1, 1).and_hms(0, 0, 0);
         ro.name = "ed".to_string();
@@ -135,6 +142,7 @@ exact_rule = /bin/bash
         ro.acl_type = Acltype::Run;
 
         ro.command = "/bin/bash".to_string();
+        read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
         assert_eq!(can(&vec_eo, &ro).permit, true);
 
         ro.target = "jim".to_string();
@@ -155,8 +163,8 @@ exact_rule = /bin/bash
         .to_string();
 
         let mut bytes = 0;
+        let mut ini_list: HashMap<String, bool> = HashMap::new();
         let mut vec_eo: Vec<EnvOptions> = vec![];
-        read_ini_config_str(&config, &mut vec_eo, "ed", false, &mut bytes);
         let mut ro = RunOptions::new();
         ro.date = NaiveDate::from_ymd(2020, 1, 1).and_hms(0, 0, 0);
         ro.name = "ed".to_string();
@@ -164,6 +172,7 @@ exact_rule = /bin/bash
         ro.acl_type = Acltype::Run;
         ro.command = "/bin/bash".to_string();
         ro.hostname = "thing".to_string();
+        read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
         assert_eq!(can(&vec_eo, &ro).permit, true);
 
         ro.hostname = "".to_string();
@@ -183,7 +192,7 @@ exact_rule = /bin/bash
 "
         .to_string();
 
-        read_ini_config_str(&config, &mut vec_eo, "ed", false, &mut bytes);
+        read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
 
         ro.hostname = "thing".to_string();
         assert_eq!(can(&vec_eo, &ro).permit, true);
@@ -200,8 +209,8 @@ exact_dir = /root
         .to_string();
 
         let mut bytes = 0;
+        let mut ini_list: HashMap<String, bool> = HashMap::new();
         let mut vec_eo: Vec<EnvOptions> = vec![];
-        read_ini_config_str(&config, &mut vec_eo, "ed", false, &mut bytes);
         let mut ro = RunOptions::new();
 
         ro.date = NaiveDate::from_ymd(2020, 1, 1).and_hms(0, 0, 0);
@@ -210,6 +219,7 @@ exact_dir = /root
         ro.acl_type = Acltype::Run;
         ro.command = "/bin/sh".to_string();
         ro.directory = Some("/root".to_string());
+        read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
 
         assert_eq!(can(&vec_eo, &ro).permit, true);
 
@@ -231,8 +241,8 @@ exact_rule = /bin/bash
         .to_string();
 
         let mut bytes = 0;
+        let mut ini_list: HashMap<String, bool> = HashMap::new();
         let mut vec_eo: Vec<EnvOptions> = vec![];
-        read_ini_config_str(&config, &mut vec_eo, "ed", false, &mut bytes);
         let mut ro = RunOptions::new();
 
         ro.date = NaiveDate::from_ymd(2020, 1, 1).and_hms(0, 0, 0);
@@ -240,6 +250,7 @@ exact_rule = /bin/bash
         ro.target = "root".to_string();
         ro.acl_type = Acltype::Run;
         ro.command = "/bin/bash".to_string();
+        read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
 
         assert_eq!(can(&vec_eo, &ro).permit, true);
 
@@ -253,7 +264,7 @@ exact_target=root
 exact_rule = /bin/bash
 "
         .to_string();
-        read_ini_config_str(&config, &mut vec_eo, "ed", false, &mut bytes);
+        read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
 
         ro.name = "zz".to_string();
         assert_eq!(can(&vec_eo, &ro).permit, false);
@@ -270,8 +281,8 @@ rule = /bin/bash
         .to_string();
 
         let mut bytes = 0;
+        let mut ini_list: HashMap<String, bool> = HashMap::new();
         let mut vec_eo: Vec<EnvOptions> = vec![];
-        read_ini_config_str(&config, &mut vec_eo, "ed", false, &mut bytes);
         let mut ro = RunOptions::new();
 
         ro.date = NaiveDate::from_ymd(2020, 1, 1).and_hms(0, 0, 0);
@@ -279,6 +290,7 @@ rule = /bin/bash
         ro.target = "root".to_string();
         ro.acl_type = Acltype::Run;
         ro.command = "/bin/sh".to_string();
+        read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
 
         assert_eq!(can(&vec_eo, &ro).permit, true);
 
@@ -297,8 +309,8 @@ exact_rule = /bin/sh
         .to_string();
 
         let mut bytes = 0;
+        let mut ini_list: HashMap<String, bool> = HashMap::new();
         let mut vec_eo: Vec<EnvOptions> = vec![];
-        read_ini_config_str(&config, &mut vec_eo, "ed", false, &mut bytes);
         let mut ro = RunOptions::new();
 
         ro.date = NaiveDate::from_ymd(2020, 1, 1).and_hms(0, 0, 0);
@@ -306,6 +318,7 @@ exact_rule = /bin/sh
         ro.target = "root".to_string();
         ro.acl_type = Acltype::Run;
         ro.command = "/bin/sh".to_string();
+        read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
 
         assert_eq!(can(&vec_eo, &ro).permit, true);
 
@@ -325,8 +338,8 @@ dir = .*
         .to_string();
 
         let mut bytes = 0;
+        let mut ini_list: HashMap<String, bool> = HashMap::new();
         let mut vec_eo: Vec<EnvOptions> = vec![];
-        read_ini_config_str(&config, &mut vec_eo, "ed", false, &mut bytes);
         let mut ro = RunOptions::new();
 
         ro.date = NaiveDate::from_ymd(2020, 1, 1).and_hms(0, 0, 0);
@@ -335,6 +348,7 @@ dir = .*
         ro.acl_type = Acltype::Run;
         ro.command = "/bin/sh".to_string();
         ro.directory = Some("/root".to_string());
+        read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
 
         assert_eq!(can(&vec_eo, &ro).permit, true);
 

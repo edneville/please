@@ -1,3 +1,10 @@
+0.5.2
+
+* do not read config files that have already been processed
+* permit reason (-r) strings as regex matches
+* %{HOSTNAME} now expands to hostname in regex rules
+* suggest -d when invoked with cd and cd is not located
+
 0.5.1
 
 * editmode=keep now default if no other mode is specified
