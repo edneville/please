@@ -4,7 +4,7 @@ section: 5
 header: User Manual
 footer: please 0.5.1
 author: Ed Neville (ed-please@s5h.net)
-date: 17 December 2021
+date: 18 December 2021
 ---
 
 # NAME
@@ -104,7 +104,7 @@ Rules starting **exact** are string matches and not **regex** processed and take
 : if true, stop processing when entry is matched, defaults to false
 
 **reason=[true|false|regex]**
-: require a reason for execution/edit. If reason is *true* then any reason will satisfy. Any string other than *true* or *false* will be treated as a regex match. Defaults to false
+: require a reason for execution/edit. If reason is **true** then any reason will satisfy. Any string other than **true** or **false** will be treated as a regex match. Defaults to false
 
 **syslog=[true|false]**
 : log this activity to syslog, defaults to true
@@ -113,7 +113,7 @@ Rules starting **exact** are string matches and not **regex** processed and take
 : assign **value** to environment **key**
 
 **editmode=[octal mode|keep]**
-: (**type=edit**) set the file mode bits on replacement file to octal mode. When set to **keep** use the existing file mode. If the file is not present, or mode is not declared, then mode falls back to 0600. If there is a file present, then the mode is read and used just prior to file rename.
+: (**type=edit**) set the file mode bits on replacement file to octal mode. When set to **keep** use the existing file mode. If the file is not present, or mode is not declared, then mode falls back to 0600. If there is a file present, then the mode is read and used just prior to file rename
 
 **exitcmd=[program]**
 : (**type=edit**) run program after editor exits as the target user, if exit is zero, continue with file replacement. **%{NEW}** and **%{OLD}** placeholders expand to new and old edit files
@@ -124,29 +124,29 @@ To allow all commands, you can use a greedy match (**^.\*$**). You should reduce
 
 ```
 [user_jim_root]
-name=jim
-target=root
-rule=^.*$
+name = jim
+target = root
+rule = ^.*$
 ```
 
 If you wish to permit a user to view another's command set, then you may do this using **type=list** (**run** by default). To list another user, they must match the **target** regex.
 
 ```
 [user_jim_list_root]
-name=jim
-type=list
-target=root
+name = jim
+type = list
+target = root
 ```
 
 **type** may also be **edit** if you wish to permit a file edit with **pleaseedit**.
 
 ```
 [user_jim_edit_hosts]
-name=jim
-type=edit
-target=root
-rule=^/etc/hosts$
-editmode=644
+name = jim
+type = edit
+target = root
+rule = ^/etc/hosts$
+editmode = 644
 ```
 
 Naming sections should help later when listing permissions.
@@ -176,53 +176,53 @@ Here is a sample for the above scenario:
 
 ```
 [user_jim_root_wc]
-name=jim
-target=root
-permit=true
-rule=^/usr/bin/wc (/var/log/[a-zA-Z0-9-]+(\.\d+)?(\s)?)+$
+name = jim
+target = root
+permit = true
+rule = ^/usr/bin/wc (/var/log/[a-zA-Z0-9-]+(\.\d+)?(\s)?)+$
 ```
 
 User jim may only start or stop a docker container:
 
 ```
 [user_jim_root_docker]
-name=jim
-target=root
-permit=true
-rule=^/usr/bin/docker (start|stop) \S+
+name = jim
+target = root
+permit = true
+rule = ^/usr/bin/docker (start|stop) \S+
 ```
 
 User ben may only edit **/etc/fstab**, and afterwards check the fstab file:
 
 ```
 [ben_fstab]
-name=ben
-target=root
-permit=true
-type=edit
-editmode=644
-rule=^/etc/fstab$
-exitcmd=/bin/findmnt --verify --tab-file %{NEW}
+name = ben
+target = root
+permit = true
+type = edit
+editmode = 644
+rule = ^/etc/fstab$
+exitcmd = /bin/findmnt --verify --tab-file %{NEW}
 ```
 
 User ben may list only users **eng**, **net** and **dba**:
 
 ```
 [ben_ops]
-name=ben
-permit=true
-type=list
-target=^(eng|net|dba)ops$
+name = ben
+permit = true
+type = list
+target = ^(eng|net|dba)ops$
 ```
 
 All users may list their own permissions. You may or may not wish to do this if you consider permitting a view of the rules to be a security risk.
 
 ```
 [list_own]
-name=^%{USER}$
-permit=true
-type=list
-target=^%{USER}$
+name = ^%{USER}$
+permit = true
+type = list
+target = ^%{USER}$
 ```
 
 # EXITCMD
@@ -233,12 +233,12 @@ When the user completes their edit, and the editor exits cleanly, if **exitcmd**
 
 ```
 [ben_ops]
-name=ben
-permit=true
-type=edit
-editmode=644
-rule=^/etc/hosts$
-exitcmd=/usr/local/bin/check_hosts %{OLD} %{NEW}
+name = ben
+permit = true
+type = edit
+editmode = 644
+rule = ^/etc/hosts$
+exitcmd = /usr/local/bin/check_hosts %{OLD} %{NEW}
 ```
 
 **/usr/local/bin/check_hosts** takes two arguments, the original file as the first argument and the modify candidate as the second argument. If **check_hosts** terminates zero, then the edit is considered clean and the original file is replaced with the candidate. Otherwise the edit file is not copied and is left, **pleaseedit** will exit with the return value from **check_hosts**.
@@ -268,12 +268,12 @@ User joker can do what they want as root on 1st April 2021:
 
 ```
 [joker_april_first]
-name=joker
-target=root
-permit=true
-notbefore=20210401
-notafter=20210401
-rule=^/bin/bash
+name = joker
+target = root
+permit = true
+notbefore = 20210401
+notafter = 20210401
+rule = ^/bin/bash
 ```
 
 # DATEMATCHES
@@ -286,10 +286,10 @@ You can permit a group of users to run **/usr/local/housekeeping/** scripts ever
 
 ```
 [l2_housekeeping]
-name=l2users
-group=true
-target=root
-permit=true
+name = l2users
+group = true
+target = root
+permit = true
 rule = /usr/local/housekeeping/tidy_(logs|images|mail)
 datematch = ^Mon\s+.*
 ```
@@ -300,21 +300,21 @@ When **reason=true**, a user must pass a reason with the **-r** option to **plea
 
 ```
 [l2_user_admin]
-name=l2users
-group=true
-target=root
-permit=true
-reason=true
+name = l2users
+group = true
+target = root
+permit = true
+reason = true
 rule = ^/usr/sbin/useradd -m \w+$
 ```
 
-Or, if tickets has a known prefix:
+Or, if tickets have a known prefix:
 
 ```
-reason=.*(bug|incident|ticket|change)\d+.*
+reason = .*(bug|incident|ticket|change)\d+.*
 ```
 
-Perhaps you want to add a mini mollyguard where the hostname must appear in the reason:
+Perhaps you want to add a mini molly-guard where the hostname must appear in the reason:
 
 ```
 [user_poweroff]
@@ -331,25 +331,25 @@ In some situations you may only want a command to run within a set of directorie
 
 ```
 [eng_build_aliases]
-name=l2users
-group=true
-dir=^/etc/mail$
+name = l2users
+group = true
+dir = ^/etc/mail$
 rule = ^/usr/local/bin/build_aliases$
 ```
 
 # LAST
 
-**last=true** stops processing at a match:
+**last = true** stops processing at a match:
 
 ```
 [mkfs]
-name=l2users
-group=true
-target=root
-permit=true
-reason=true
+name = l2users
+group = true
+target = root
+permit = true
+reason = true
 rule = ^/sbin/mkfs.(ext[234]|xfs) /dev/sd[bcdefg]\d?$
-last=true
+last = true
 ```
 
 For simplicity, there is no need to process other configured rules if certain that the **l2users** group are safe to execute this. **last** should only be used in situations where there will never be something that could contradict the match in an undesired way later.
