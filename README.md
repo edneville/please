@@ -84,6 +84,10 @@ You may need to configure PAM if you didn't use a distro package in order for `r
 
 ```
 #%PAM-1.0
+
+# Set up user limits from /etc/security/limits.conf.
+session    required   pam_limits.so
+
 @include common-auth
 @include common-account
 @include common-session-noninteractive
@@ -131,7 +135,7 @@ The options are as follows:
 | group=[true/false]          | True to signify that name= refers to a group rather than a user. |
 | hostname=regex              | Hosts where this applies, defaults to 'localhost'. |
 | dir=regex                   | Permit switching to regex defined directory prior to execution. |
-| permit_env=regex            | when combined with `-a`, permit matching environments keys |
+| permit_env=regex            | When combined with `-a`, permit matching environments keys |
 
 Exact counterparts, which must match exactly. When both regex and exact rules are present, the exact rule match will have precedence.
 
@@ -148,13 +152,13 @@ Exact counterparts, which must match exactly. When both regex and exact rules ar
 | Part                        | Effect       |
 |-----------------------------|--------------|
 | permit=[true/false]         | Defaults to true |
-| require_pass=[true/false]   | Defaults to true, mandatory in run and edit, become this user |
-| last=[true/false]           | when true, stop processing when matched, defaults to false |
-| reason=[true/false/regex]   | when not false, require a reason to be provided by `-r`, defaults to false |
-| syslog=[true/false]         | log this activity to syslog, default = true |
-| env_assign.key=value        | force environment **key** to be assigned **value** |
-| exitcmd=[program]           | (edit) continue with file replacement if `program` exits 0 |
-| editmode=[octal mode/keep]  | (edit) set destination file mode to `octal mode`, or keep the mode of an existing file. If the file is not present, or mode is not declared, then mode falls back to 0600. If there is a file present, then the mode is read and used just prior to file rename |
+| require_pass=[true/false]   | Defaults to true |
+| last=[true/false]           | When true, stop processing when matched, defaults to false |
+| reason=[true/false/regex]   | When set, require a reason provided by `-r`, defaults to false |
+| syslog=[true/false]         | Log this activity to syslog, default = true |
+| env_assign.key=value        | Force environment **key** to be assigned **value** |
+| exitcmd=[program]           | (pleaseedit) Continue with file replacement if `program` exits 0 |
+| editmode=[octal mode/keep]  | (pleaseedit) Set destination file mode to `octal mode`, or keep the mode of an existing file. If the file is not present, or mode is not declared, then mode falls back to 0600. If there is a file present, then the mode is read and used just prior to file rename |
 
 Using a greedy `.*` for the regex field will be as good as saying the rule should match any command. In previous releases there was no anchor (`^` and `$`) however, it seems more sensible to follow `find`'s approach and insist that there are anchors around the regex. This avoids `/bin/bash` matching `/home/user/bin/bash`.
 
@@ -166,20 +170,20 @@ For example, using the two entries below:
 
 ```
 [jim_root_du]
-name=jim
-target=root
-permit=true
+name = jim
+target = root
+permit = true
 rule = ^(/usr)?/bin/du (/home/[a-z0-9-]+\s?)+
 require_pass=false
 ```
 
 ```
 [jim_postgres]
-name=jim
-target=postgres
-permit=true
+name = jim
+target = postgres
+permit = true
 rule = /bin/bash
-require_pass=false
+require_pass = false
 ```
 
 Would permit running `du`, as `/usr/bin/du` or `/bin/du` as `root`:
@@ -211,10 +215,10 @@ You can permit some a group of users to perform some house keeping on a Monday:
 
 ```
 [l2_housekeeping]
-name=l2users
-group=true
-target=root
-permit=true
+name = l2users
+group = true
+target = root
+permit = true
 rule = /usr/local/housekeeping/tidy_(logs|images|mail)
 datematch = ^Mon.*
 ```
