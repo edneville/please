@@ -4,6 +4,8 @@
 * permit reason (-r) strings as regex matches
 * %{HOSTNAME} now expands to hostname in regex rules
 * suggest -d when invoked with cd and cd is not located
+* new option of timeout for password prompt
+* new option of target_group for run/edit
 
 0.5.1
 

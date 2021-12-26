@@ -4,7 +4,7 @@ section: 5
 header: User Manual
 footer: please 0.5.1
 author: Ed Neville (ed-please@s5h.net)
-date: 18 December 2021
+date: 08 January 2022
 ---
 
 # NAME
@@ -39,6 +39,9 @@ The properties permitted are described below and should appear at most once per 
 
 **target=[regex]**
 : user to execute or list as, defaults to **root**
+
+**target_group=[regex]**
+: requires that the user runs with **\-\-group** to run or edit with the match
 
 **rule=[regex]**
 : the regular expression that the command or edit path matches against, defaults to ^$
@@ -86,6 +89,9 @@ Rules starting **exact** are string matches and not **regex** processed and take
 **exact_target=[string]**
 : only permit a target that matches exactly
 
+**exact_target_group=[groupname]**
+: requires that the user runs with **\-\-group** to run or edit as **groupname**
+
 **exact_rule=[string]**
 : only permit a command rule that matches exactly
 
@@ -99,6 +105,9 @@ Rules starting **exact** are string matches and not **regex** processed and take
 
 **require_pass=[true|false]**
 : if entry matches, require a password, defaults to true
+
+**timeout=[number]**
+: length of timeout in whole seconds to wait for password input
 
 **last=[true|false]**
 : if true, stop processing when entry is matched, defaults to false
