@@ -180,6 +180,7 @@ fn build_exitcmd(entry: &EnvOptions, source_file: &str, edit_file: &str) -> Comm
 fn general_options(mut ro: &mut RunOptions, args: Vec<String>, service: &str) {
     let mut opts = Options::new();
     opts.parsing_style(getopts::ParsingStyle::StopAtFirstFree);
+    opts.optopt("g", "group", "become target group", "GROUP");
     opts.optflag("h", "help", "print usage help");
     opts.optflag("n", "noprompt", "do nothing if a password is required");
     opts.optflag("p", "purge", "purge access token");
@@ -270,7 +271,7 @@ fn rename_to_source(
     fchown(
         dir_parent_tmp_file.as_raw_fd(),
         Some(nix::unistd::Uid::from_raw(lookup_name.uid())),
-        Some(nix::unistd::Gid::from_raw(lookup_name.primary_group_id())),
+        Some(target_gid),
     )
     .unwrap();
 
@@ -359,7 +360,6 @@ extern "C" fn handle_sigtstp(
 /// entry point
 fn main() {
     let args: Vec<String> = std::env::args().collect();
-    let original_command = args.clone();
     let service = String::from("pleaseedit");
     let mut ro = RunOptions::new();
     let original_uid = get_current_uid();
@@ -367,6 +367,7 @@ fn main() {
     ro.name = original_user.name().to_string_lossy().to_string();
     ro.acl_type = Acltype::Edit;
     ro.syslog = true;
+    ro.original_command = args.clone();
     let mut vec_eo: Vec<EnvOptions> = vec![];
 
     let root_uid = nix::unistd::Uid::from_raw(0);
@@ -414,7 +415,7 @@ fn main() {
 
     ro.syslog = entry.syslog;
     if !entry.permit {
-        log_action(&service, "deny", &ro, &original_command.join(" "));
+        log_action(&service, "deny", &ro, &ro.original_command.join(" "));
         println!(
             "You may not edit \"{}\" on {} as {}",
             &ro.command, &ro.hostname, &ro.target
@@ -423,13 +424,13 @@ fn main() {
     }
 
     // check if a reason was given
-    if !reason_ok(&entry, &ro, &service) {
-        log_action(&service, "no_reason", &ro, &original_command.join(" "));
+    if !reason_ok(&entry, &ro) {
+        log_action(&service, "no_reason", &ro, &ro.original_command.join(" "));
         std::process::exit(1);
     }
 
     if !challenge_password(&ro, &entry, &service) {
-        log_action(&service, "deny", &ro, &original_command.join(" "));
+        log_action(&service, "deny", &ro, &ro.original_command.join(" "));
         std::process::exit(1);
     }
 
@@ -522,7 +523,7 @@ fn main() {
     }
 
     // drop privs to original user and read into memory
-    log_action(&service, "permit", &ro, &original_command.join(" "));
+    log_action(&service, "permit", &ro, &ro.original_command.join(" "));
     let dir_parent_tmp =
         source_tmp_file_name(&source_file, format!("{}.copy", service).as_str(), &ro.name);
 
@@ -543,6 +544,6 @@ fn main() {
         &lookup_name,
         &dir_parent_tmp_file,
         target_uid,
-        target_gid,
+        runopt_target_gid(&ro, &lookup_name),
     );
 }

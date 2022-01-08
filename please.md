@@ -4,7 +4,7 @@ section: 1
 header: User Manual
 footer: please 0.5.1
 author: Ed Neville (ed-please@s5h.net)
-date: 18 December 2021
+date: 08 January 2022
 ---
 
 # NAME
@@ -19,11 +19,19 @@ please - a tool for access elevation.
 
 **pleaseedit [-r/\--reason \"new fs\"] /etc/fstab**
 
+**pleaseedit [-g/\--group groupname] filename**
+
+**pleaseedit [-t/\--target username] filename**
+
 **please [-a/\--allowenv list]**
 
 **please [-c/\--check] /etc/please.ini**
 
 **please [-d/\--dir directory] command**
+
+**please [-e/\--env environment] command**
+
+**please [-g/\--group groupname] command**
 
 **please [-h/\--help]**
 
@@ -61,6 +69,9 @@ The aim is to allow admins to delegate accurate principle of least privilege acc
 
 **-d**/**\--dir**
 : will change directory to **dir** prior to executing the command
+
+**-g**/**\--group groupname**
+: run or edit as groupname
 
 **-h**/**\--help**
 : print help and exit

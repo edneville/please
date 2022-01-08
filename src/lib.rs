@@ -15,7 +15,6 @@
 //    along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 use regex::Regex;
-
 use std::collections::HashMap;
 use std::env;
 use std::ffi::{CStr, CString};
@@ -24,6 +23,9 @@ use std::process;
 use syslog::{Facility, Formatter3164};
 
 use chrono::{NaiveDate, NaiveDateTime, Utc};
+use nix::sys::signal;
+use nix::sys::signal::*;
+
 use std::fmt;
 use std::fs;
 use std::fs::File;
@@ -35,7 +37,7 @@ use users::os::unix::UserExt;
 use users::*;
 
 use getopts::{Matches, Options};
-use nix::unistd::{gethostname, initgroups, setegid, seteuid, setgid, setuid};
+use nix::unistd::{alarm, gethostname, initgroups, setegid, seteuid, setgid, setuid};
 use pam::Authenticator;
 
 use rand::distributions::Alphanumeric;
@@ -64,6 +66,8 @@ pub struct EnvOptions {
     pub datematch: Option<String>,
     pub target: Option<String>,
     pub exact_target: Option<String>,
+    pub target_group: Option<String>,
+    pub exact_target_group: Option<String>,
     pub hostname: Option<String>,
     pub exact_hostname: Option<String>,
     pub permit: bool,
@@ -82,6 +86,7 @@ pub struct EnvOptions {
     pub syslog: bool,
     pub env_permit: Option<String>,
     pub env_assign: Option<HashMap<String, String>>,
+    pub timeout: Option<u32>,
 }
 
 impl EnvOptions {
@@ -93,6 +98,8 @@ impl EnvOptions {
             exact_rule: None,
             target: Some("root".to_string()),
             exact_target: None,
+            target_group: None,
+            exact_target_group: None,
             notbefore: None,
             notafter: None,
             datematch: None,
@@ -114,6 +121,7 @@ impl EnvOptions {
             syslog: true,
             env_permit: None,
             env_assign: None,
+            timeout: None,
         }
     }
     fn new_deny() -> EnvOptions {
@@ -138,6 +146,7 @@ pub struct RunOptions {
     pub original_uid: nix::unistd::Uid,
     pub original_gid: nix::unistd::Gid,
     pub target: String,
+    pub target_group: Option<String>,
     pub command: String,
     pub original_command: Vec<String>,
     pub hostname: String,
@@ -163,6 +172,7 @@ impl RunOptions {
             original_uid: nix::unistd::Uid::from_raw(get_current_uid()),
             original_gid: nix::unistd::Gid::from_raw(get_current_gid()),
             target: "".to_string(),
+            target_group: None,
             command: "".to_string(),
             original_command: vec![],
             hostname: "localhost".to_string(),
@@ -364,6 +374,9 @@ pub fn common_opt_arguments(
     }
     if matches.opt_present("t") {
         ro.target = matches.opt_str("t").unwrap();
+    }
+    if matches.opt_present("g") {
+        ro.target_group = Some(matches.opt_str("g").unwrap());
     }
     if matches.opt_present("u") {
         ro.target = matches.opt_str("u").unwrap();
@@ -589,6 +602,18 @@ pub fn read_ini(
             "exact_target" => {
                 opt.exact_target = Some(value.to_string());
             }
+            "target_group" => {
+                opt.target_group = Some(value.to_string());
+                if fail_error
+                    && regex_build(value, ro, config_path, &section, Some(line_number as i32))
+                        .is_none()
+                {
+                    faulty = true;
+                }
+            }
+            "exact_target_group" => {
+                opt.exact_target_group = Some(value.to_string());
+            }
             "permit" => opt.permit = value == "true",
             "require_pass" => opt.require_pass = value != "false",
             "type" => match value.to_lowercase().as_str() {
@@ -684,7 +709,6 @@ pub fn read_ini(
                     }
                 }
             }
-            /* TODO */
             "reason" => {
                 if value == "true" || value == "false" {
                     opt.reason = ReasonType::Need(value == "true");
@@ -694,6 +718,15 @@ pub fn read_ini(
             }
             "last" => opt.last = value == "true",
             "syslog" => opt.syslog = value == "true",
+            "timeout" => {
+                let timeout: Result<u32, core::num::ParseIntError> = value.parse();
+                if fail_error && timeout.is_err() {
+                    faulty = true;
+                } else {
+                    opt.timeout = Some(timeout.unwrap());
+                }
+            }
+
             &_ => {
                 println!("Error parsing {}:{}", config_path, line_number);
                 faulty = true;
@@ -853,6 +886,52 @@ pub fn target_ok(item: &EnvOptions, ro: &RunOptions, line: Option<i32>) -> bool 
         };
 
         if target_re.is_match(&ro.target) {
+            return true;
+        }
+        return false;
+    }
+    false
+}
+
+pub fn target_group_ok(item: &EnvOptions, ro: &RunOptions, line: Option<i32>) -> bool {
+    if (item.target_group.is_some() || item.exact_target_group.is_some())
+        && ro.target_group.is_none()
+    {
+        // println!("target_group is none");
+        return false;
+    }
+
+    if ro.target_group.is_none() {
+        // println!("target_group is none");
+        return true;
+    }
+
+    if item.exact_target_group.is_some() {
+        let exact_target = item.exact_target.as_ref().unwrap();
+        if exact_target == &ro.target {
+            return true;
+        }
+
+        // println!("{}: target group mismatch: {} != {}", item.section, exact_target_group, ro.target_group);
+        return false;
+    }
+
+    if item.target_group.is_some() {
+        let target_group_re = match regex_build(
+            &item.target_group.as_ref().unwrap(),
+            &ro,
+            &item.file_name,
+            &item.section,
+            line,
+        ) {
+            Some(check) => check,
+            None => {
+                println!("Could not compile {}", &item.target_group.as_ref().unwrap());
+                return false;
+            }
+        };
+
+        if target_group_re.is_match(&ro.target_group.as_ref().unwrap()) {
             return true;
         }
         return false;
@@ -1128,6 +1207,10 @@ pub fn can(vec_eo: &[EnvOptions], ro: &RunOptions) -> EnvOptions {
             continue;
         }
 
+        if !target_group_ok(&item, &ro, None) {
+            continue;
+        }
+
         if item.acl_type == Acltype::List {
             // println!("{}: is list", item.section);
             opt = item.clone();
@@ -1151,7 +1234,7 @@ pub fn can(vec_eo: &[EnvOptions], ro: &RunOptions) -> EnvOptions {
 }
 
 /// check reason. this happens post authorize in order to provide feedback
-pub fn reason_ok(item: &EnvOptions, ro: &RunOptions, service: &str) -> bool {
+pub fn reason_ok(item: &EnvOptions, ro: &RunOptions) -> bool {
     if item.reason == ReasonType::Need(false) {
         return true;
     }
@@ -1170,12 +1253,6 @@ pub fn reason_ok(item: &EnvOptions, ro: &RunOptions, service: &str) -> bool {
                 return true;
             }
 
-            log_action(
-                &service,
-                "no_reason_match",
-                &ro,
-                &ro.original_command.join(" "),
-            );
             println!(
                 "Sorry but there is no reason match to {} \"{}\" on {} as {}",
                 &ro.acl_type, &ro.command, &ro.hostname, &ro.target
@@ -1185,7 +1262,6 @@ pub fn reason_ok(item: &EnvOptions, ro: &RunOptions, service: &str) -> bool {
         }
         ReasonType::Need(value) => {
             if value == &true && ro.reason.is_none() {
-                log_action(&service, "no_reason", &ro, &ro.original_command.join(" "));
                 println!(
                     "Sorry but no reason was given to {} \"{}\" on {} as {}",
                     &ro.acl_type,
@@ -1276,13 +1352,64 @@ pub fn challenge_password(ro: &RunOptions, entry: &EnvOptions, service: &str) ->
             service: service.to_string(),
         };
 
+        if entry.timeout.is_some() {
+            extern "C" fn alarm_signal_handler(_: nix::libc::c_int) {
+                println!("Timed out getting password");
+
+                let tty = std::fs::File::open("/dev/tty");
+                if tty.is_ok() {
+                    let term_res = nix::sys::termios::tcgetattr(tty.as_ref().unwrap().as_raw_fd());
+                    if let Ok(mut term) = term_res {
+                        term.local_flags
+                            .set(nix::sys::termios::LocalFlags::ECHO, true);
+
+                        let res = nix::sys::termios::tcsetattr(
+                            tty.as_ref().unwrap().as_raw_fd(),
+                            nix::sys::termios::SetArg::TCSANOW,
+                            &term,
+                        );
+                        if res.is_err() {
+                            println!("Couldn't return terminal to original settings");
+                        }
+                    }
+                }
+
+                std::process::exit(1);
+            }
+
+            let sa = SigAction::new(
+                SigHandler::Handler(alarm_signal_handler),
+                SaFlags::SA_RESTART,
+                SigSet::empty(),
+            );
+
+            unsafe {
+                match sigaction(Signal::SIGALRM, &sa) {
+                    Ok(_) => {}
+                    Err(_) => {
+                        println!("Couldn't reset alarm");
+                        std::process::exit(1);
+                    }
+                }
+            }
+        }
+
         let mut handler = Authenticator::with_handler(service, convo).expect("Cannot init PAM");
 
         loop {
+            if let Some(timeout) = entry.timeout {
+                alarm::set(timeout);
+            }
+
             let auth = handler_shim(&ro, &mut handler);
+
+            if entry.timeout.is_some() {
+                alarm::cancel();
+            }
 
             if auth.is_ok() {
                 if handler.get_handler().passwd.is_some() {
+                    unsafe { signal::signal(signal::SIGALRM, signal::SigHandler::SigDfl).unwrap() };
                     if !esc_privs() {
                         std::process::exit(1);
                     }
@@ -1298,6 +1425,7 @@ pub fn challenge_password(ro: &RunOptions, entry: &EnvOptions, service: &str) ->
             retry_counter += 1;
             if retry_counter == 3 {
                 println!("Authentication failed :-(");
+
                 return false;
             }
         }
@@ -1880,4 +2008,24 @@ pub fn print_version(program: &str) {
 pub fn prng_alpha_num_string(n: usize) -> String {
     let rng = thread_rng();
     rng.sample_iter(&Alphanumeric).take(n).collect()
+}
+
+pub fn runopt_target_gid(ro: &RunOptions, lookup_name: &users::User) -> nix::unistd::Gid {
+    if ro.target_group.is_some() {
+        match nix::unistd::Group::from_name(&ro.target_group.as_ref().unwrap()) {
+            Ok(x) => match x {
+                Some(g) => g.gid,
+                None => {
+                    println!("Cannot assign group {}", &ro.target_group.as_ref().unwrap());
+                    std::process::exit(1);
+                }
+            },
+            Err(_) => {
+                println!("Cannot assign group {}", &ro.target_group.as_ref().unwrap());
+                std::process::exit(1);
+            }
+        }
+    } else {
+        nix::unistd::Gid::from_raw(lookup_name.primary_group_id())
+    }
 }

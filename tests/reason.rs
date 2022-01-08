@@ -29,7 +29,7 @@ reason = true
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
         let can_do = can(&vec_eo, &ro);
         assert_eq!((can_do).permit, true);
-        assert_eq!(reason_ok(&can_do, &ro, "please"), false);
+        assert_eq!(reason_ok(&can_do, &ro), false);
     }
 
     #[test]
@@ -56,7 +56,7 @@ reason = true
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
         let can_do = can(&vec_eo, &ro);
         assert_eq!((can_do).permit, true);
-        assert_eq!(reason_ok(&can_do, &ro, "please"), true);
+        assert_eq!(reason_ok(&can_do, &ro), true);
     }
 
     #[test]
@@ -83,7 +83,7 @@ reason = bigdb
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
         let can_do = can(&vec_eo, &ro);
         assert_eq!((can_do).permit, true);
-        assert_eq!(reason_ok(&can_do, &ro, "please"), false);
+        assert_eq!(reason_ok(&can_do, &ro), false);
     }
 
     #[test]
@@ -110,7 +110,7 @@ reason = bigdb
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
         let can_do = can(&vec_eo, &ro);
         assert_eq!((can_do).permit, true);
-        assert_eq!(reason_ok(&can_do, &ro, "please"), true);
+        assert_eq!(reason_ok(&can_do, &ro), true);
     }
 
     #[test]
@@ -137,12 +137,12 @@ reason = .*%{HOSTNAME}.*
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
         let can_do = can(&vec_eo, &ro);
         assert_eq!((can_do).permit, true);
-        assert_eq!(reason_ok(&can_do, &ro, "please"), true);
+        assert_eq!(reason_ok(&can_do, &ro), true);
 
         ro.reason = Some("power off".to_string());
-        assert_eq!(reason_ok(&can_do, &ro, "please"), false);
+        assert_eq!(reason_ok(&can_do, &ro), false);
 
         ro.reason = Some("localhost".to_string());
-        assert_eq!(reason_ok(&can_do, &ro, "please"), true);
+        assert_eq!(reason_ok(&can_do, &ro), true);
     }
 }

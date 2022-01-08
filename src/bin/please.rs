@@ -53,7 +53,7 @@ fn do_list(ro: &mut RunOptions, vec_eo: &[EnvOptions], service: &str) {
     }
 
     // check if a reason was given
-    if !reason_ok(&can_do, &ro, &service) {
+    if !reason_ok(&can_do, &ro) {
         std::process::exit(1);
     }
 
@@ -107,6 +107,7 @@ fn general_options(
     );
     opts.optopt("c", "check", "check config file", "FILE");
     opts.optopt("d", "dir", "change to directory prior to execution", "DIR");
+    opts.optopt("g", "group", "become target group", "GROUP");
     opts.optflag("h", "help", "print usage help");
     opts.optflag("l", "list", "list effective rules, can combine with -t/-u");
     opts.optflag("n", "noprompt", "do nothing if a password is required");
@@ -168,13 +169,13 @@ fn general_options(
 /// main entry point
 fn main() {
     let args: Vec<String> = std::env::args().collect();
-    let original_command = args.clone();
     let service = String::from("please");
     let mut ro = RunOptions::new();
     let original_uid = get_current_uid();
     let original_user = get_user_by_uid(original_uid).unwrap();
     ro.name = original_user.name().to_string_lossy().to_string();
     ro.syslog = true;
+    ro.original_command = args.clone();
     let mut vec_eo: Vec<EnvOptions> = vec![];
 
     let root_uid = nix::unistd::Uid::from_raw(0);
@@ -254,19 +255,19 @@ fn main() {
 
     ro.syslog = entry.syslog;
     if !entry.permit {
-        log_action(&service, "deny", &ro, &original_command.join(" "));
+        log_action(&service, "deny", &ro, &ro.original_command.join(" "));
         print_may_not(&ro);
         std::process::exit(1);
     }
 
     // check if a reason was given
-    if !reason_ok(&entry, &ro, &service) {
-        log_action(&service, "no_reason", &ro, &original_command.join(" "));
+    if !reason_ok(&entry, &ro) {
+        log_action(&service, "no_reason", &ro, &ro.original_command.join(" "));
         std::process::exit(1);
     }
 
     if !challenge_password(&ro, &entry, &service) {
-        log_action(&service, "deny", &ro, &original_command.join(" "));
+        log_action(&service, "deny", &ro, &ro.original_command.join(" "));
         std::process::exit(1);
     }
 
@@ -281,7 +282,7 @@ fn main() {
     }
     let lookup_name = lookup_name.unwrap();
     let target_uid = nix::unistd::Uid::from_raw(lookup_name.uid());
-    let target_gid = nix::unistd::Gid::from_raw(lookup_name.primary_group_id());
+    let target_gid = runopt_target_gid(&ro, &lookup_name);
 
     if !esc_privs() {
         std::process::exit(1);
@@ -296,7 +297,7 @@ fn main() {
         std::process::exit(1);
     }
 
-    log_action(&service, "permit", &ro, &original_command.join(" "));
+    log_action(&service, "permit", &ro, &ro.original_command.join(" "));
 
     set_environment(&ro, &entry, &original_user, original_uid, &lookup_name);
 
