@@ -134,6 +134,7 @@ The options are as follows:
 | type=[edit/run/list]        | Set the entry type, run = execution, edit = pleaseedit, list = show user rights |
 | group=[true/false]          | True to signify that name= refers to a group rather than a user. |
 | hostname=regex              | Hosts where this applies, defaults to 'localhost'. |
+| target_group=regex          | When set a group must be provided that matches |
 | dir=regex                   | Permit switching to regex defined directory prior to execution. |
 | permit_env=regex            | When combined with `-a`, permit matching environments keys |
 
@@ -144,6 +145,7 @@ Exact counterparts, which must match exactly. When both regex and exact rules ar
 | exact_name=string           | Match this exact name |
 | exact_hostname=string       | Match this exact hostname |
 | exact_target=string         | Match this exact target user |
+| exact_target_group=string   | Match this exact target group |
 | exact_rule=string           | Match this exact rule |
 | exact_dir=string            | Match this exact directory |
 

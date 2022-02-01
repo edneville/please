@@ -163,6 +163,7 @@ pub struct RunOptions {
     pub old_umask: Option<nix::sys::stat::Mode>,
     pub old_envs: Option<HashMap<String, String>>,
     pub allow_env_list: Option<Vec<String>>,
+    pub env_options: Option<EnvOptions>,
 }
 
 impl RunOptions {
@@ -189,6 +190,7 @@ impl RunOptions {
             old_umask: None,
             old_envs: None,
             allow_env_list: None,
+            env_options: None,
         }
     }
 }
@@ -210,13 +212,16 @@ impl pam::Converse for PamConvo {
         CString::new(self.login.clone()).map_err(|_| ())
     }
     fn prompt_blind(&mut self, _msg: &CStr) -> Result<CString, ()> {
-        self.passwd = Some(
-            rpassword::read_password_from_tty(Some(&format!(
-                "[{}] password for {}: ",
-                self.service, self.login
-            )))
-            .unwrap(),
-        );
+        match rpassword::read_password_from_tty(Some(&format!(
+            "[{}] password for {}: ",
+            self.service, self.login
+        ))) {
+            Ok(password) => self.passwd = Some(password),
+            Err(_) => {
+                println!("Cannot read from terminal");
+                std::process::exit(1);
+            }
+        }
 
         CString::new(self.passwd.clone().unwrap()).map_err(|_| ())
     }
@@ -1784,6 +1789,13 @@ pub fn log_action(service: &str, result: &str, ro: &RunOptions, command: &str) -
         Ok(x) => x.to_string_lossy().to_string(),
     };
 
+    let matching_env = match &ro.env_options {
+        Some(env_options) => {
+            format!("{}:{}", env_options.file_name, env_options.section)
+        }
+        None => "".to_string(),
+    };
+
     match syslog::unix(formatter) {
         Err(_e) => println!("Could not connect to syslog"),
         Ok(mut writer) => {
@@ -1791,7 +1803,7 @@ pub fn log_action(service: &str, result: &str, ro: &RunOptions, command: &str) -
 
             writer
                 .err(format!(
-                    "user=\"{}\" cwd=\"{}\" tty=\"{}\" action=\"{}\" target=\"{}\" type=\"{}\" reason=\"{}\" command=\"{}\"",
+                    "user=\"{}\" cwd=\"{}\" tty=\"{}\" action=\"{}\" target=\"{}\" type=\"{}\" reason=\"{}\" command=\"{}\" matching_section=\"{}\"",
                     escape_log( &ro.name ),
                     escape_log( &cwd ),
                     if tty_name.is_none() {
@@ -1807,7 +1819,8 @@ pub fn log_action(service: &str, result: &str, ro: &RunOptions, command: &str) -
                     } else {
                         String::from("")
                     },
-                    escape_log( command )
+                    escape_log( command ),
+                    matching_env,
                 ))
                 .expect("could not write error message");
         }
@@ -2007,7 +2020,10 @@ pub fn print_version(program: &str) {
 /// return a lump of random alpha numeric characters
 pub fn prng_alpha_num_string(n: usize) -> String {
     let rng = thread_rng();
-    rng.sample_iter(&Alphanumeric).take(n).collect()
+    rng.sample_iter(&Alphanumeric)
+        .take(n)
+        .map(|x| x as char)
+        .collect()
 }
 
 pub fn runopt_target_gid(ro: &RunOptions, lookup_name: &users::User) -> nix::unistd::Gid {

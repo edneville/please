@@ -2,7 +2,7 @@
 
 * do not read config files that have already been processed
 * permit reason (-r) strings as regex matches
-* %{HOSTNAME} now expands to hostname in regex rules
+* %{HOSTNAME} expands to hostname in regex rules
 * suggest -d when invoked with cd and cd is not located
 * new option of timeout for password prompt
 * new option of target_group for run/edit
@@ -54,9 +54,9 @@ Thanks to Matthias Gerstner for these recommendations
 
 0.3.22
 
-[fix] spaces within arguments should be escaped
--u should alias -t
-please and pleaseedit should output help when run without arguments
+* [fix] spaces within arguments should be escaped
+* -u should alias -t
+* please and pleaseedit should output help when run without arguments
 
 0.3.21
 
