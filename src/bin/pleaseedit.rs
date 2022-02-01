@@ -425,7 +425,7 @@ fn main() {
 
     // check if a reason was given
     if !reason_ok(&entry, &ro) {
-        log_action(&service, "no_reason", &ro, &ro.original_command.join(" "));
+        log_action(&service, "reason_fail", &ro, &ro.original_command.join(" "));
         std::process::exit(1);
     }
 

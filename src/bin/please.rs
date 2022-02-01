@@ -36,6 +36,7 @@ fn do_list(ro: &mut RunOptions, vec_eo: &[EnvOptions], service: &str) {
     };
 
     let can_do = can(&vec_eo, &ro);
+    ro.env_options = Some(can_do.clone());
     ro.syslog = can_do.syslog;
 
     if !can_do.permit {
@@ -54,6 +55,7 @@ fn do_list(ro: &mut RunOptions, vec_eo: &[EnvOptions], service: &str) {
 
     // check if a reason was given
     if !reason_ok(&can_do, &ro) {
+        log_action(&service, "reason_fail", &ro, &ro.original_command.join(" "));
         std::process::exit(1);
     }
 
@@ -252,6 +254,7 @@ fn main() {
     }
 
     let entry = can(&vec_eo, &ro);
+    ro.env_options = Some(entry.clone());
 
     ro.syslog = entry.syslog;
     if !entry.permit {
@@ -262,7 +265,7 @@ fn main() {
 
     // check if a reason was given
     if !reason_ok(&entry, &ro) {
-        log_action(&service, "no_reason", &ro, &ro.original_command.join(" "));
+        log_action(&service, "reason_fail", &ro, &ro.original_command.join(" "));
         std::process::exit(1);
     }
 

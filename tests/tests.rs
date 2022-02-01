@@ -1378,6 +1378,17 @@ reason=false
     }
 
     #[test]
+    // this will fail at a point in the future - if so, try and run it again
+    // we need some random assurance
+    fn test_prng_alpha_num_unique() {
+        let length = 8;
+        let a = prng_alpha_num_string(length);
+        for _ in 1..100 {
+            assert_ne!(a, prng_alpha_num_string(length));
+        }
+    }
+
+    #[test]
     fn test_list_output() {
         let config = "
 [list]
