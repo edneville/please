@@ -35,13 +35,15 @@ fn do_list(ro: &mut RunOptions, vec_eo: &[EnvOptions], service: &str) {
         &ro.target
     };
 
-    let can_do = can(&vec_eo, &ro);
+    let can_do = can(vec_eo, ro);
     ro.env_options = Some(can_do.clone());
-    ro.syslog = can_do.syslog;
+    if can_do.syslog.is_some() {
+        ro.syslog = can_do.syslog.unwrap();
+    }
 
-    if !can_do.permit {
+    if !can_do.permit() {
         let dest = format!("{}'s", &ro.target);
-        log_action(&service, "deny", &ro, &ro.command);
+        log_action(service, "deny", ro, &ro.command);
         println!(
             "You may not view {} command list",
             if ro.target.is_empty() || ro.target == ro.name {
@@ -54,27 +56,27 @@ fn do_list(ro: &mut RunOptions, vec_eo: &[EnvOptions], service: &str) {
     }
 
     // check if a reason was given
-    if !reason_ok(&can_do, &ro) {
-        log_action(&service, "reason_fail", &ro, &ro.original_command.join(" "));
+    if !reason_ok(&can_do, ro) {
+        log_action(service, "reason_fail", ro, &ro.original_command.join(" "));
         std::process::exit(1);
     }
 
     // check if a password is required
-    if !challenge_password(&ro, &can_do, &service) {
-        log_action(&service, "deny", &ro, &ro.original_command.join(" "));
+    if !challenge_password(ro, &can_do, service) {
+        log_action(service, "deny", ro, &ro.original_command.join(" "));
         std::process::exit(1);
     }
 
-    log_action(&service, "permit", &ro, &ro.command);
+    log_action(service, "permit", ro, &ro.command);
     println!("{} may run the following:", name);
     ro.acl_type = Acltype::Run;
-    list(&vec_eo, &ro);
+    list(vec_eo, ro);
     println!("{} may edit the following:", name);
     ro.acl_type = Acltype::Edit;
-    list(&vec_eo, &ro);
+    list(vec_eo, ro);
     println!("{} may list the following:", name);
     ro.acl_type = Acltype::List;
-    list(&vec_eo, &ro);
+    list(vec_eo, ro);
 }
 
 /// navigate to directory or exit 1
@@ -97,7 +99,7 @@ fn general_options(
     mut ro: &mut RunOptions,
     args: Vec<String>,
     service: &str,
-    mut vec_eo: &mut Vec<EnvOptions>,
+    vec_eo: &mut Vec<EnvOptions>,
 ) {
     let mut opts = Options::new();
     opts.parsing_style(getopts::ParsingStyle::StopAtFirstFree);
@@ -123,7 +125,7 @@ fn general_options(
     let matches = match opts.parse(&args[1..]) {
         Ok(m) => m,
         Err(f) => {
-            println!("{}", f.to_string());
+            println!("{}", f);
             std::process::exit(1);
         }
     };
@@ -133,8 +135,8 @@ fn general_options(
         let mut ini_list: HashMap<String, bool> = HashMap::new();
         std::process::exit(read_ini_config_file(
             &matches.opt_str("c").unwrap(),
-            &mut vec_eo,
-            &ro,
+            vec_eo,
+            ro,
             true,
             &mut bytes,
             &mut ini_list,
@@ -158,12 +160,12 @@ fn general_options(
     }
 
     let header = format!("{} [arguments] </path/to/executable>", &service);
-    common_opt_arguments(&matches, &opts, &mut ro, &service, &header);
+    common_opt_arguments(&matches, &opts, ro, service, &header);
 
     if ro.new_args.is_empty() && !ro.warm_token && !ro.purge_token && ro.acl_type != Acltype::List {
         println!("No command given");
         print_usage(&opts, &header);
-        print_version(&service);
+        print_version(service);
         std::process::exit(0);
     }
 }
@@ -256,8 +258,10 @@ fn main() {
     let entry = can(&vec_eo, &ro);
     ro.env_options = Some(entry.clone());
 
-    ro.syslog = entry.syslog;
-    if !entry.permit {
+    if entry.syslog.is_some() {
+        ro.syslog = entry.syslog.unwrap();
+    }
+    if !entry.permit() {
         log_action(&service, "deny", &ro, &ro.original_command.join(" "));
         print_may_not(&ro);
         std::process::exit(1);

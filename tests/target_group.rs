@@ -6,6 +6,16 @@ mod test {
     use super::*;
     use pleaser::*;
 
+    fn ro(name: &str, target: &str) -> RunOptions {
+        let mut ro = RunOptions::new();
+        ro.date = NaiveDate::from_ymd(2020, 1, 1).and_hms(0, 0, 0);
+        ro.name = name.to_string();
+        ro.target = target.to_string();
+        ro.acl_type = Acltype::Run;
+
+        ro
+    }
+
     #[test]
     fn test_target_group_rule() {
         let config = "[ed]
@@ -19,23 +29,19 @@ target_group = potato
         let mut bytes = 0;
         let mut ini_list: HashMap<String, bool> = HashMap::new();
         let mut vec_eo: Vec<EnvOptions> = vec![];
-        let mut ro = RunOptions::new();
-        ro.date = NaiveDate::from_ymd(2020, 1, 1).and_hms(0, 0, 0);
-        ro.name = "ed".to_string();
-        ro.target = "root".to_string();
+        let mut ro = ro("ed", "root");
         ro.target_group = Some("potato".to_string());
-        ro.acl_type = Acltype::Run;
 
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
 
         ro.command = "/bin/bash".to_string();
-        assert_eq!(can(&vec_eo, &ro).permit, true);
+        assert_eq!(can(&vec_eo, &ro).permit(), true);
 
         ro.target_group = Some("potatoes".to_string());
-        assert_eq!(can(&vec_eo, &ro).permit, false);
+        assert_eq!(can(&vec_eo, &ro).permit(), false);
 
         ro.target_group = None;
-        assert_eq!(can(&vec_eo, &ro).permit, false);
+        assert_eq!(can(&vec_eo, &ro).permit(), false);
     }
 
     #[test]
@@ -44,30 +50,26 @@ target_group = potato
 exact_name=ed
 exact_target=root
 exact_rule = /bin/bash
-target_group = potato
+exact_target_group = potato
 "
         .to_string();
 
         let mut bytes = 0;
         let mut ini_list: HashMap<String, bool> = HashMap::new();
         let mut vec_eo: Vec<EnvOptions> = vec![];
-        let mut ro = RunOptions::new();
-        ro.date = NaiveDate::from_ymd(2020, 1, 1).and_hms(0, 0, 0);
-        ro.name = "ed".to_string();
-        ro.target = "root".to_string();
+        let mut ro = ro("ed", "root");
         ro.target_group = Some("potato".to_string());
-        ro.acl_type = Acltype::Run;
 
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
 
         ro.command = "/bin/bash".to_string();
-        assert_eq!(can(&vec_eo, &ro).permit, true);
+        assert_eq!(can(&vec_eo, &ro).permit(), true);
 
         ro.target_group = Some("potatoes".to_string());
-        assert_eq!(can(&vec_eo, &ro).permit, false);
+        assert_eq!(can(&vec_eo, &ro).permit(), false);
 
         ro.target_group = None;
-        assert_eq!(can(&vec_eo, &ro).permit, false);
+        assert_eq!(can(&vec_eo, &ro).permit(), false);
     }
 
     #[test]
@@ -84,18 +86,16 @@ target_group = oracle
         let mut vec_eo: Vec<EnvOptions> = vec![];
         let mut bytes = 0;
         let mut ini_list: HashMap<String, bool> = HashMap::new();
-        let mut ro = RunOptions::new();
-        ro.name = "ed".to_string();
-        ro.target = "root".to_string();
+        let mut ro = ro("ed", "root");
         ro.command = "/etc/please.ini".to_string();
         ro.target_group = Some("oracle".to_string());
         ro.acl_type = Acltype::Edit;
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
 
-        assert_eq!(can(&vec_eo, &ro).permit, true);
+        assert_eq!(can(&vec_eo, &ro).permit(), true);
 
         ro.command = "".to_string();
-        assert_eq!(can(&vec_eo, &ro).permit, false);
+        assert_eq!(can(&vec_eo, &ro).permit(), false);
     }
 
     #[test]
@@ -112,18 +112,15 @@ target_group = oracle
         let mut vec_eo: Vec<EnvOptions> = vec![];
         let mut bytes = 0;
         let mut ini_list: HashMap<String, bool> = HashMap::new();
-        let mut ro = RunOptions::new();
-        ro.name = "ed".to_string();
-        ro.target = "root".to_string();
+        let mut ro = ro("ed", "root");
         ro.command = "/etc/please.ini".to_string();
         ro.target_group = Some("oracle".to_string());
-        ro.acl_type = Acltype::Run;
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
 
-        assert_eq!(can(&vec_eo, &ro).permit, true);
+        assert_eq!(can(&vec_eo, &ro).permit(), true);
 
         ro.command = "".to_string();
-        assert_eq!(can(&vec_eo, &ro).permit, false);
+        assert_eq!(can(&vec_eo, &ro).permit(), false);
     }
 
     // group has no effect in list context
@@ -141,18 +138,16 @@ target_group = oracle
         let mut vec_eo: Vec<EnvOptions> = vec![];
         let mut bytes = 0;
         let mut ini_list: HashMap<String, bool> = HashMap::new();
-        let mut ro = RunOptions::new();
-        ro.name = "ed".to_string();
-        ro.target = "root".to_string();
+        let mut ro = ro("ed", "root");
         ro.command = "/etc/please.ini".to_string();
         ro.target_group = Some("oracle".to_string());
         ro.acl_type = Acltype::List;
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
 
-        assert_eq!(can(&vec_eo, &ro).permit, true);
+        assert_eq!(can(&vec_eo, &ro).permit(), true);
 
         ro.command = "".to_string();
-        assert_eq!(can(&vec_eo, &ro).permit, true);
+        assert_eq!(can(&vec_eo, &ro).permit(), true);
     }
 
     #[test]
@@ -168,14 +163,11 @@ type = edit
         let mut vec_eo: Vec<EnvOptions> = vec![];
         let mut bytes = 0;
         let mut ini_list: HashMap<String, bool> = HashMap::new();
-        let mut ro = RunOptions::new();
-        ro.name = "ed".to_string();
-        ro.target = "root".to_string();
+        let mut ro = ro("ed", "root");
         ro.command = "/etc/please.ini".to_string();
         ro.target_group = Some("oracle".to_string());
-        ro.acl_type = Acltype::Run;
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
 
-        assert_eq!(can(&vec_eo, &ro).permit, false);
+        assert_eq!(can(&vec_eo, &ro).permit(), false);
     }
 }

@@ -27,13 +27,13 @@ exact_rule = /bin/bash
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
 
         ro.command = "/bin/bash".to_string();
-        assert_eq!(can(&vec_eo, &ro).permit, true);
+        assert_eq!(can(&vec_eo, &ro).permit(), true);
 
         ro.command = "/bin/bashz".to_string();
-        assert_eq!(can(&vec_eo, &ro).permit, false);
+        assert_eq!(can(&vec_eo, &ro).permit(), false);
 
         ro.command = "/".to_string();
-        assert_eq!(can(&vec_eo, &ro).permit, false);
+        assert_eq!(can(&vec_eo, &ro).permit(), false);
     }
 
     #[test]
@@ -56,10 +56,10 @@ exact_rule = /bin/bash
 
         ro.command = "/bin/bash".to_string();
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
-        assert_eq!(can(&vec_eo, &ro).permit, true);
+        assert_eq!(can(&vec_eo, &ro).permit(), true);
 
         ro.command = "/bin/bash file".to_string();
-        assert_eq!(can(&vec_eo, &ro).permit, false);
+        assert_eq!(can(&vec_eo, &ro).permit(), false);
 
         let config = "[ed]
 exact_name=ed
@@ -72,10 +72,10 @@ exact_rule = /bin/bash file
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
 
         ro.command = "/bin/bash".to_string();
-        assert_eq!(can(&vec_eo, &ro).permit, false);
+        assert_eq!(can(&vec_eo, &ro).permit(), false);
 
         ro.command = "/bin/bash file".to_string();
-        assert_eq!(can(&vec_eo, &ro).permit, true);
+        assert_eq!(can(&vec_eo, &ro).permit(), true);
 
         let config = "[ed]
 exact_name=ed
@@ -88,10 +88,10 @@ exact_rule = /bin/bash echo\\ hello\\ world
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
 
         ro.command = "/bin/bash".to_string();
-        assert_eq!(can(&vec_eo, &ro).permit, false);
+        assert_eq!(can(&vec_eo, &ro).permit(), false);
 
         ro.command = "/bin/bash echo\\ hello\\ world".to_string();
-        assert_eq!(can(&vec_eo, &ro).permit, true);
+        assert_eq!(can(&vec_eo, &ro).permit(), true);
     }
 
     #[test]
@@ -114,13 +114,13 @@ exact_rule = /bin/bash
 
         ro.command = "/bin/bash".to_string();
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
-        assert_eq!(can(&vec_eo, &ro).permit, true);
+        assert_eq!(can(&vec_eo, &ro).permit(), true);
 
         ro.name = "jim".to_string();
-        assert_eq!(can(&vec_eo, &ro).permit, false);
+        assert_eq!(can(&vec_eo, &ro).permit(), false);
 
         ro.command = "edd".to_string();
-        assert_eq!(can(&vec_eo, &ro).permit, false);
+        assert_eq!(can(&vec_eo, &ro).permit(), false);
     }
 
     #[test]
@@ -143,13 +143,13 @@ exact_rule = /bin/bash
 
         ro.command = "/bin/bash".to_string();
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
-        assert_eq!(can(&vec_eo, &ro).permit, true);
+        assert_eq!(can(&vec_eo, &ro).permit(), true);
 
         ro.target = "jim".to_string();
-        assert_eq!(can(&vec_eo, &ro).permit, false);
+        assert_eq!(can(&vec_eo, &ro).permit(), false);
 
         ro.target = "edd".to_string();
-        assert_eq!(can(&vec_eo, &ro).permit, false);
+        assert_eq!(can(&vec_eo, &ro).permit(), false);
     }
 
     #[test]
@@ -173,16 +173,16 @@ exact_rule = /bin/bash
         ro.command = "/bin/bash".to_string();
         ro.hostname = "thing".to_string();
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
-        assert_eq!(can(&vec_eo, &ro).permit, true);
+        assert_eq!(can(&vec_eo, &ro).permit(), true);
 
         ro.hostname = "".to_string();
-        assert_eq!(can(&vec_eo, &ro).permit, false);
+        assert_eq!(can(&vec_eo, &ro).permit(), false);
 
         ro.hostname = "web".to_string();
-        assert_eq!(can(&vec_eo, &ro).permit, false);
+        assert_eq!(can(&vec_eo, &ro).permit(), false);
 
         ro.hostname = "localhost".to_string();
-        assert_eq!(can(&vec_eo, &ro).permit, false);
+        assert_eq!(can(&vec_eo, &ro).permit(), false);
 
         let config = "[ed]
 exact_name=ed
@@ -195,7 +195,7 @@ exact_rule = /bin/bash
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
 
         ro.hostname = "thing".to_string();
-        assert_eq!(can(&vec_eo, &ro).permit, true);
+        assert_eq!(can(&vec_eo, &ro).permit(), true);
     }
 
     #[test]
@@ -221,13 +221,13 @@ exact_dir = /root
         ro.directory = Some("/root".to_string());
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
 
-        assert_eq!(can(&vec_eo, &ro).permit, true);
+        assert_eq!(can(&vec_eo, &ro).permit(), true);
 
         ro.directory = Some("/home".to_string());
-        assert_eq!(can(&vec_eo, &ro).permit, false);
+        assert_eq!(can(&vec_eo, &ro).permit(), false);
 
         ro.directory = Some("/".to_string());
-        assert_eq!(can(&vec_eo, &ro).permit, false);
+        assert_eq!(can(&vec_eo, &ro).permit(), false);
     }
 
     #[test]
@@ -252,10 +252,10 @@ exact_rule = /bin/bash
         ro.command = "/bin/bash".to_string();
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
 
-        assert_eq!(can(&vec_eo, &ro).permit, true);
+        assert_eq!(can(&vec_eo, &ro).permit(), true);
 
         ro.name = "zz".to_string();
-        assert_eq!(can(&vec_eo, &ro).permit, false);
+        assert_eq!(can(&vec_eo, &ro).permit(), false);
 
         let config = "[ed]
 exact_name=
@@ -267,7 +267,7 @@ exact_rule = /bin/bash
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
 
         ro.name = "zz".to_string();
-        assert_eq!(can(&vec_eo, &ro).permit, false);
+        assert_eq!(can(&vec_eo, &ro).permit(), false);
     }
 
     #[test]
@@ -292,10 +292,10 @@ rule = /bin/bash
         ro.command = "/bin/sh".to_string();
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
 
-        assert_eq!(can(&vec_eo, &ro).permit, true);
+        assert_eq!(can(&vec_eo, &ro).permit(), true);
 
         ro.command = "/bin/bash".to_string();
-        assert_eq!(can(&vec_eo, &ro).permit, false);
+        assert_eq!(can(&vec_eo, &ro).permit(), false);
     }
 
     #[test]
@@ -320,10 +320,10 @@ exact_rule = /bin/sh
         ro.command = "/bin/sh".to_string();
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
 
-        assert_eq!(can(&vec_eo, &ro).permit, true);
+        assert_eq!(can(&vec_eo, &ro).permit(), true);
 
         ro.target = "bob".to_string();
-        assert_eq!(can(&vec_eo, &ro).permit, false);
+        assert_eq!(can(&vec_eo, &ro).permit(), false);
     }
 
     #[test]
@@ -350,9 +350,9 @@ dir = .*
         ro.directory = Some("/root".to_string());
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
 
-        assert_eq!(can(&vec_eo, &ro).permit, true);
+        assert_eq!(can(&vec_eo, &ro).permit(), true);
 
         ro.directory = Some("/home".to_string());
-        assert_eq!(can(&vec_eo, &ro).permit, false);
+        assert_eq!(can(&vec_eo, &ro).permit(), false);
     }
 }

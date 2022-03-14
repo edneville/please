@@ -70,11 +70,11 @@ fn setup_temp_edit_file(
     target_uid: nix::unistd::Uid,
     target_gid: nix::unistd::Gid,
 ) -> String {
-    if !drop_privs(&ro) {
+    if !drop_privs(ro) {
         std::process::exit(1);
     }
 
-    let tmp_edit_file = tmp_edit_file_name(&source_file, &service, &ro.name);
+    let tmp_edit_file = tmp_edit_file_name(source_file, service, &ro.name);
     let tmp_edit_file_path = Path::new(&tmp_edit_file);
 
     if tmp_edit_file_path.exists() && std::fs::remove_file(tmp_edit_file_path).is_err() {
@@ -101,7 +101,7 @@ fn setup_temp_edit_file(
         }
     }
 
-    if !drop_privs(&ro) {
+    if !drop_privs(ro) {
         std::process::exit(1);
     }
 
@@ -153,7 +153,7 @@ fn build_exitcmd(entry: &EnvOptions, source_file: &str, edit_file: &str) -> Comm
     let cmd_re = Regex::new(r"\s+").unwrap();
 
     let cmd_str = &entry.exitcmd.as_ref().unwrap();
-    let cmd_parts: Vec<&str> = cmd_re.split(&cmd_str).collect();
+    let cmd_parts: Vec<&str> = cmd_re.split(cmd_str).collect();
 
     if cmd_parts.is_empty() {
         println!("exitcmd has too few arguments");
@@ -164,7 +164,7 @@ fn build_exitcmd(entry: &EnvOptions, source_file: &str, edit_file: &str) -> Comm
     for (pos, j) in cmd_parts.iter().enumerate() {
         if pos > 0 {
             cmd.arg(
-                j.replace("%{OLD}", &source_file)
+                j.replace("%{OLD}", source_file)
                     .replace("%{NEW}", edit_file),
             );
         }
@@ -177,7 +177,7 @@ fn build_exitcmd(entry: &EnvOptions, source_file: &str, edit_file: &str) -> Comm
 }
 
 /// create options for parsing and --help
-fn general_options(mut ro: &mut RunOptions, args: Vec<String>, service: &str) {
+fn general_options(ro: &mut RunOptions, args: Vec<String>, service: &str) {
     let mut opts = Options::new();
     opts.parsing_style(getopts::ParsingStyle::StopAtFirstFree);
     opts.optopt("g", "group", "become target group", "GROUP");
@@ -193,18 +193,18 @@ fn general_options(mut ro: &mut RunOptions, args: Vec<String>, service: &str) {
     let matches = match opts.parse(&args[1..]) {
         Ok(m) => m,
         Err(f) => {
-            println!("{}", f.to_string());
+            println!("{}", f);
             std::process::exit(1);
         }
     };
 
     let header = format!("{} [arguments] </path/to/file>", &service);
-    common_opt_arguments(&matches, &opts, &mut ro, &service, &header);
+    common_opt_arguments(&matches, &opts, ro, service, &header);
 
     if (ro.new_args.is_empty() || ro.new_args.len() > 1) && !ro.warm_token && !ro.purge_token {
         println!("You must provide one file to edit");
         print_usage(&opts, &header);
-        print_version(&service);
+        print_version(service);
         std::process::exit(1);
     }
 }
@@ -231,7 +231,7 @@ fn write_target_tmp_file(
         || file
             .as_ref()
             .unwrap()
-            .write(&file_data.as_ref().unwrap().as_bytes())
+            .write(file_data.as_ref().unwrap().as_bytes())
             .is_err()
     {
         println!("Could not write data to {}", &dir_parent_tmp);
@@ -241,7 +241,7 @@ fn write_target_tmp_file(
 }
 
 fn remove_tmp_edit(ro: &RunOptions, edit_file: &str) {
-    if !drop_privs(&ro) {
+    if !drop_privs(ro) {
         std::process::exit(1);
     }
     if std::fs::remove_file(edit_file).is_err() {
@@ -290,7 +290,7 @@ fn rename_to_source(
     fchmod(dir_parent_tmp_file.as_raw_fd(), edit_mode).unwrap();
 
     if entry.exitcmd.is_some() {
-        let mut cmd = build_exitcmd(&entry, &source_file.to_str().unwrap(), &dir_parent_tmp);
+        let mut cmd = build_exitcmd(entry, source_file.to_str().unwrap(), dir_parent_tmp);
         match cmd.output() {
             Err(x) => {
                 println!("Aborting as exitcmd was non-zero when executing, removing tmp file:");
@@ -413,8 +413,10 @@ fn main() {
 
     let entry = can(&vec_eo, &ro);
 
-    ro.syslog = entry.syslog;
-    if !entry.permit {
+    if entry.syslog.is_some() {
+        ro.syslog = entry.syslog.unwrap();
+    }
+    if !entry.permit() {
         log_action(&service, "deny", &ro, &ro.original_command.join(" "));
         println!(
             "You may not edit \"{}\" on {} as {}",
@@ -453,7 +455,7 @@ fn main() {
     set_environment(&ro, &entry, &original_user, original_uid, &lookup_name);
     let edit_file = &setup_temp_edit_file(&service, source_file, &ro, target_uid, target_gid);
 
-    std::env::set_var("PLEASE_EDIT_FILE", edit_file.to_string());
+    std::env::set_var("PLEASE_EDIT_FILE", edit_file);
     std::env::set_var("PLEASE_SOURCE_FILE", source_file.to_str().unwrap());
 
     let mut good_edit = false;
@@ -525,9 +527,9 @@ fn main() {
     // drop privs to original user and read into memory
     log_action(&service, "permit", &ro, &ro.original_command.join(" "));
     let dir_parent_tmp =
-        source_tmp_file_name(&source_file, format!("{}.copy", service).as_str(), &ro.name);
+        source_tmp_file_name(source_file, format!("{}.copy", service).as_str(), &ro.name);
 
-    let file_data = edit_file_to_memory(&source_file, &edit_file);
+    let file_data = edit_file_to_memory(source_file, edit_file);
 
     // become the target user and create file
     let dir_parent_tmp_file =
@@ -539,7 +541,7 @@ fn main() {
     // rename file to source if exitcmd is clean
     rename_to_source(
         &dir_parent_tmp,
-        &source_file,
+        source_file,
         &entry,
         &lookup_name,
         &dir_parent_tmp_file,

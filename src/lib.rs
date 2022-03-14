@@ -70,8 +70,8 @@ pub struct EnvOptions {
     pub exact_target_group: Option<String>,
     pub hostname: Option<String>,
     pub exact_hostname: Option<String>,
-    pub permit: bool,
-    pub require_pass: bool,
+    pub permit: Option<bool>,
+    pub require_pass: Option<bool>,
     pub acl_type: Acltype,
     pub file_name: String,
     pub section: String,
@@ -81,9 +81,9 @@ pub struct EnvOptions {
     pub exact_dir: Option<String>,
     pub exitcmd: Option<String>,
     pub edit_mode: Option<EditMode>,
-    pub reason: ReasonType,
-    pub last: bool,
-    pub syslog: bool,
+    pub reason: Option<ReasonType>,
+    pub last: Option<bool>,
+    pub syslog: Option<bool>,
     pub env_permit: Option<String>,
     pub env_assign: Option<HashMap<String, String>>,
     pub timeout: Option<u32>,
@@ -107,8 +107,8 @@ impl EnvOptions {
             exact_hostname: None,
             file_name: "".to_string(),
             section: "".to_string(),
-            permit: true,
-            require_pass: true,
+            permit: None,
+            require_pass: None,
             acl_type: Acltype::Run,
             group: false,
             configured: false,
@@ -116,9 +116,9 @@ impl EnvOptions {
             exact_dir: None,
             exitcmd: None,
             edit_mode: Some(EditMode::Keep(true)),
-            reason: ReasonType::Need(false),
-            last: false,
-            syslog: true,
+            reason: None,
+            last: None,
+            syslog: None,
             env_permit: None,
             env_assign: None,
             timeout: None,
@@ -126,11 +126,18 @@ impl EnvOptions {
     }
     fn new_deny() -> EnvOptions {
         let mut opt = EnvOptions::new();
-        opt.permit = false;
+        opt.permit = Some(false);
         opt.rule = Some(".".to_string());
         opt.target = Some("^$".to_string());
         opt.acl_type = Acltype::List;
         opt
+    }
+    pub fn permit(&self) -> bool {
+        if self.permit.is_some() && !self.permit.unwrap() {
+            return false;
+        }
+
+        true
     }
 }
 
@@ -348,7 +355,7 @@ pub fn credits(service: &str) {
         "The SUSE Security Team, especially Matthias Gerstner",
     ];
 
-    print_version(&service);
+    print_version(service);
 
     contributors.sort_unstable();
 
@@ -392,7 +399,7 @@ pub fn common_opt_arguments(
         && matches.opt_str("t").unwrap() != matches.opt_str("u").unwrap()
     {
         println!("Cannot use -t and -u with conflicting values");
-        print_usage(&opts, &header);
+        print_usage(opts, header);
         std::process::exit(1);
     }
 
@@ -400,7 +407,7 @@ pub fn common_opt_arguments(
         ro.purge_token = true;
     }
     if matches.opt_present("v") {
-        print_version(&service);
+        print_version(service);
         std::process::exit(0);
     }
     if matches.opt_present("w") {
@@ -413,12 +420,12 @@ pub fn common_opt_arguments(
 
     if matches.opt_present("h") {
         if ro.new_args == ["credits"] {
-            credits(&service);
+            credits(service);
             std::process::exit(0);
         }
 
-        print_usage(&opts, &header);
-        print_version(&service);
+        print_usage(opts, header);
+        print_version(service);
         std::process::exit(0);
     }
 
@@ -427,7 +434,7 @@ pub fn common_opt_arguments(
             std::process::exit(1);
         }
         remove_token(&ro.name);
-        if !drop_privs(&ro) {
+        if !drop_privs(ro) {
             std::process::exit(1);
         }
         std::process::exit(0);
@@ -435,7 +442,7 @@ pub fn common_opt_arguments(
 
     if ro.warm_token {
         if ro.prompt {
-            challenge_password(&ro, &EnvOptions::new(), &service);
+            challenge_password(ro, &EnvOptions::new(), service);
         }
         std::process::exit(0);
     }
@@ -530,7 +537,7 @@ pub fn read_ini(
                     println!("Includes should start with /");
                     return true;
                 }
-                if read_ini_config_file(&value, vec_eo, ro, fail_error, bytes, ini_list) {
+                if read_ini_config_file(value, vec_eo, ro, fail_error, bytes, ini_list) {
                     println!("Could not include file");
                     return true;
                 }
@@ -556,7 +563,7 @@ pub fn read_ini(
                             if !can_dir_include(&incf) {
                                 continue;
                             }
-                            if read_ini_config_file(&incf, vec_eo, &ro, fail_error, bytes, ini_list)
+                            if read_ini_config_file(&incf, vec_eo, ro, fail_error, bytes, ini_list)
                             {
                                 println!("Could not include file");
                                 return true;
@@ -619,8 +626,8 @@ pub fn read_ini(
             "exact_target_group" => {
                 opt.exact_target_group = Some(value.to_string());
             }
-            "permit" => opt.permit = value == "true",
-            "require_pass" => opt.require_pass = value != "false",
+            "permit" => opt.permit = Some(value == "true"),
+            "require_pass" => opt.require_pass = Some(value != "false"),
             "type" => match value.to_lowercase().as_str() {
                 "edit" => opt.acl_type = Acltype::Edit,
                 "list" => opt.acl_type = Acltype::List,
@@ -642,25 +649,23 @@ pub fn read_ini(
             }
             "notbefore" if value.len() == 8 => {
                 opt.notbefore = Some(
-                    parse_date_from_str(&value.to_string(), "%Y%m%d")
+                    parse_date_from_str(value, "%Y%m%d")
                         .unwrap()
                         .and_hms(0, 0, 0),
                 )
             }
             "notafter" if value.len() == 8 => {
                 opt.notafter = Some(
-                    parse_date_from_str(&value.to_string(), "%Y%m%d")
+                    parse_date_from_str(value, "%Y%m%d")
                         .unwrap()
                         .and_hms(23, 59, 59),
                 )
             }
             "notbefore" if value.len() == 14 => {
-                opt.notbefore =
-                    Some(parse_datetime_from_str(&value.to_string(), "%Y%m%d%H%M%S").unwrap())
+                opt.notbefore = Some(parse_datetime_from_str(value, "%Y%m%d%H%M%S").unwrap())
             }
             "notafter" if value.len() == 14 => {
-                opt.notafter =
-                    Some(parse_datetime_from_str(&value.to_string(), "%Y%m%d%H%M%S").unwrap())
+                opt.notafter = Some(parse_datetime_from_str(value, "%Y%m%d%H%M%S").unwrap())
             }
             "datematch" => {
                 opt.datematch = Some(value.to_string());
@@ -716,13 +721,13 @@ pub fn read_ini(
             }
             "reason" => {
                 if value == "true" || value == "false" {
-                    opt.reason = ReasonType::Need(value == "true");
+                    opt.reason = Some(ReasonType::Need(value == "true"));
                 } else {
-                    opt.reason = ReasonType::Text(value.to_string());
+                    opt.reason = Some(ReasonType::Text(value.to_string()));
                 }
             }
-            "last" => opt.last = value == "true",
-            "syslog" => opt.syslog = value == "true",
+            "last" => opt.last = Some(value == "true"),
+            "syslog" => opt.syslog = Some(value == "true"),
             "timeout" => {
                 let timeout: Result<u32, core::num::ParseIntError> = value.parse();
                 if fail_error && timeout.is_err() {
@@ -809,7 +814,7 @@ pub fn read_ini_config_file(
         }
     }
 
-    read_ini(&s, vec_eo, &ro, fail_error, config_path, bytes, ini_list)
+    read_ini(&s, vec_eo, ro, fail_error, config_path, bytes, ini_list)
 }
 
 pub fn read_ini_config_str(
@@ -820,7 +825,7 @@ pub fn read_ini_config_str(
     bytes: &mut u64,
     ini_list: &mut HashMap<String, bool>,
 ) -> bool {
-    read_ini(&config, vec_eo, ro, fail_error, "static", bytes, ini_list)
+    read_ini(config, vec_eo, ro, fail_error, "static", bytes, ini_list)
 }
 
 /// may we execute with this hostname
@@ -840,8 +845,8 @@ pub fn hostname_ok(item: &EnvOptions, ro: &RunOptions, line: Option<i32>) -> boo
 
     if item.hostname.is_some() {
         let hostname_re = match regex_build(
-            &item.hostname.as_ref().unwrap(),
-            &ro,
+            item.hostname.as_ref().unwrap(),
+            ro,
             &item.file_name,
             &item.section,
             line,
@@ -877,8 +882,8 @@ pub fn target_ok(item: &EnvOptions, ro: &RunOptions, line: Option<i32>) -> bool 
 
     if item.target.is_some() {
         let target_re = match regex_build(
-            &item.target.as_ref().unwrap(),
-            &ro,
+            item.target.as_ref().unwrap(),
+            ro,
             &item.file_name,
             &item.section,
             line,
@@ -912,19 +917,19 @@ pub fn target_group_ok(item: &EnvOptions, ro: &RunOptions, line: Option<i32>) ->
     }
 
     if item.exact_target_group.is_some() {
-        let exact_target = item.exact_target.as_ref().unwrap();
-        if exact_target == &ro.target {
+        let exact_target_group = item.exact_target_group.as_ref().unwrap();
+        if exact_target_group == ro.target_group.as_ref().unwrap() {
             return true;
         }
 
-        // println!("{}: target group mismatch: {} != {}", item.section, exact_target_group, ro.target_group);
+        // println!("{}: target group mismatch: {} != {}", item.section, exact_target_group, ro.target_group.as_ref().unwrap());
         return false;
     }
 
     if item.target_group.is_some() {
         let target_group_re = match regex_build(
-            &item.target_group.as_ref().unwrap(),
-            &ro,
+            item.target_group.as_ref().unwrap(),
+            ro,
             &item.file_name,
             &item.section,
             line,
@@ -936,7 +941,7 @@ pub fn target_group_ok(item: &EnvOptions, ro: &RunOptions, line: Option<i32>) ->
             }
         };
 
-        if target_group_re.is_match(&ro.target_group.as_ref().unwrap()) {
+        if target_group_re.is_match(ro.target_group.as_ref().unwrap()) {
             return true;
         }
         return false;
@@ -956,8 +961,8 @@ pub fn rule_match(item: &EnvOptions, ro: &RunOptions, line: Option<i32>) -> bool
 
     if item.rule.is_some() {
         let rule_re = match regex_build(
-            &item.rule.as_ref().unwrap(),
-            &ro,
+            item.rule.as_ref().unwrap(),
+            ro,
             &item.file_name,
             &item.section,
             line,
@@ -1000,8 +1005,8 @@ pub fn directory_check_ok(item: &EnvOptions, ro: &RunOptions, line: Option<i32>)
         }
 
         let dir_re = match regex_build(
-            &item.dir.as_ref().unwrap(),
-            &ro,
+            item.dir.as_ref().unwrap(),
+            ro,
             &item.file_name,
             &item.section,
             line,
@@ -1013,7 +1018,7 @@ pub fn directory_check_ok(item: &EnvOptions, ro: &RunOptions, line: Option<i32>)
             }
         };
 
-        if (&ro.directory.as_ref()).is_some() && !dir_re.is_match(&ro.directory.as_ref().unwrap()) {
+        if (&ro.directory.as_ref()).is_some() && !dir_re.is_match(ro.directory.as_ref().unwrap()) {
             // && ro.directory != "." {
             return false;
         }
@@ -1038,8 +1043,8 @@ pub fn environment_ok(item: &EnvOptions, ro: &RunOptions, line: Option<i32>) -> 
     }
 
     let env_re = match regex_build(
-        &item.env_permit.as_ref().unwrap(),
-        &ro,
+        item.env_permit.as_ref().unwrap(),
+        ro,
         &item.file_name,
         &item.section,
         line,
@@ -1053,7 +1058,7 @@ pub fn environment_ok(item: &EnvOptions, ro: &RunOptions, line: Option<i32>) -> 
 
     for permit_env in ro.allow_env_list.as_ref().unwrap() {
         // println!("permit_env is {}", permit_env);
-        if !env_re.is_match(&permit_env) {
+        if !env_re.is_match(permit_env) {
             // println!( "{}: skipping as not a permitted env {} vs {}",    item.section, item.env_permit.clone().unwrap(), permit_env );
             return false;
         }
@@ -1076,8 +1081,8 @@ pub fn permitted_dates_ok(item: &EnvOptions, ro: &RunOptions, line: Option<i32>)
 
     if item.datematch.is_some() {
         let datematch_re = match regex_build(
-            &item.datematch.as_ref().unwrap(),
-            &ro,
+            item.datematch.as_ref().unwrap(),
+            ro,
             &item.file_name,
             &item.section,
             line,
@@ -1109,8 +1114,8 @@ pub fn name_matches(item: &EnvOptions, ro: &RunOptions, line: Option<i32>) -> bo
 
     if item.name.is_some() {
         let name_re = match regex_build(
-            &item.name.as_ref().unwrap(),
-            &ro,
+            item.name.as_ref().unwrap(),
+            ro,
             &item.file_name,
             &item.section,
             line,
@@ -1147,8 +1152,8 @@ pub fn group_matches(item: &EnvOptions, ro: &RunOptions, line: Option<i32>) -> b
 
     if item.name.is_some() {
         let name_re = match regex_build(
-            &item.name.as_ref().unwrap(),
-            &ro,
+            item.name.as_ref().unwrap(),
+            ro,
             &item.file_name,
             &item.section,
             line,
@@ -1161,7 +1166,7 @@ pub fn group_matches(item: &EnvOptions, ro: &RunOptions, line: Option<i32>) -> b
         };
 
         for (k, _) in ro.groups.iter() {
-            if name_re.is_match(&k.to_string()) {
+            if name_re.is_match(k) {
                 // println!("{}: {} matches group {}", item.section, item.name.as_ref().unwrap(), k);
                 return true;
             }
@@ -1172,10 +1177,97 @@ pub fn group_matches(item: &EnvOptions, ro: &RunOptions, line: Option<i32>) -> b
     false
 }
 
+pub fn matching(item: &EnvOptions, ro: &RunOptions, line_error: Option<i32>) -> bool {
+    if !permitted_dates_ok(item, ro, line_error) {
+        return false;
+    }
+
+    if !item.group && !name_matches(item, ro, line_error) {
+        return false;
+    }
+
+    if item.group && !group_matches(item, ro, line_error) {
+        return false;
+    }
+
+    if !hostname_ok(item, ro, line_error) {
+        return false;
+    }
+
+    if !directory_check_ok(item, ro, line_error) {
+        return false;
+    }
+
+    if !environment_ok(item, ro, line_error) {
+        return false;
+    }
+
+    if !target_ok(item, ro, line_error) {
+        return false;
+    }
+
+    if !target_group_ok(item, ro, line_error) {
+        return false;
+    }
+
+    if item.acl_type == Acltype::List {
+        // println!("{}: is list", item.section);
+        return true;
+    }
+
+    rule_match(item, ro, line_error)
+}
+
+pub fn merge_default(default: &EnvOptions, item: &EnvOptions) -> EnvOptions {
+    let mut merged = item.clone();
+
+    if default.syslog.is_some() && item.syslog.is_none() {
+        merged.syslog = default.syslog;
+    }
+
+    if default.reason.is_some() && item.reason.is_none() {
+        merged.reason = default.reason.clone();
+    }
+
+    if default.require_pass.is_some() && item.require_pass.is_none() {
+        merged.require_pass = default.require_pass;
+    }
+
+    if default.last.is_some() && item.last.is_none() {
+        merged.last = default.last;
+    }
+
+    if default.exitcmd.is_some() && item.exitcmd.is_none() {
+        merged.exitcmd = default.exitcmd.clone();
+    }
+
+    if default.edit_mode.is_some() && item.edit_mode.is_none() {
+        merged.edit_mode = default.edit_mode.clone();
+    }
+
+    if default.timeout.is_some() && item.timeout.is_none() {
+        merged.timeout = default.timeout;
+    }
+
+    if default.env_permit.is_some() && item.env_permit.is_none() {
+        merged.env_permit = default.env_permit.clone();
+    }
+
+    if default.env_assign.is_some() && item.env_assign.is_none() {
+        merged.env_assign = default.env_assign.clone();
+    }
+
+    if default.permit.is_some() && item.permit.is_none() {
+        merged.permit = default.permit;
+    }
+
+    merged
+}
+
 /// search the EnvOptions list for matching RunOptions and return the match
 pub fn can(vec_eo: &[EnvOptions], ro: &RunOptions) -> EnvOptions {
     let mut opt = EnvOptions::new_deny();
-    let mut matched;
+    let mut default = EnvOptions::new();
 
     for item in vec_eo {
         // println!("{}:", item.section);
@@ -1184,54 +1276,23 @@ pub fn can(vec_eo: &[EnvOptions], ro: &RunOptions) -> EnvOptions {
             continue;
         }
 
-        if !permitted_dates_ok(&item, &ro, None) {
+        if !matching(item, ro, None) {
             continue;
         }
 
-        if !item.group && !name_matches(&item, &ro, None) {
-            continue;
+        if item.section.starts_with("default") {
+            default = merge_default(&default, item);
         }
 
-        if item.group && !group_matches(&item, &ro, None) {
-            continue;
-        }
+        opt = merge_default(&default, item);
 
-        if !hostname_ok(&item, &ro, None) {
-            continue;
-        }
-
-        if !directory_check_ok(&item, &ro, None) {
-            continue;
-        }
-
-        if !environment_ok(&item, &ro, None) {
-            continue;
-        }
-
-        if !target_ok(&item, &ro, None) {
-            continue;
-        }
-
-        if !target_group_ok(&item, &ro, None) {
-            continue;
-        }
-
-        if item.acl_type == Acltype::List {
-            // println!("{}: is list", item.section);
-            opt = item.clone();
-            matched = true;
-        } else {
-            if !rule_match(&item, &ro, None) {
-                continue;
+        match opt.last {
+            None => {}
+            Some(last) => {
+                if last {
+                    break;
+                }
             }
-            matched = true;
-            opt = item.clone();
-
-            // else { println!("{}: item rule ({}) is not a match for {}", item.section, item.rule, ro.command); }
-        }
-
-        if opt.last && matched {
-            break;
         }
         // println!("didn't match");
     }
@@ -1240,13 +1301,13 @@ pub fn can(vec_eo: &[EnvOptions], ro: &RunOptions) -> EnvOptions {
 
 /// check reason. this happens post authorize in order to provide feedback
 pub fn reason_ok(item: &EnvOptions, ro: &RunOptions) -> bool {
-    if item.reason == ReasonType::Need(false) {
+    if item.reason.is_none() {
         return true;
     }
 
-    match &item.reason {
+    match &item.reason.as_ref().unwrap() {
         ReasonType::Text(value) => {
-            let m_re = match regex_build(&value, &ro, &item.file_name, &item.section, None) {
+            let m_re = match regex_build(value, ro, &item.file_name, &item.section, None) {
                 Some(check) => check,
                 None => {
                     println!("Could not compile {}", &value);
@@ -1254,7 +1315,7 @@ pub fn reason_ok(item: &EnvOptions, ro: &RunOptions) -> bool {
                 }
             };
 
-            if ro.reason.is_some() && m_re.is_match(&ro.reason.as_ref().unwrap()) {
+            if ro.reason.is_some() && m_re.is_match(ro.reason.as_ref().unwrap()) {
                 return true;
             }
 
@@ -1326,7 +1387,7 @@ pub fn handler_shim<T: pam::Converse>(
 /// read password of user via rpassword
 /// should pam require a password, and it is successful, then we set a token
 pub fn challenge_password(ro: &RunOptions, entry: &EnvOptions, service: &str) -> bool {
-    if entry.require_pass {
+    if entry.require_pass.is_some() && entry.require_pass.unwrap() {
         if tty_name().is_none() {
             println!("Cannot read password without tty");
             return false;
@@ -1343,7 +1404,7 @@ pub fn challenge_password(ro: &RunOptions, entry: &EnvOptions, service: &str) ->
             return true;
         }
 
-        if !drop_privs(&ro) {
+        if !drop_privs(ro) {
             std::process::exit(1);
         }
 
@@ -1406,7 +1467,7 @@ pub fn challenge_password(ro: &RunOptions, entry: &EnvOptions, service: &str) ->
                 alarm::set(timeout);
             }
 
-            let auth = handler_shim(&ro, &mut handler);
+            let auth = handler_shim(ro, &mut handler);
 
             if entry.timeout.is_some() {
                 alarm::cancel();
@@ -1421,7 +1482,7 @@ pub fn challenge_password(ro: &RunOptions, entry: &EnvOptions, service: &str) ->
 
                     update_token(&ro.name);
 
-                    if !drop_privs(&ro) {
+                    if !drop_privs(ro) {
                         std::process::exit(1);
                     }
                 }
@@ -1474,7 +1535,7 @@ pub fn list_dir(eo: &EnvOptions) -> String {
 /// print output list of acl
 pub fn list(vec_eo: &[EnvOptions], ro: &RunOptions) {
     //let mut str_list: vec![];
-    for s in produce_list(&vec_eo, &ro) {
+    for s in produce_list(vec_eo, ro) {
         println!("{}", s);
     }
 }
@@ -1491,11 +1552,11 @@ pub fn produce_list(vec_eo: &[EnvOptions], ro: &RunOptions) -> Vec<String> {
     let mut last_file = "";
 
     for item in vec_eo {
-        if !item.group && !name_matches(&item, &ro, None) {
+        if !item.group && !name_matches(item, &ro, None) {
             continue;
         }
 
-        if item.group && !group_matches(&item, &ro, None) {
+        if item.group && !group_matches(item, &ro, None) {
             continue;
         }
 
@@ -1508,23 +1569,28 @@ pub fn produce_list(vec_eo: &[EnvOptions], ro: &RunOptions) -> Vec<String> {
             prefixes.push(format!("expired({})", item.notafter.unwrap()));
         }
 
-        if item.reason != ReasonType::Need(false) {
-            prefixes.push(String::from("reason_required"));
+        match &item.reason {
+            Some(r) => {
+                if *r != ReasonType::Need(false) {
+                    prefixes.push(String::from("reason_required"));
+                }
+            }
+            None => {}
         }
 
         if item.acl_type != ro.acl_type {
             continue;
         }
 
-        if !item.permit {
+        if !item.permit() {
             prefixes.push(String::from("not permitted"));
         }
 
-        if !hostname_ok(&item, &ro, None) {
+        if !hostname_ok(item, &ro, None) {
             continue;
         }
 
-        if item.last {
+        if item.last.is_some() && item.last.unwrap() {
             prefixes.push(String::from("last"));
         }
 
@@ -1555,10 +1621,14 @@ pub fn produce_list(vec_eo: &[EnvOptions], ro: &RunOptions) -> Vec<String> {
             "    {}:{}{} (pass={},dirs={}): {}",
             item.section,
             prefix,
-            list_target(&item),
-            item.require_pass,
-            list_dir(&item),
-            list_rule(&item)
+            list_target(item),
+            if item.require_pass.is_some() {
+                item.require_pass.unwrap()
+            } else {
+                false
+            },
+            list_dir(item),
+            list_rule(item)
         ));
     }
     str_list
@@ -1672,16 +1742,16 @@ pub fn set_environment(
     std::env::set_var("SUDO_COMMAND", &ro.command);
 
     set_env_if_not_passed_through(
-        &ro,
+        ro,
         "PATH",
         "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
     );
 
-    set_env_if_not_passed_through(&ro, "HOME", lookup_name.home_dir().to_str().unwrap());
-    set_env_if_not_passed_through(&ro, "MAIL", &format!("/var/mail/{}", ro.target));
-    set_env_if_not_passed_through(&ro, "SHELL", lookup_name.shell().to_str().unwrap());
-    set_env_if_not_passed_through(&ro, "USER", &ro.target);
-    set_env_if_not_passed_through(&ro, "LOGNAME", &ro.target);
+    set_env_if_not_passed_through(ro, "HOME", lookup_name.home_dir().to_str().unwrap());
+    set_env_if_not_passed_through(ro, "MAIL", &format!("/var/mail/{}", ro.target));
+    set_env_if_not_passed_through(ro, "SHELL", lookup_name.shell().to_str().unwrap());
+    set_env_if_not_passed_through(ro, "USER", &ro.target);
+    set_env_if_not_passed_through(ro, "LOGNAME", &ro.target);
 
     if entry.env_assign.is_some() {
         for (k, v) in entry.env_assign.as_ref().unwrap() {
@@ -1768,7 +1838,7 @@ pub fn tty_name() -> Option<String> {
 
 /// add a level of escape to strings when they go to the old as " holds entities
 pub fn escape_log(message: &str) -> String {
-    message.replace("\"", "\\\"")
+    message.replace('\"', "\\\"")
 }
 
 /// write to syslog a standard log
@@ -1815,7 +1885,7 @@ pub fn log_action(service: &str, result: &str, ro: &RunOptions, command: &str) -
                     escape_log( &ro.target ),
                     ro.acl_type,
                     if ro.reason.as_ref().is_some() {
-                        escape_log( &ro.reason.as_ref().unwrap() )
+                        escape_log( ro.reason.as_ref().unwrap() )
                     } else {
                         String::from("")
                     },
@@ -1842,7 +1912,7 @@ pub fn token_path(user: &str) -> Option<String> {
         "{}/{}:{}:{}",
         token_dir(),
         user,
-        tty_name.unwrap().replace("/", "_"),
+        tty_name.unwrap().replace('/', "_"),
         ppid
     ))
 }
@@ -1975,7 +2045,7 @@ pub fn remove_token(user: &str) {
         return;
     }
 
-    let token_location = token_path(&user);
+    let token_location = token_path(user);
     if token_location.is_none() {
         return;
     }
@@ -2006,7 +2076,7 @@ pub fn group_hash(groups: Vec<Group>) -> HashMap<String, u32> {
 pub fn replace_new_args(new_args: Vec<String>) -> String {
     let mut args = vec![];
     for arg in &new_args {
-        args.push(arg.replace("\\", "\\\\").replace(" ", "\\ "));
+        args.push(arg.replace('\\', "\\\\").replace(' ', "\\ "));
     }
 
     args.join(" ")
@@ -2028,7 +2098,7 @@ pub fn prng_alpha_num_string(n: usize) -> String {
 
 pub fn runopt_target_gid(ro: &RunOptions, lookup_name: &users::User) -> nix::unistd::Gid {
     if ro.target_group.is_some() {
-        match nix::unistd::Group::from_name(&ro.target_group.as_ref().unwrap()) {
+        match nix::unistd::Group::from_name(ro.target_group.as_ref().unwrap()) {
             Ok(x) => match x {
                 Some(g) => g.gid,
                 None => {

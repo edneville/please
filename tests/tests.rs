@@ -39,7 +39,7 @@ regex=^/bin/bash .*$
         ro.acl_type = Acltype::Run;
         ro.command = "/bin/bash".to_string();
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
-        assert_eq!(can(&vec_eo, &ro).permit, true);
+        assert_eq!(can(&vec_eo, &ro).permit(), true);
     }
 
     #[test]
@@ -67,7 +67,7 @@ regex = /bin/bash
         ro.acl_type = Acltype::Run;
         ro.command = "/bin/bash".to_string();
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
-        assert_eq!(can(&vec_eo, &ro).permit, true);
+        assert_eq!(can(&vec_eo, &ro).permit(), true);
     }
 
     #[test]
@@ -106,21 +106,21 @@ regex=^/bin/bash"
         let mut bytes = 0;
         let mut ini_list: HashMap<String, bool> = HashMap::new();
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
-        assert_eq!(can(&vec_eo, &ro).permit, false);
+        assert_eq!(can(&vec_eo, &ro).permit(), false);
 
         ro.name = "other".to_string();
         ro.target = "thingy".to_string();
         let mut vec_eo: Vec<EnvOptions> = vec![];
         let mut ini_list: HashMap<String, bool> = HashMap::new();
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
-        assert_eq!(can(&vec_eo, &ro).permit, true);
+        assert_eq!(can(&vec_eo, &ro).permit(), true);
 
         ro.name = "other".to_string();
         ro.target = "oracle".to_string();
         let mut vec_eo: Vec<EnvOptions> = vec![];
         let mut ini_list: HashMap<String, bool> = HashMap::new();
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
-        assert_eq!(can(&vec_eo, &ro).permit, false);
+        assert_eq!(can(&vec_eo, &ro).permit(), false);
     }
 
     #[test]
@@ -158,16 +158,16 @@ target=^ "
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
 
         ro.date = NaiveDate::from_ymd(2019, 12, 31).and_hms(0, 0, 0);
-        assert_eq!(can(&vec_eo, &ro).permit, false);
+        assert_eq!(can(&vec_eo, &ro).permit(), false);
 
         ro.date = NaiveDate::from_ymd(2020, 12, 25).and_hms(0, 0, 0);
-        assert_eq!(can(&vec_eo, &ro).permit, true);
+        assert_eq!(can(&vec_eo, &ro).permit(), true);
 
         ro.date = NaiveDate::from_ymd(2020, 01, 25).and_hms(0, 0, 0);
-        assert_eq!(can(&vec_eo, &ro).permit, true);
+        assert_eq!(can(&vec_eo, &ro).permit(), true);
 
         ro.date = NaiveDate::from_ymd(2020, 03, 25).and_hms(0, 0, 0);
-        assert_eq!(can(&vec_eo, &ro).permit, true);
+        assert_eq!(can(&vec_eo, &ro).permit(), true);
     }
 
     #[test]
@@ -197,9 +197,9 @@ require_pass = false
 
         ro.target = "ed".to_string();
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
-        assert_eq!(can(&vec_eo, &ro).permit, true);
+        assert_eq!(can(&vec_eo, &ro).permit(), true);
         ro.target = "root".to_string();
-        assert_eq!(can(&vec_eo, &ro).permit, false);
+        assert_eq!(can(&vec_eo, &ro).permit(), false);
     }
 
     #[test]
@@ -228,19 +228,19 @@ regex=^.*
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
 
         ro.date = NaiveDate::from_ymd(2020, 8, 8).and_hms(0, 0, 0);
-        assert_eq!(can(&vec_eo, &ro).permit, true);
+        assert_eq!(can(&vec_eo, &ro).permit(), true);
 
         ro.date = NaiveDate::from_ymd(2020, 8, 10).and_hms(0, 0, 0);
-        assert_eq!(can(&vec_eo, &ro).permit, true);
+        assert_eq!(can(&vec_eo, &ro).permit(), true);
 
         ro.date = NaiveDate::from_ymd(2020, 8, 10).and_hms(23, 59, 59);
-        assert_eq!(can(&vec_eo, &ro).permit, true);
+        assert_eq!(can(&vec_eo, &ro).permit(), true);
 
         ro.date = NaiveDate::from_ymd(2020, 8, 11).and_hms(0, 0, 0);
-        assert_eq!(can(&vec_eo, &ro).permit, false);
+        assert_eq!(can(&vec_eo, &ro).permit(), false);
 
         ro.date = NaiveDate::from_ymd(2020, 8, 7).and_hms(0, 0, 0);
-        assert_eq!(can(&vec_eo, &ro).permit, false);
+        assert_eq!(can(&vec_eo, &ro).permit(), false);
     }
 
     #[test]
@@ -272,24 +272,24 @@ regex=^/bin/bash .*$
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
 
         ro.command = "/bin/bash /usr/local/oracle/backup_script".to_string();
-        assert_eq!(can(&vec_eo, &ro).permit, true);
+        assert_eq!(can(&vec_eo, &ro).permit(), true);
 
         ro.command = "/bin/sh /usr/local/oracle/backup_script".to_string();
-        assert_eq!(can(&vec_eo, &ro).permit, false);
+        assert_eq!(can(&vec_eo, &ro).permit(), false);
 
         ro.hostname = "web1".to_string();
-        assert_eq!(can(&vec_eo, &ro).permit, false);
+        assert_eq!(can(&vec_eo, &ro).permit(), false);
 
         ro.hostname = "".to_string();
-        assert_eq!(can(&vec_eo, &ro).permit, false);
+        assert_eq!(can(&vec_eo, &ro).permit(), false);
 
         ro.hostname = "localhost".to_string();
         ro.target = "grid".to_string();
         ro.command = "/bin/bash /usr/local/oracle/backup_script".to_string();
-        assert_eq!(can(&vec_eo, &ro).permit, false);
+        assert_eq!(can(&vec_eo, &ro).permit(), false);
 
         ro.target = "root".to_string();
-        assert_eq!(can(&vec_eo, &ro).permit, false);
+        assert_eq!(can(&vec_eo, &ro).permit(), false);
     }
 
     #[test]
@@ -312,19 +312,19 @@ regex=^/bin/bash.*$
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
 
         ro.command = "/bin/bash /usr/local/oracle/backup_script".to_string();
-        assert_eq!(can(&vec_eo, &ro).permit, true);
+        assert_eq!(can(&vec_eo, &ro).permit(), true);
 
         ro.command = "/bin/sh /usr/local/oracle/backup_script".to_string();
-        assert_eq!(can(&vec_eo, &ro).permit, false);
+        assert_eq!(can(&vec_eo, &ro).permit(), false);
 
         ro.hostname = "web1".to_string();
-        assert_eq!(can(&vec_eo, &ro).permit, false);
+        assert_eq!(can(&vec_eo, &ro).permit(), false);
 
         ro.hostname = "".to_string();
-        assert_eq!(can(&vec_eo, &ro).permit, false);
+        assert_eq!(can(&vec_eo, &ro).permit(), false);
 
         ro.target = "grid".to_string();
-        assert_eq!(can(&vec_eo, &ro).permit, false);
+        assert_eq!(can(&vec_eo, &ro).permit(), false);
     }
 
     #[test]
@@ -353,23 +353,23 @@ regex=^/bin/sh.*$
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
 
         ro.command = "/bin/bash /usr/local/oracle/backup_script".to_string();
-        assert_eq!(can(&vec_eo, &ro).permit, false);
+        assert_eq!(can(&vec_eo, &ro).permit(), false);
 
         ro.hostname = "web1".to_string();
-        assert_eq!(can(&vec_eo, &ro).permit, true);
+        assert_eq!(can(&vec_eo, &ro).permit(), true);
 
         ro.hostname = "web2".to_string();
-        assert_eq!(can(&vec_eo, &ro).permit, false);
+        assert_eq!(can(&vec_eo, &ro).permit(), false);
 
         ro.hostname = "localhost".to_string();
         ro.command = "/bin/sh /usr/local/oracle/backup_script".to_string();
-        assert_eq!(can(&vec_eo, &ro).permit, true);
+        assert_eq!(can(&vec_eo, &ro).permit(), true);
 
         ro.hostname = "web1".to_string();
-        assert_eq!(can(&vec_eo, &ro).permit, true);
+        assert_eq!(can(&vec_eo, &ro).permit(), true);
 
         ro.hostname = "web2".to_string();
-        assert_eq!(can(&vec_eo, &ro).permit, true);
+        assert_eq!(can(&vec_eo, &ro).permit(), true);
     }
 
     #[test]
@@ -390,7 +390,7 @@ regex=/bin/sh\\b.*
         ro.target = "oracle".to_string();
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
 
-        assert_eq!(can(&vec_eo, &ro).permit, false);
+        assert_eq!(can(&vec_eo, &ro).permit(), false);
     }
 
     #[test]
@@ -413,7 +413,7 @@ regex=.*
         ro.command = "/bin/bash".to_string();
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
 
-        assert_eq!(can(&vec_eo, &ro).permit, true);
+        assert_eq!(can(&vec_eo, &ro).permit(), true);
     }
 
     #[test]
@@ -458,7 +458,7 @@ regex = ^"
         ro.command = "/etc/apache/httpd2.conf".to_string();
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
 
-        assert_eq!(can(&vec_eo, &ro).permit, true);
+        assert_eq!(can(&vec_eo, &ro).permit(), true);
     }
 
     #[test]
@@ -480,10 +480,10 @@ regex =^/bin/cat /etc/%{USER}"
         ro.command = "/bin/cat /etc/ed".to_string();
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
 
-        assert_eq!(can(&vec_eo, &ro).permit, true);
+        assert_eq!(can(&vec_eo, &ro).permit(), true);
 
         ro.name = "ned".to_string();
-        assert_eq!(can(&vec_eo, &ro).permit, false);
+        assert_eq!(can(&vec_eo, &ro).permit(), false);
     }
 
     #[test]
@@ -556,15 +556,15 @@ regex = ^.*$
         ro.command = "/bin/cat /etc/ed".to_string();
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
 
-        assert_eq!(can(&vec_eo, &ro).permit, false);
+        assert_eq!(can(&vec_eo, &ro).permit(), false);
 
         ro.groups.insert(String::from("users"), 1);
-        assert_eq!(can(&vec_eo, &ro).permit, true);
+        assert_eq!(can(&vec_eo, &ro).permit(), true);
 
         ro.groups = HashMap::new();
 
         ro.groups.insert(String::from("wwwadm"), 1);
-        assert_eq!(can(&vec_eo, &ro).permit, false);
+        assert_eq!(can(&vec_eo, &ro).permit(), false);
     }
 
     #[test]
@@ -617,33 +617,33 @@ target = ^(eng|dba|net)ops$
         ro.acl_type = Acltype::List;
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
 
-        assert_eq!(can(&vec_eo, &ro).permit, true);
+        assert_eq!(can(&vec_eo, &ro).permit(), true);
 
         ro.name = "meh".to_string();
         ro.target = "ed".to_string();
-        assert_eq!(can(&vec_eo, &ro).permit, true);
+        assert_eq!(can(&vec_eo, &ro).permit(), true);
 
         ro.target = "bob".to_string();
-        assert_eq!(can(&vec_eo, &ro).permit, false);
+        assert_eq!(can(&vec_eo, &ro).permit(), false);
 
         ro.target = "root".to_string();
-        assert_eq!(can(&vec_eo, &ro).permit, false);
+        assert_eq!(can(&vec_eo, &ro).permit(), false);
 
         ro.name = "bob".to_string();
         ro.target = "ed".to_string();
-        assert_eq!(can(&vec_eo, &ro).permit, false);
+        assert_eq!(can(&vec_eo, &ro).permit(), false);
 
         ro.name = "ben".to_string();
         ro.target = "dbaops".to_string();
-        assert_eq!(can(&vec_eo, &ro).permit, true);
+        assert_eq!(can(&vec_eo, &ro).permit(), true);
         ro.target = "engops".to_string();
-        assert_eq!(can(&vec_eo, &ro).permit, true);
+        assert_eq!(can(&vec_eo, &ro).permit(), true);
 
         ro.target = "netops".to_string();
-        assert_eq!(can(&vec_eo, &ro).permit, true);
+        assert_eq!(can(&vec_eo, &ro).permit(), true);
 
         ro.target = "wwwops".to_string();
-        assert_eq!(can(&vec_eo, &ro).permit, false);
+        assert_eq!(can(&vec_eo, &ro).permit(), false);
     }
 
     #[test]
@@ -671,20 +671,20 @@ regex = ^/var/www/html/%{USER}.html
         ro.acl_type = Acltype::Edit;
 
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
-        assert_eq!(can(&vec_eo, &ro).permit, false);
+        assert_eq!(can(&vec_eo, &ro).permit(), false);
 
         ro.groups.insert(String::from("root"), 1);
-        assert_eq!(can(&vec_eo, &ro).permit, false);
+        assert_eq!(can(&vec_eo, &ro).permit(), false);
 
         ro.command = "/var/www/html/ed.html".to_string();
-        assert_eq!(can(&vec_eo, &ro).permit, true);
+        assert_eq!(can(&vec_eo, &ro).permit(), true);
 
         ro.command = "/var/www/html/%{USER}.html".to_string();
-        assert_eq!(can(&vec_eo, &ro).permit, false);
+        assert_eq!(can(&vec_eo, &ro).permit(), false);
 
         ro.groups = HashMap::new();
         ro.groups.insert(String::from("wwwadm"), 1);
-        assert_eq!(can(&vec_eo, &ro).permit, false);
+        assert_eq!(can(&vec_eo, &ro).permit(), false);
     }
 
     #[test]
@@ -712,7 +712,7 @@ regex = ^/var/www/html/%{USER}.html$
         ro.groups.insert(String::from("root"), 1);
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
 
-        assert_eq!(can(&vec_eo, &ro).permit, true);
+        assert_eq!(can(&vec_eo, &ro).permit(), true);
     }
 
     #[test]
@@ -738,7 +738,7 @@ regex = ^/var/www/html/%USER.html$"
 
         ro.groups.insert(String::from("root"), 1);
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
-        assert_eq!(can(&vec_eo, &ro).permit, false);
+        assert_eq!(can(&vec_eo, &ro).permit(), false);
     }
 
     #[test]
@@ -763,7 +763,7 @@ regex = ^/var/www/html/%{USER}.html$"
         ro.command = "/var/www/html/ed.html".to_string();
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
         ro.groups.insert(String::from("root"), 1);
-        assert_eq!(can(&vec_eo, &ro).permit, true);
+        assert_eq!(can(&vec_eo, &ro).permit(), true);
     }
 
     #[test]
@@ -799,17 +799,17 @@ regex = /bin/bash"
             "/bin/bash"
         );
 
-        assert_eq!(can(&vec_eo, &ro).permit, false);
+        assert_eq!(can(&vec_eo, &ro).permit(), false);
 
         ro.groups.insert(String::from("root"), 1);
         ro.command = "/bin/sh".to_string();
-        assert_eq!(can(&vec_eo, &ro).permit, false);
+        assert_eq!(can(&vec_eo, &ro).permit(), false);
 
         ro.command = "/bin/bash".to_string();
-        assert_eq!(can(&vec_eo, &ro).permit, true);
+        assert_eq!(can(&vec_eo, &ro).permit(), true);
 
         ro.target = "woot".to_string();
-        assert_eq!(can(&vec_eo, &ro).permit, true);
+        assert_eq!(can(&vec_eo, &ro).permit(), true);
     }
 
     #[test]
@@ -824,7 +824,7 @@ regex = /bin/bash"
         ro.acl_type = Acltype::Edit;
         ro.command = "/etc/please.ini".to_string();
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
-        assert_eq!(can(&vec_eo, &ro).permit, false);
+        assert_eq!(can(&vec_eo, &ro).permit(), false);
     }
 
     #[test]
@@ -849,10 +849,10 @@ dir=.*
         ro.command = "/bin/bash".to_string();
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
 
-        assert_eq!(can(&vec_eo, &ro).permit, false);
+        assert_eq!(can(&vec_eo, &ro).permit(), false);
 
         ro.directory = Some("/".to_string());
-        assert_eq!(can(&vec_eo, &ro).permit, true);
+        assert_eq!(can(&vec_eo, &ro).permit(), true);
     }
 
     #[test]
@@ -878,13 +878,17 @@ dir=/var/www
         ro.command = "/bin/bash".to_string();
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
 
-        assert_eq!(can(&vec_eo, &ro).permit, false, "no directory given",);
+        assert_eq!(can(&vec_eo, &ro).permit(), false, "no directory given",);
 
         ro.directory = Some("/".to_string());
-        assert_eq!(can(&vec_eo, &ro).permit, false, "change outside permitted",);
+        assert_eq!(
+            can(&vec_eo, &ro).permit(),
+            false,
+            "change outside permitted",
+        );
 
         ro.directory = Some("/var/www".to_string());
-        assert_eq!(can(&vec_eo, &ro).permit, true, "permitted");
+        assert_eq!(can(&vec_eo, &ro).permit(), true, "permitted");
     }
 
     #[test]
@@ -910,7 +914,7 @@ dir=/tmp
         ro.directory = Some("/tmp".to_string());
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
 
-        assert_eq!(can(&vec_eo, &ro).permit, true, "dir_tmp",);
+        assert_eq!(can(&vec_eo, &ro).permit(), true, "dir_tmp",);
     }
 
     #[test]
@@ -936,10 +940,10 @@ regex=.*
         ro.directory = Some("/".to_string());
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
 
-        assert_eq!(can(&vec_eo, &ro).permit, false, "directory given",);
+        assert_eq!(can(&vec_eo, &ro).permit(), false, "directory given",);
 
         ro.directory = Some("".to_string());
-        assert_eq!(can(&vec_eo, &ro).permit, false, "directory given",);
+        assert_eq!(can(&vec_eo, &ro).permit(), false, "directory given",);
     }
 
     #[test]
@@ -965,10 +969,10 @@ datematch=Fri.*UTC.*
         ro.command = "/bin/bash".to_string();
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
 
-        assert_eq!(can(&vec_eo, &ro).permit, true);
+        assert_eq!(can(&vec_eo, &ro).permit(), true);
 
         ro.date = NaiveDate::from_ymd(2020, 10, 01).and_hms(22, 0, 0);
-        assert_eq!(can(&vec_eo, &ro).permit, false);
+        assert_eq!(can(&vec_eo, &ro).permit(), false);
 
         let config = "
 [regex_anchor]
@@ -985,11 +989,11 @@ datematch=Fri.*\\s22:00:00\\s+UTC\\s2020
         let mut ini_list: HashMap<String, bool> = HashMap::new();
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
         ro.date = NaiveDate::from_ymd(2020, 10, 02).and_hms(21, 0, 0);
-        assert_eq!(can(&vec_eo, &ro).permit, false);
+        assert_eq!(can(&vec_eo, &ro).permit(), false);
         ro.date = NaiveDate::from_ymd(2020, 10, 02).and_hms(23, 0, 0);
-        assert_eq!(can(&vec_eo, &ro).permit, false);
+        assert_eq!(can(&vec_eo, &ro).permit(), false);
         ro.date = NaiveDate::from_ymd(2020, 10, 02).and_hms(22, 0, 0);
-        assert_eq!(can(&vec_eo, &ro).permit, true);
+        assert_eq!(can(&vec_eo, &ro).permit(), true);
 
         let config = "
 [regex_anchor]
@@ -1006,11 +1010,11 @@ datematch=Thu\\s+1\\s+Oct\\s+22:00:00\\s+UTC\\s+2020
         let mut ini_list: HashMap<String, bool> = HashMap::new();
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
         ro.date = NaiveDate::from_ymd(2020, 10, 01).and_hms(21, 0, 0);
-        assert_eq!(can(&vec_eo, &ro).permit, false);
+        assert_eq!(can(&vec_eo, &ro).permit(), false);
         ro.date = NaiveDate::from_ymd(2020, 10, 01).and_hms(23, 0, 0);
-        assert_eq!(can(&vec_eo, &ro).permit, false);
+        assert_eq!(can(&vec_eo, &ro).permit(), false);
         ro.date = NaiveDate::from_ymd(2020, 10, 01).and_hms(22, 0, 0);
-        assert_eq!(can(&vec_eo, &ro).permit, true);
+        assert_eq!(can(&vec_eo, &ro).permit(), true);
     }
 
     #[test]
@@ -1121,7 +1125,7 @@ permit=true
 
         let entry = can(&vec_eo, &ro);
 
-        assert_eq!(entry.permit, false);
+        assert_eq!(entry.permit(), false);
     }
 
     #[test]
@@ -1147,7 +1151,7 @@ reason=true
 
         let entry = can(&vec_eo, &ro);
 
-        assert_eq!(entry.reason, ReasonType::Need(true));
+        assert_eq!(entry.reason, Some(ReasonType::Need(true)));
     }
 
     #[test]
@@ -1209,28 +1213,28 @@ regex=^/usr/bin/wc (/var/log/[a-zA-Z0-9-]+(\\.\\d+)?(\\s)?)+$
         ro.command = "/usr/bin/wc /var/log/messages /var/log/syslog /var/log/maillog".to_string();
 
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
-        assert_eq!(can(&vec_eo, &ro).permit, true);
+        assert_eq!(can(&vec_eo, &ro).permit(), true);
 
         ro.command = "/usr/bin/wc /var/log/messages /var/log/messages.1".to_string();
-        assert_eq!(can(&vec_eo, &ro).permit, true);
+        assert_eq!(can(&vec_eo, &ro).permit(), true);
 
         ro.command =
             "/usr/bin/wc /var/log/messages /var/log/syslog /var/log/maillog /var/log/../../shadow"
                 .to_string();
-        assert_eq!(can(&vec_eo, &ro).permit, false);
+        assert_eq!(can(&vec_eo, &ro).permit(), false);
 
         ro.command = "/usr/bin/wc".to_string();
-        assert_eq!(can(&vec_eo, &ro).permit, false);
+        assert_eq!(can(&vec_eo, &ro).permit(), false);
 
         ro.command = "/usr/bin/wc /etc/shadow".to_string();
-        assert_eq!(can(&vec_eo, &ro).permit, false);
+        assert_eq!(can(&vec_eo, &ro).permit(), false);
 
         ro.command = "/usr/bin/wc".to_string();
-        assert_eq!(can(&vec_eo, &ro).permit, false);
+        assert_eq!(can(&vec_eo, &ro).permit(), false);
 
         ro.command = "/usr/bin/wc /var/log/messages /var/log/messages.1 /var/log/../../etc/shadow"
             .to_string();
-        assert_eq!(can(&vec_eo, &ro).permit, false);
+        assert_eq!(can(&vec_eo, &ro).permit(), false);
     }
 
     #[test]
@@ -1255,7 +1259,7 @@ exitcmd = /usr/bin/please -c %{NEW}
         ro.acl_type = Acltype::Edit;
         ro.command = "/etc/please.ini".to_string();
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
-        assert_eq!(can(&vec_eo, &ro).permit, true);
+        assert_eq!(can(&vec_eo, &ro).permit(), true);
     }
 
     #[test]
@@ -1429,7 +1433,7 @@ reason = false
         ro.allow_env_list = Some(vec!["PATH".to_string()]);
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
 
-        assert_eq!(can(&vec_eo, &ro).permit, false);
+        assert_eq!(can(&vec_eo, &ro).permit(), false);
     }
 
     #[test]
@@ -1481,7 +1485,7 @@ permit_env = (HOME|PATH)
         ro.allow_env_list = Some(vec!["PATH".to_string(), "HOME".to_string()]);
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
 
-        assert_eq!(can(&vec_eo, &ro).permit, true);
+        assert_eq!(can(&vec_eo, &ro).permit(), true);
     }
 
     #[test]
@@ -1508,7 +1512,7 @@ permit_env = (HOME|PATH)
         ]);
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
 
-        assert_eq!(can(&vec_eo, &ro).permit, false);
+        assert_eq!(can(&vec_eo, &ro).permit(), false);
     }
 
     #[test]
@@ -1530,7 +1534,7 @@ permit_env = (HOME|PATH)
         ro.allow_env_list = None;
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
 
-        assert_eq!(can(&vec_eo, &ro).permit, true);
+        assert_eq!(can(&vec_eo, &ro).permit(), true);
     }
 
     #[test]
@@ -1552,7 +1556,7 @@ regex = /bin/echo [%]\\{USER\\}
         ro.command = "/bin/echo %{USER}".to_string();
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
 
-        assert_eq!(can(&vec_eo, &ro).permit, true);
+        assert_eq!(can(&vec_eo, &ro).permit(), true);
     }
 
     #[test]
@@ -1574,7 +1578,7 @@ regex = /bin/echo \\x25\\{USER\\}
         ro.command = "/bin/echo %{USER}".to_string();
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
 
-        assert_eq!(can(&vec_eo, &ro).permit, true);
+        assert_eq!(can(&vec_eo, &ro).permit(), true);
     }
 
     #[test]
@@ -1596,7 +1600,7 @@ regex = /bin/echo hello\\x5cworld
         ro.command = "/bin/echo hello\\world".to_string();
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
 
-        assert_eq!(can(&vec_eo, &ro).permit, true);
+        assert_eq!(can(&vec_eo, &ro).permit(), true);
     }
 
     #[test]
@@ -1618,7 +1622,7 @@ regex = /bin/echo hello[\\\\]world
         ro.command = "/bin/echo hello\\world".to_string();
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
 
-        assert_eq!(can(&vec_eo, &ro).permit, true);
+        assert_eq!(can(&vec_eo, &ro).permit(), true);
     }
 
     #[test]
@@ -1640,7 +1644,7 @@ exact_rule = /bin/echo hello\ world
         ro.command = replace_new_args(vec!["/bin/echo".to_string(), "hello world".to_string()]);
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
 
-        assert_eq!(can(&vec_eo, &ro).permit, true);
+        assert_eq!(can(&vec_eo, &ro).permit(), true);
     }
 
     #[test]
@@ -1662,7 +1666,7 @@ rule = /bin/echo hello\\ world
         ro.command = replace_new_args(vec!["/bin/echo".to_string(), "hello world".to_string()]);
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
 
-        assert_eq!(can(&vec_eo, &ro).permit, true);
+        assert_eq!(can(&vec_eo, &ro).permit(), true);
     }
 
     #[test]
@@ -1684,7 +1688,7 @@ rule = /bin/echo hello\\ \\\\\\ world
         ro.command = replace_new_args(vec!["/bin/echo".to_string(), "hello \\ world".to_string()]);
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
 
-        assert_eq!(can(&vec_eo, &ro).permit, true);
+        assert_eq!(can(&vec_eo, &ro).permit(), true);
     }
 
     #[test]

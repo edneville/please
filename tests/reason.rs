@@ -28,7 +28,7 @@ reason = true
         ro.command = "/bin/bash".to_string();
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
         let can_do = can(&vec_eo, &ro);
-        assert_eq!((can_do).permit, true);
+        assert_eq!((can_do).permit(), true);
         assert_eq!(reason_ok(&can_do, &ro), false);
     }
 
@@ -55,7 +55,7 @@ reason = true
         ro.command = "/bin/bash".to_string();
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
         let can_do = can(&vec_eo, &ro);
-        assert_eq!((can_do).permit, true);
+        assert_eq!((can_do).permit(), true);
         assert_eq!(reason_ok(&can_do, &ro), true);
     }
 
@@ -82,7 +82,7 @@ reason = bigdb
         ro.command = "/bin/bash".to_string();
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
         let can_do = can(&vec_eo, &ro);
-        assert_eq!((can_do).permit, true);
+        assert_eq!((can_do).permit(), true);
         assert_eq!(reason_ok(&can_do, &ro), false);
     }
 
@@ -109,7 +109,7 @@ reason = bigdb
 
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
         let can_do = can(&vec_eo, &ro);
-        assert_eq!((can_do).permit, true);
+        assert_eq!((can_do).permit(), true);
         assert_eq!(reason_ok(&can_do, &ro), true);
     }
 
@@ -136,7 +136,7 @@ reason = .*%{HOSTNAME}.*
 
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
         let can_do = can(&vec_eo, &ro);
-        assert_eq!((can_do).permit, true);
+        assert_eq!((can_do).permit(), true);
         assert_eq!(reason_ok(&can_do, &ro), true);
 
         ro.reason = Some("power off".to_string());

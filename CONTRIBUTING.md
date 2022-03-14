@@ -28,5 +28,5 @@ Ensure that if you add something new, or change behaviour, it must be testable. 
 
 # Credits
 
-If you wish, please add yourself to the credits in `src/util.rs`.
+If you wish, please add yourself to the credits in `src/lib.rs`.
 
