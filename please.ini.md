@@ -4,7 +4,7 @@ section: 5
 header: User Manual
 footer: please 0.5.1
 author: Ed Neville (ed-please@s5h.net)
-date: 01 February 2022
+date: 26 March 2022
 ---
 
 # NAME
@@ -31,6 +31,8 @@ The properties permitted are described below and should appear at most once per 
 
 **includedir=[directory]**
 : read .ini files in directory, and continue to next section, if the directory does not exist config parse will fail
+
+Sections with a name starting 'default' will retain match actions 
 
 # MATCHES
 

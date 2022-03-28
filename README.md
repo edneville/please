@@ -1,14 +1,12 @@
-# Please, a sudo alternative with regex support
+# Please, a sudo alternative
 
-Great! This is what I need.
+Delegate accurate least privilege access with ease. Express easily with a regex and expose only what is needed and nothing more. Or validate file edits with `pleaseedit`.
 
-The aim is to allow admins to delegate accurate least privilege access with ease. There are times when what is intended to be executed can be expressed easily with a regex to expose only what is needed and nothing more.
+Admin your box without giving users full root shells, most admins have experience of regex in one form or another, so lets configure access that way.
 
-The idea is to help you admin your box without giving users full root shells, just because that is easier. Most admins have experience of regex in one form or another, so lets configure access that way.
+I saw regex but don't like regex. No problem, you can still use please and pleaseedit without regex by using `exact_` counterparts, or treat each field/property as plain text, and escape control characters `?(){}[]+` etc. Most of the regex match statements have `exact` counterparts.
 
-I saw regex but don't like regex. No problem, you can still use please without regex using `exact_` counterparts, or treat each field/property as plain text, and escape control characters `?(){}[]+` etc. Most of the regex match statements have `exact` counterparts.
-
-Please is written with memory safe rust. Traditional C memory unsafety is avoided, logic problems may still exist. Logic problems would exist in both systems, but I choose the smaller problem set.
+Please is written with memory safe rust. Traditional C memory unsafety is avoided, logic problems may exist but this codebase is relatively small.
 
 # How do I install it
 
@@ -224,6 +222,10 @@ permit = true
 rule = /usr/local/housekeeping/tidy_(logs|images|mail)
 datematch = ^Mon.*
 ```
+
+# Default sections
+
+When a matching section name begins with `default` the actions will remain set until overwritten by another matching section.
 
 # pleaseedit
 
