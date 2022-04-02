@@ -355,4 +355,32 @@ dir = .*
         ro.directory = Some("/home".to_string());
         assert_eq!(can(&vec_eo, &ro).permit(), false);
     }
+
+    #[test]
+    fn test_exact_target_group() {
+        let config = "[ed]
+group = true
+exact_target=root
+exact_rule = /bin/sh
+exact_name = audio
+"
+        .to_string();
+
+        let mut bytes = 0;
+        let mut ini_list: HashMap<String, bool> = HashMap::new();
+        let mut vec_eo: Vec<EnvOptions> = vec![];
+        let mut ro = RunOptions::new();
+
+        ro.date = NaiveDate::from_ymd(2020, 1, 1).and_hms(0, 0, 0);
+        ro.name = "ed".to_string();
+        ro.target = "root".to_string();
+        ro.acl_type = Acltype::Run;
+        ro.command = "/bin/sh".to_string();
+        read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
+
+        assert_eq!(can(&vec_eo, &ro).permit(), false);
+
+        ro.groups.insert(String::from("audio"), 1);
+        assert_eq!(can(&vec_eo, &ro).permit(), true);
+    }
 }

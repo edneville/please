@@ -250,11 +250,27 @@ fn remove_tmp_edit(ro: &RunOptions, edit_file: &str) {
     }
 }
 
+fn edit_mode(entry: &EnvOptions, source_file: &Path) -> nix::sys::stat::Mode {
+    match &entry.edit_mode {
+        Some(mode) => match mode {
+            EditMode::Mode(x) => nix::sys::stat::Mode::from_bits(*x as u32).unwrap(),
+            EditMode::Keep(_x) => match nix::sys::stat::stat(source_file) {
+                Ok(m) => nix::sys::stat::Mode::from_bits_truncate(m.st_mode),
+                _ => nix::sys::stat::Mode::from_bits(0o600).unwrap(),
+            },
+        },
+        None => match nix::sys::stat::stat(source_file) {
+            Ok(m) => nix::sys::stat::Mode::from_bits_truncate(m.st_mode),
+            _ => nix::sys::stat::Mode::from_bits(0o600).unwrap(),
+        },
+    }
+}
+
 /// rename the edit in the source directory, return false if exitcmd failed
 fn rename_to_source(
     dir_parent_tmp: &str,
     source_file: &Path,
-    entry: &EnvOptions,
+    entry: &mut EnvOptions,
     lookup_name: &User,
     dir_parent_tmp_file: &std::fs::File,
     target_uid: nix::unistd::Uid,
@@ -275,19 +291,11 @@ fn rename_to_source(
     )
     .unwrap();
 
-    let edit_mode = if entry.edit_mode.is_some() {
-        match entry.edit_mode.as_ref().unwrap() {
-            EditMode::Mode(x) => nix::sys::stat::Mode::from_bits(*x as u32).unwrap(),
-            EditMode::Keep(_x) => match nix::sys::stat::stat(source_file) {
-                Ok(m) => nix::sys::stat::Mode::from_bits_truncate(m.st_mode),
-                _ => nix::sys::stat::Mode::from_bits(0o600).unwrap(),
-            },
-        }
-    } else {
-        nix::sys::stat::Mode::from_bits(0o600).unwrap()
-    };
-
-    fchmod(dir_parent_tmp_file.as_raw_fd(), edit_mode).unwrap();
+    fchmod(
+        dir_parent_tmp_file.as_raw_fd(),
+        edit_mode(entry, source_file),
+    )
+    .unwrap();
 
     if entry.exitcmd.is_some() {
         let mut cmd = build_exitcmd(entry, source_file.to_str().unwrap(), dir_parent_tmp);
@@ -411,7 +419,7 @@ fn main() {
         std::process::exit(1);
     }
 
-    let entry = can(&vec_eo, &ro);
+    let mut entry = can(&vec_eo, &ro);
 
     if entry.syslog.is_some() {
         ro.syslog = entry.syslog.unwrap();
@@ -542,7 +550,7 @@ fn main() {
     rename_to_source(
         &dir_parent_tmp,
         source_file,
-        &entry,
+        &mut entry,
         &lookup_name,
         &dir_parent_tmp_file,
         target_uid,

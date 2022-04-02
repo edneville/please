@@ -115,7 +115,7 @@ impl EnvOptions {
             dir: None,
             exact_dir: None,
             exitcmd: None,
-            edit_mode: Some(EditMode::Keep(true)),
+            edit_mode: None,
             reason: None,
             last: None,
             syslog: None,
@@ -1142,7 +1142,7 @@ pub fn group_matches(item: &EnvOptions, ro: &RunOptions, line: Option<i32>) -> b
         let name = item.exact_name.as_ref().unwrap();
         for (k, _) in ro.groups.iter() {
             if name == k {
-                // println!("{}: {} matches group {}", item.section,item.name.as_ref().unwrap(), k);
+                // println!("{}: {} matches group {}", &item.section, name, k);
                 return true;
             }
         }
@@ -1179,34 +1179,42 @@ pub fn group_matches(item: &EnvOptions, ro: &RunOptions, line: Option<i32>) -> b
 
 pub fn matching(item: &EnvOptions, ro: &RunOptions, line_error: Option<i32>) -> bool {
     if !permitted_dates_ok(item, ro, line_error) {
+        // println!("Didn't match permitted dates");
         return false;
     }
 
     if !item.group && !name_matches(item, ro, line_error) {
+        // println!("not item group, and name does not match");
         return false;
     }
 
     if item.group && !group_matches(item, ro, line_error) {
+        // println!("item group, and group does not match");
         return false;
     }
 
     if !hostname_ok(item, ro, line_error) {
+        // println!("hostname does not match");
         return false;
     }
 
     if !directory_check_ok(item, ro, line_error) {
+        // println!("directory does not match");
         return false;
     }
 
     if !environment_ok(item, ro, line_error) {
+        // println!("environment does not match");
         return false;
     }
 
     if !target_ok(item, ro, line_error) {
+        // println!("target user does not match");
         return false;
     }
 
     if !target_group_ok(item, ro, line_error) {
+        // println!("target group does not match");
         return false;
     }
 
@@ -1222,42 +1230,52 @@ pub fn merge_default(default: &EnvOptions, item: &EnvOptions) -> EnvOptions {
     let mut merged = item.clone();
 
     if default.syslog.is_some() && item.syslog.is_none() {
+        // println!("merging syslog");
         merged.syslog = default.syslog;
     }
 
     if default.reason.is_some() && item.reason.is_none() {
+        // println!("merging reason");
         merged.reason = default.reason.clone();
     }
 
     if default.require_pass.is_some() && item.require_pass.is_none() {
+        // println!("merging require_pass");
         merged.require_pass = default.require_pass;
     }
 
     if default.last.is_some() && item.last.is_none() {
+        // println!("merging last");
         merged.last = default.last;
     }
 
     if default.exitcmd.is_some() && item.exitcmd.is_none() {
+        // println!("merging exitcmd");
         merged.exitcmd = default.exitcmd.clone();
     }
 
     if default.edit_mode.is_some() && item.edit_mode.is_none() {
+        // println!("merging edit_mode");
         merged.edit_mode = default.edit_mode.clone();
     }
 
     if default.timeout.is_some() && item.timeout.is_none() {
+        // println!("merging timeout");
         merged.timeout = default.timeout;
     }
 
     if default.env_permit.is_some() && item.env_permit.is_none() {
+        // println!("merging env_permit");
         merged.env_permit = default.env_permit.clone();
     }
 
     if default.env_assign.is_some() && item.env_assign.is_none() {
+        // println!("merging env_assign");
         merged.env_assign = default.env_assign.clone();
     }
 
     if default.permit.is_some() && item.permit.is_none() {
+        // println!("merging permit");
         merged.permit = default.permit;
     }
 
@@ -1277,6 +1295,7 @@ pub fn can(vec_eo: &[EnvOptions], ro: &RunOptions) -> EnvOptions {
         }
 
         if !matching(item, ro, None) {
+            // println!("!matching");
             continue;
         }
 
