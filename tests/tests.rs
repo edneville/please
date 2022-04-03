@@ -1711,6 +1711,6 @@ rule = /etc/fstab
         ro.command = replace_new_args(vec!["/etc/fstab".to_string()]);
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
 
-        assert_eq!(can(&vec_eo, &ro).edit_mode, Some(EditMode::Keep(true)));
+        assert_eq!(can(&vec_eo, &ro).edit_mode, None);
     }
 }

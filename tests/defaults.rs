@@ -284,4 +284,105 @@ rule = .*
         assert_eq!(can.timeout.is_none(), true);
         assert_eq!(can.permit(), true);
     }
+
+    #[test]
+    fn test_edit_mode_keep() {
+        let config = "
+[default:edit_mode]
+name = .*
+rule = .*
+editmode = keep
+type = edit
+permit = false
+
+[ed]
+name = ed
+rule = .*
+type = edit
+"
+        .to_string();
+
+        let mut bytes = 0;
+        let mut ini_list: HashMap<String, bool> = HashMap::new();
+        let mut vec_eo: Vec<EnvOptions> = vec![];
+        let mut ro = RunOptions::new();
+        ro.date = NaiveDate::from_ymd(2020, 1, 1).and_hms(0, 0, 0);
+        ro.name = "ed".to_string();
+        ro.target = "root".to_string();
+        ro.acl_type = Acltype::Edit;
+
+        read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
+
+        ro.command = "/bin/bash".to_string();
+        let can = can(&vec_eo, &ro);
+        assert_eq!(can.edit_mode, Some(EditMode::Keep(true)));
+        assert_eq!(can.permit(), false);
+    }
+
+    #[test]
+    fn test_edit_mode_keep_none() {
+        let config = "
+[default:edit_mode]
+name = thing
+rule = .*
+editmode = keep
+type = edit
+permit = false
+
+[ed]
+name = ed
+rule = .*
+type = edit
+"
+        .to_string();
+
+        let mut bytes = 0;
+        let mut ini_list: HashMap<String, bool> = HashMap::new();
+        let mut vec_eo: Vec<EnvOptions> = vec![];
+        let mut ro = RunOptions::new();
+        ro.date = NaiveDate::from_ymd(2020, 1, 1).and_hms(0, 0, 0);
+        ro.name = "ed".to_string();
+        ro.target = "root".to_string();
+        ro.acl_type = Acltype::Edit;
+
+        read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
+
+        ro.command = "/bin/bash".to_string();
+        let can = can(&vec_eo, &ro);
+        assert_eq!(can.edit_mode, None);
+        assert_eq!(can.permit(), true);
+    }
+
+    #[test]
+    fn test_edit_mode_non_keep() {
+        let config = "
+[default:edit_mode]
+name = ed
+rule = .*
+type = edit
+editmode = 111
+
+[ed]
+name = ed
+rule = .*
+type = edit
+"
+        .to_string();
+
+        let mut bytes = 0;
+        let mut ini_list: HashMap<String, bool> = HashMap::new();
+        let mut vec_eo: Vec<EnvOptions> = vec![];
+        let mut ro = RunOptions::new();
+        ro.date = NaiveDate::from_ymd(2020, 1, 1).and_hms(0, 0, 0);
+        ro.name = "ed".to_string();
+        ro.target = "root".to_string();
+        ro.acl_type = Acltype::Edit;
+
+        read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
+
+        ro.command = "/bin/bash".to_string();
+        let can = can(&vec_eo, &ro);
+        assert_eq!(can.edit_mode, Some(EditMode::Mode(0o111)));
+        assert_eq!(can.permit(), true);
+    }
 }
