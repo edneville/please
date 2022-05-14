@@ -1,20 +1,11 @@
-use chrono::NaiveDate;
 use std::collections::HashMap;
+mod basic_ro;
 
 #[cfg(test)]
 mod test {
     use super::*;
+    use basic_ro::*;
     use pleaser::*;
-
-    fn ro(name: &str, target: &str) -> RunOptions {
-        let mut ro = RunOptions::new();
-        ro.date = NaiveDate::from_ymd(2020, 1, 1).and_hms(0, 0, 0);
-        ro.name = name.to_string();
-        ro.target = target.to_string();
-        ro.acl_type = Acltype::Run;
-
-        ro
-    }
 
     #[test]
     fn test_target_group_rule() {
@@ -29,7 +20,7 @@ target_group = potato
         let mut bytes = 0;
         let mut ini_list: HashMap<String, bool> = HashMap::new();
         let mut vec_eo: Vec<EnvOptions> = vec![];
-        let mut ro = ro("ed", "root");
+        let mut ro = basic_ro("ed", "root");
         ro.target_group = Some("potato".to_string());
 
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
@@ -57,7 +48,7 @@ exact_target_group = potato
         let mut bytes = 0;
         let mut ini_list: HashMap<String, bool> = HashMap::new();
         let mut vec_eo: Vec<EnvOptions> = vec![];
-        let mut ro = ro("ed", "root");
+        let mut ro = basic_ro("ed", "root");
         ro.target_group = Some("potato".to_string());
 
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
@@ -86,7 +77,7 @@ target_group = oracle
         let mut vec_eo: Vec<EnvOptions> = vec![];
         let mut bytes = 0;
         let mut ini_list: HashMap<String, bool> = HashMap::new();
-        let mut ro = ro("ed", "root");
+        let mut ro = basic_ro("ed", "root");
         ro.command = "/etc/please.ini".to_string();
         ro.target_group = Some("oracle".to_string());
         ro.acl_type = Acltype::Edit;
@@ -112,7 +103,7 @@ target_group = oracle
         let mut vec_eo: Vec<EnvOptions> = vec![];
         let mut bytes = 0;
         let mut ini_list: HashMap<String, bool> = HashMap::new();
-        let mut ro = ro("ed", "root");
+        let mut ro = basic_ro("ed", "root");
         ro.command = "/etc/please.ini".to_string();
         ro.target_group = Some("oracle".to_string());
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
@@ -138,7 +129,7 @@ target_group = oracle
         let mut vec_eo: Vec<EnvOptions> = vec![];
         let mut bytes = 0;
         let mut ini_list: HashMap<String, bool> = HashMap::new();
-        let mut ro = ro("ed", "root");
+        let mut ro = basic_ro("ed", "root");
         ro.command = "/etc/please.ini".to_string();
         ro.target_group = Some("oracle".to_string());
         ro.acl_type = Acltype::List;
@@ -163,7 +154,7 @@ type = edit
         let mut vec_eo: Vec<EnvOptions> = vec![];
         let mut bytes = 0;
         let mut ini_list: HashMap<String, bool> = HashMap::new();
-        let mut ro = ro("ed", "root");
+        let mut ro = basic_ro("ed", "root");
         ro.command = "/etc/please.ini".to_string();
         ro.target_group = Some("oracle".to_string());
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);

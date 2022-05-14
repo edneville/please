@@ -1,9 +1,10 @@
-use chrono::NaiveDate;
 use std::collections::HashMap;
+mod basic_ro;
 
 #[cfg(test)]
 mod test {
     use super::*;
+    use basic_ro::*;
     use pleaser::*;
 
     #[test]
@@ -19,11 +20,7 @@ reason = true
         let mut bytes = 0;
         let mut ini_list: HashMap<String, bool> = HashMap::new();
         let mut vec_eo: Vec<EnvOptions> = vec![];
-        let mut ro = RunOptions::new();
-        ro.date = NaiveDate::from_ymd(2020, 1, 1).and_hms(0, 0, 0);
-        ro.name = "ed".to_string();
-        ro.target = "root".to_string();
-        ro.acl_type = Acltype::Run;
+        let mut ro = basic_ro("ed", "root");
 
         ro.command = "/bin/bash".to_string();
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
@@ -45,11 +42,7 @@ reason = true
         let mut bytes = 0;
         let mut ini_list: HashMap<String, bool> = HashMap::new();
         let mut vec_eo: Vec<EnvOptions> = vec![];
-        let mut ro = RunOptions::new();
-        ro.date = NaiveDate::from_ymd(2020, 1, 1).and_hms(0, 0, 0);
-        ro.name = "ed".to_string();
-        ro.target = "root".to_string();
-        ro.acl_type = Acltype::Run;
+        let mut ro = basic_ro("ed", "root");
         ro.reason = Some("simple reason".to_string());
 
         ro.command = "/bin/bash".to_string();
@@ -72,11 +65,7 @@ reason = bigdb
         let mut bytes = 0;
         let mut ini_list: HashMap<String, bool> = HashMap::new();
         let mut vec_eo: Vec<EnvOptions> = vec![];
-        let mut ro = RunOptions::new();
-        ro.date = NaiveDate::from_ymd(2020, 1, 1).and_hms(0, 0, 0);
-        ro.name = "ed".to_string();
-        ro.target = "root".to_string();
-        ro.acl_type = Acltype::Run;
+        let mut ro = basic_ro("ed", "root");
         ro.reason = Some("simple reason".to_string());
 
         ro.command = "/bin/bash".to_string();
@@ -99,11 +88,7 @@ reason = bigdb
         let mut bytes = 0;
         let mut ini_list: HashMap<String, bool> = HashMap::new();
         let mut vec_eo: Vec<EnvOptions> = vec![];
-        let mut ro = RunOptions::new();
-        ro.date = NaiveDate::from_ymd(2020, 1, 1).and_hms(0, 0, 0);
-        ro.name = "ed".to_string();
-        ro.target = "root".to_string();
-        ro.acl_type = Acltype::Run;
+        let mut ro = basic_ro("ed", "root");
         ro.reason = Some("bigdb".to_string());
         ro.command = "/bin/bash".to_string();
 
@@ -126,11 +111,7 @@ reason = .*%{HOSTNAME}.*
         let mut bytes = 0;
         let mut ini_list: HashMap<String, bool> = HashMap::new();
         let mut vec_eo: Vec<EnvOptions> = vec![];
-        let mut ro = RunOptions::new();
-        ro.date = NaiveDate::from_ymd(2020, 1, 1).and_hms(0, 0, 0);
-        ro.name = "ed".to_string();
-        ro.target = "root".to_string();
-        ro.acl_type = Acltype::Run;
+        let mut ro = basic_ro("ed", "root");
         ro.reason = Some("power off localhost".to_string());
         ro.command = "/sbin/poweroff".to_string();
 

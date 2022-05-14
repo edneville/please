@@ -1,9 +1,10 @@
-use chrono::NaiveDate;
 use std::collections::HashMap;
+mod basic_ro;
 
 #[cfg(test)]
 mod test {
     use super::*;
+    use basic_ro::*;
     use pleaser::*;
 
     #[test]
@@ -22,11 +23,7 @@ rule = .*
         let mut bytes = 0;
         let mut ini_list: HashMap<String, bool> = HashMap::new();
         let mut vec_eo: Vec<EnvOptions> = vec![];
-        let mut ro = RunOptions::new();
-        ro.date = NaiveDate::from_ymd(2020, 1, 1).and_hms(0, 0, 0);
-        ro.name = "ed".to_string();
-        ro.target = "root".to_string();
-        ro.acl_type = Acltype::Run;
+        let mut ro = basic_ro("ed", "root");
 
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
 
@@ -51,11 +48,7 @@ rule = .*
         let mut bytes = 0;
         let mut ini_list: HashMap<String, bool> = HashMap::new();
         let mut vec_eo: Vec<EnvOptions> = vec![];
-        let mut ro = RunOptions::new();
-        ro.date = NaiveDate::from_ymd(2020, 1, 1).and_hms(0, 0, 0);
-        ro.name = "ed".to_string();
-        ro.target = "root".to_string();
-        ro.acl_type = Acltype::Run;
+        let mut ro = basic_ro("ed", "root");
 
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
 
@@ -80,11 +73,7 @@ rule = .*
         let mut bytes = 0;
         let mut ini_list: HashMap<String, bool> = HashMap::new();
         let mut vec_eo: Vec<EnvOptions> = vec![];
-        let mut ro = RunOptions::new();
-        ro.date = NaiveDate::from_ymd(2020, 1, 1).and_hms(0, 0, 0);
-        ro.name = "ed".to_string();
-        ro.target = "root".to_string();
-        ro.acl_type = Acltype::Run;
+        let mut ro = basic_ro("ed", "root");
 
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
 
@@ -120,11 +109,7 @@ rule = .*
         let mut bytes = 0;
         let mut ini_list: HashMap<String, bool> = HashMap::new();
         let mut vec_eo: Vec<EnvOptions> = vec![];
-        let mut ro = RunOptions::new();
-        ro.date = NaiveDate::from_ymd(2020, 1, 1).and_hms(0, 0, 0);
-        ro.name = "ed".to_string();
-        ro.target = "root".to_string();
-        ro.acl_type = Acltype::Run;
+        let mut ro = basic_ro("ed", "root");
 
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
 
@@ -165,11 +150,7 @@ rule = .*
         let mut bytes = 0;
         let mut ini_list: HashMap<String, bool> = HashMap::new();
         let mut vec_eo: Vec<EnvOptions> = vec![];
-        let mut ro = RunOptions::new();
-        ro.date = NaiveDate::from_ymd(2020, 1, 1).and_hms(0, 0, 0);
-        ro.name = "ed".to_string();
-        ro.target = "root".to_string();
-        ro.acl_type = Acltype::Run;
+        let mut ro = basic_ro("ed", "root");
 
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
 
@@ -198,11 +179,7 @@ rule = .*
         let mut bytes = 0;
         let mut ini_list: HashMap<String, bool> = HashMap::new();
         let mut vec_eo: Vec<EnvOptions> = vec![];
-        let mut ro = RunOptions::new();
-        ro.date = NaiveDate::from_ymd(2020, 1, 1).and_hms(0, 0, 0);
-        ro.name = "ed".to_string();
-        ro.target = "root".to_string();
-        ro.acl_type = Acltype::Run;
+        let mut ro = basic_ro("ed", "root");
 
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
 
@@ -229,11 +206,7 @@ rule = .*
         let mut bytes = 0;
         let mut ini_list: HashMap<String, bool> = HashMap::new();
         let mut vec_eo: Vec<EnvOptions> = vec![];
-        let mut ro = RunOptions::new();
-        ro.date = NaiveDate::from_ymd(2020, 1, 1).and_hms(0, 0, 0);
-        ro.name = "ed".to_string();
-        ro.target = "root".to_string();
-        ro.acl_type = Acltype::Run;
+        let mut ro = basic_ro("ed", "root");
 
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
 
@@ -270,11 +243,7 @@ rule = .*
         let mut bytes = 0;
         let mut ini_list: HashMap<String, bool> = HashMap::new();
         let mut vec_eo: Vec<EnvOptions> = vec![];
-        let mut ro = RunOptions::new();
-        ro.date = NaiveDate::from_ymd(2020, 1, 1).and_hms(0, 0, 0);
-        ro.name = "ed".to_string();
-        ro.target = "root".to_string();
-        ro.acl_type = Acltype::Run;
+        let mut ro = basic_ro("ed", "root");
 
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
 
@@ -305,10 +274,7 @@ type = edit
         let mut bytes = 0;
         let mut ini_list: HashMap<String, bool> = HashMap::new();
         let mut vec_eo: Vec<EnvOptions> = vec![];
-        let mut ro = RunOptions::new();
-        ro.date = NaiveDate::from_ymd(2020, 1, 1).and_hms(0, 0, 0);
-        ro.name = "ed".to_string();
-        ro.target = "root".to_string();
+        let mut ro = basic_ro("ed", "root");
         ro.acl_type = Acltype::Edit;
 
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
@@ -339,10 +305,7 @@ type = edit
         let mut bytes = 0;
         let mut ini_list: HashMap<String, bool> = HashMap::new();
         let mut vec_eo: Vec<EnvOptions> = vec![];
-        let mut ro = RunOptions::new();
-        ro.date = NaiveDate::from_ymd(2020, 1, 1).and_hms(0, 0, 0);
-        ro.name = "ed".to_string();
-        ro.target = "root".to_string();
+        let mut ro = basic_ro("ed", "root");
         ro.acl_type = Acltype::Edit;
 
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
@@ -361,6 +324,8 @@ name = ed
 rule = .*
 type = edit
 editmode = 111
+exitcmd = /bin/false
+reason = blah
 
 [ed]
 name = ed
@@ -372,10 +337,7 @@ type = edit
         let mut bytes = 0;
         let mut ini_list: HashMap<String, bool> = HashMap::new();
         let mut vec_eo: Vec<EnvOptions> = vec![];
-        let mut ro = RunOptions::new();
-        ro.date = NaiveDate::from_ymd(2020, 1, 1).and_hms(0, 0, 0);
-        ro.name = "ed".to_string();
-        ro.target = "root".to_string();
+        let mut ro = basic_ro("ed", "root");
         ro.acl_type = Acltype::Edit;
 
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
@@ -384,5 +346,45 @@ type = edit
         let can = can(&vec_eo, &ro);
         assert_eq!(can.edit_mode, Some(EditMode::Mode(0o111)));
         assert_eq!(can.permit(), true);
+        assert_eq!(can.exitcmd, Some("/bin/false".to_string()));
+        assert_eq!(can.reason, Some(ReasonType::Text("blah".to_string())));
+    }
+
+    #[test]
+    fn test_edit_default_other_user() {
+        let config = "
+[default:edit_mode]
+name = ed
+rule = .*
+type = edit
+editmode = 111
+
+[ed]
+name = ed
+rule = .*
+type = edit
+
+[noted]
+name = noted
+rule = .*
+type = edit
+"
+        .to_string();
+
+        let mut bytes = 0;
+        let mut ini_list: HashMap<String, bool> = HashMap::new();
+        let mut vec_eo: Vec<EnvOptions> = vec![];
+        let mut ro = basic_ro("ed", "root");
+        ro.name = "noted".to_string();
+        ro.acl_type = Acltype::Edit;
+
+        read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
+
+        ro.command = "/bin/bash".to_string();
+        let can = can(&vec_eo, &ro);
+        assert_eq!(can.edit_mode, None);
+        assert_eq!(can.permit(), true);
+        assert_eq!(can.exitcmd, None);
+        assert_eq!(can.reason, None);
     }
 }

@@ -270,7 +270,7 @@ fn edit_mode(entry: &EnvOptions, source_file: &Path) -> nix::sys::stat::Mode {
 fn rename_to_source(
     dir_parent_tmp: &str,
     source_file: &Path,
-    entry: &mut EnvOptions,
+    entry: &EnvOptions,
     lookup_name: &User,
     dir_parent_tmp_file: &std::fs::File,
     target_uid: nix::unistd::Uid,
@@ -419,7 +419,7 @@ fn main() {
         std::process::exit(1);
     }
 
-    let mut entry = can(&vec_eo, &ro);
+    let entry = can(&vec_eo, &ro);
 
     if entry.syslog.is_some() {
         ro.syslog = entry.syslog.unwrap();
@@ -550,7 +550,7 @@ fn main() {
     rename_to_source(
         &dir_parent_tmp,
         source_file,
-        &mut entry,
+        &entry,
         &lookup_name,
         &dir_parent_tmp_file,
         target_uid,
