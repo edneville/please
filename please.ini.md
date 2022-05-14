@@ -4,7 +4,7 @@ section: 5
 header: User Manual
 footer: please 0.5.1
 author: Ed Neville (ed-please@s5h.net)
-date: 02 April 2022
+date: 14 May 2022
 ---
 
 # NAME
@@ -384,8 +384,6 @@ reason = false
 # NOTES
 
 At a later date repeated properties within the same section may be treated as a match list.
-
-At a later date sections with names containing 'default' may behave differently to normal sections.
 
 # CONTRIBUTIONS
 

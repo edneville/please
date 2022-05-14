@@ -1,10 +1,11 @@
-use std::collections::HashMap;
-
 use chrono::NaiveDate;
+use std::collections::HashMap;
+mod basic_ro;
 
 #[cfg(test)]
 mod test {
     use super::*;
+    use basic_ro::*;
     use pleaser::*;
 
     #[test]
@@ -32,11 +33,8 @@ regex=^/bin/bash .*$
         let mut bytes = 0;
         let mut ini_list: HashMap<String, bool> = HashMap::new();
         let mut vec_eo: Vec<EnvOptions> = vec![];
-        let mut ro = RunOptions::new();
-        ro.date = NaiveDate::from_ymd(2020, 1, 1).and_hms(0, 0, 0);
-        ro.name = "ed".to_string();
-        ro.target = "root".to_string();
-        ro.acl_type = Acltype::Run;
+        let mut ro = basic_ro("ed", "root");
+
         ro.command = "/bin/bash".to_string();
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
         assert_eq!(can(&vec_eo, &ro).permit(), true);
@@ -61,10 +59,7 @@ regex = /bin/bash
         let mut vec_eo: Vec<EnvOptions> = vec![];
         let mut bytes = 0;
         let mut ini_list: HashMap<String, bool> = HashMap::new();
-        let mut ro = RunOptions::new();
-        ro.name = "ed".to_string();
-        ro.target = "root".to_string();
-        ro.acl_type = Acltype::Run;
+        let mut ro = basic_ro("ed", "root");
         ro.command = "/bin/bash".to_string();
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
         assert_eq!(can(&vec_eo, &ro).permit(), true);
@@ -95,11 +90,8 @@ target=thingy
 regex=^/bin/bash"
             .to_string();
 
-        let mut ro = RunOptions::new();
+        let mut ro = basic_ro("ed", "root");
         ro.date = NaiveDate::from_ymd(2019, 12, 31).and_hms(0, 0, 0);
-        ro.name = "ed".to_string();
-        ro.target = "root".to_string();
-        ro.acl_type = Acltype::Run;
         ro.command = "/bin/bash".to_string();
 
         let mut vec_eo: Vec<EnvOptions> = vec![];
@@ -146,10 +138,7 @@ name=m{}
 target=^ "
             .to_string();
 
-        let mut ro = RunOptions::new();
-        ro.name = "ed".to_string();
-        ro.target = "root".to_string();
-        ro.acl_type = Acltype::Run;
+        let mut ro = basic_ro("ed", "root");
         ro.command = "/bin/bash".to_string();
 
         let mut vec_eo: Vec<EnvOptions> = vec![];
@@ -191,8 +180,7 @@ require_pass = false
         let mut vec_eo: Vec<EnvOptions> = vec![];
         let mut bytes = 0;
         let mut ini_list: HashMap<String, bool> = HashMap::new();
-        let mut ro = RunOptions::new();
-        ro.name = "ed".to_string();
+        let mut ro = basic_ro("ed", "root");
         ro.acl_type = Acltype::List;
 
         ro.target = "ed".to_string();
@@ -217,9 +205,7 @@ regex=^.*
         let mut vec_eo: Vec<EnvOptions> = vec![];
         let mut bytes = 0;
         let mut ini_list: HashMap<String, bool> = HashMap::new();
-        let mut ro = RunOptions::new();
-        ro.name = "ed".to_string();
-        ro.target = "root".to_string();
+        let mut ro = basic_ro("ed", "root");
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
 
         let mut vec_eo: Vec<EnvOptions> = vec![];
@@ -265,8 +251,7 @@ regex=^/bin/bash .*$
         let mut vec_eo: Vec<EnvOptions> = vec![];
         let mut bytes = 0;
         let mut ini_list: HashMap<String, bool> = HashMap::new();
-        let mut ro = RunOptions::new();
-        ro.name = "ed".to_string();
+        let mut ro = basic_ro("ed", "root");
         ro.target = "oracle".to_string();
         ro.date = NaiveDate::from_ymd(2019, 12, 31).and_hms(0, 0, 0);
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
@@ -306,8 +291,7 @@ regex=^/bin/bash.*$
         let mut vec_eo: Vec<EnvOptions> = vec![];
         let mut bytes = 0;
         let mut ini_list: HashMap<String, bool> = HashMap::new();
-        let mut ro = RunOptions::new();
-        ro.name = "ed".to_string();
+        let mut ro = basic_ro("ed", "root");
         ro.target = "oracle".to_string();
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
 
@@ -347,8 +331,7 @@ regex=^/bin/sh.*$
         let mut vec_eo: Vec<EnvOptions> = vec![];
         let mut bytes = 0;
         let mut ini_list: HashMap<String, bool> = HashMap::new();
-        let mut ro = RunOptions::new();
-        ro.name = "ed".to_string();
+        let mut ro = basic_ro("ed", "root");
         ro.target = "oracle".to_string();
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
 
@@ -385,7 +368,7 @@ regex=/bin/sh\\b.*
         let mut vec_eo: Vec<EnvOptions> = vec![];
         let mut bytes = 0;
         let mut ini_list: HashMap<String, bool> = HashMap::new();
-        let mut ro = RunOptions::new();
+        let mut ro = basic_ro("ed", "root");
         ro.name = "".to_string();
         ro.target = "oracle".to_string();
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
@@ -407,8 +390,7 @@ regex=.*
         let mut vec_eo: Vec<EnvOptions> = vec![];
         let mut bytes = 0;
         let mut ini_list: HashMap<String, bool> = HashMap::new();
-        let mut ro = RunOptions::new();
-        ro.name = "ed".to_string();
+        let mut ro = basic_ro("ed", "root");
         ro.target = "oracle".to_string();
         ro.command = "/bin/bash".to_string();
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
@@ -450,10 +432,7 @@ regex = ^"
         let mut vec_eo: Vec<EnvOptions> = vec![];
         let mut bytes = 0;
         let mut ini_list: HashMap<String, bool> = HashMap::new();
-        let mut ro = RunOptions::new();
-        ro.date = NaiveDate::from_ymd(2020, 1, 1).and_hms(0, 0, 0);
-        ro.name = "ed".to_string();
-        ro.target = "root".to_string();
+        let mut ro = basic_ro("ed", "root");
         ro.acl_type = Acltype::Edit;
         ro.command = "/etc/apache/httpd2.conf".to_string();
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
@@ -473,10 +452,7 @@ regex =^/bin/cat /etc/%{USER}"
         let mut vec_eo: Vec<EnvOptions> = vec![];
         let mut bytes = 0;
         let mut ini_list: HashMap<String, bool> = HashMap::new();
-        let mut ro = RunOptions::new();
-        ro.date = NaiveDate::from_ymd(2020, 1, 1).and_hms(0, 0, 0);
-        ro.name = "ed".to_string();
-        ro.target = "root".to_string();
+        let mut ro = basic_ro("ed", "root");
         ro.command = "/bin/cat /etc/ed".to_string();
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
 
@@ -499,10 +475,7 @@ regex = ^/bin/cat /etc/("
 
         let mut bytes = 0;
         let mut ini_list: HashMap<String, bool> = HashMap::new();
-        let mut ro = RunOptions::new();
-        ro.date = NaiveDate::from_ymd(2020, 1, 1).and_hms(0, 0, 0);
-        ro.name = "ed".to_string();
-        ro.target = "root".to_string();
+        let mut ro = basic_ro("ed", "root");
         ro.command = "/bin/cat /etc/ed".to_string();
 
         assert_eq!(
@@ -521,10 +494,7 @@ regex = ^/bin/cat /etc/
 
         let mut bytes = 0;
         let mut ini_list: HashMap<String, bool> = HashMap::new();
-        let mut ro = RunOptions::new();
-        ro.date = NaiveDate::from_ymd(2020, 1, 1).and_hms(0, 0, 0);
-        ro.name = "ed".to_string();
-        ro.target = "root".to_string();
+        let mut ro = basic_ro("ed", "root");
         ro.command = "/bin/cat /etc/ed".to_string();
 
         assert_eq!(
@@ -549,10 +519,7 @@ regex = ^.*$
         let mut vec_eo: Vec<EnvOptions> = vec![];
         let mut bytes = 0;
         let mut ini_list: HashMap<String, bool> = HashMap::new();
-        let mut ro = RunOptions::new();
-        ro.date = NaiveDate::from_ymd(2020, 1, 1).and_hms(0, 0, 0);
-        ro.name = "ed".to_string();
-        ro.target = "root".to_string();
+        let mut ro = basic_ro("ed", "root");
         ro.command = "/bin/cat /etc/ed".to_string();
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
 
@@ -609,10 +576,7 @@ target = ^(eng|dba|net)ops$
         let mut vec_eo: Vec<EnvOptions> = vec![];
         let mut bytes = 0;
         let mut ini_list: HashMap<String, bool> = HashMap::new();
-        let mut ro = RunOptions::new();
-        ro.date = NaiveDate::from_ymd(2020, 1, 1).and_hms(0, 0, 0);
-        ro.name = "ed".to_string();
-        ro.target = "root".to_string();
+        let mut ro = basic_ro("ed", "root");
         ro.command = "/bin/cat /etc/ed".to_string();
         ro.acl_type = Acltype::List;
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
@@ -663,10 +627,7 @@ regex = ^/var/www/html/%{USER}.html
         let mut bytes = 0;
         let mut ini_list: HashMap<String, bool> = HashMap::new();
 
-        let mut ro = RunOptions::new();
-        ro.date = NaiveDate::from_ymd(2020, 1, 1).and_hms(0, 0, 0);
-        ro.name = "ed".to_string();
-        ro.target = "root".to_string();
+        let mut ro = basic_ro("ed", "root");
         ro.command = "/etc/please.ini".to_string();
         ro.acl_type = Acltype::Edit;
 
@@ -704,9 +665,7 @@ regex = ^/var/www/html/%{USER}.html$
         let mut bytes = 0;
         let mut ini_list: HashMap<String, bool> = HashMap::new();
 
-        let mut ro = RunOptions::new();
-        ro.name = "ed".to_string();
-        ro.target = "root".to_string();
+        let mut ro = basic_ro("ed", "root");
         ro.command = "/var/www/html/ed.html".to_string();
         ro.acl_type = Acltype::Edit;
         ro.groups.insert(String::from("root"), 1);
@@ -730,9 +689,7 @@ regex = ^/var/www/html/%USER.html$"
         let mut bytes = 0;
         let mut ini_list: HashMap<String, bool> = HashMap::new();
 
-        let mut ro = RunOptions::new();
-        ro.name = "ed".to_string();
-        ro.target = "root".to_string();
+        let mut ro = basic_ro("ed", "root");
         ro.acl_type = Acltype::Edit;
         ro.command = "/var/www/html/ed.html".to_string();
 
@@ -756,9 +713,7 @@ regex = ^/var/www/html/%{USER}.html$"
         let mut bytes = 0;
         let mut ini_list: HashMap<String, bool> = HashMap::new();
 
-        let mut ro = RunOptions::new();
-        ro.name = "ed".to_string();
-        ro.target = "root".to_string();
+        let mut ro = basic_ro("ed", "root");
         ro.acl_type = Acltype::Edit;
         ro.command = "/var/www/html/ed.html".to_string();
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
@@ -781,10 +736,7 @@ regex = /bin/bash"
         let mut vec_eo: Vec<EnvOptions> = vec![];
         let mut bytes = 0;
         let mut ini_list: HashMap<String, bool> = HashMap::new();
-        let mut ro = RunOptions::new();
-        ro.name = "ed".to_string();
-        ro.target = "root".to_string();
-        ro.acl_type = Acltype::Run;
+        let mut ro = basic_ro("ed", "root");
         ro.command = "/bin/bash".to_string();
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
         assert_eq!(
@@ -818,9 +770,7 @@ regex = /bin/bash"
         let config = "".to_string();
         let mut bytes = 0;
         let mut ini_list: HashMap<String, bool> = HashMap::new();
-        let mut ro = RunOptions::new();
-        ro.name = "ed".to_string();
-        ro.target = "root".to_string();
+        let mut ro = basic_ro("ed", "root");
         ro.acl_type = Acltype::Edit;
         ro.command = "/etc/please.ini".to_string();
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
@@ -842,10 +792,8 @@ dir=.*
         let mut vec_eo: Vec<EnvOptions> = vec![];
         let mut bytes = 0;
         let mut ini_list: HashMap<String, bool> = HashMap::new();
-        let mut ro = RunOptions::new();
-        ro.name = "ed".to_string();
+        let mut ro = basic_ro("ed", "root");
         ro.target = "oracle".to_string();
-        ro.acl_type = Acltype::Run;
         ro.command = "/bin/bash".to_string();
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
 
@@ -870,11 +818,8 @@ dir=/var/www
         let mut vec_eo: Vec<EnvOptions> = vec![];
         let mut bytes = 0;
         let mut ini_list: HashMap<String, bool> = HashMap::new();
-        let mut ro = RunOptions::new();
-        ro.date = NaiveDate::from_ymd(2020, 1, 1).and_hms(0, 0, 0);
-        ro.name = "ed".to_string();
+        let mut ro = basic_ro("ed", "root");
         ro.target = "oracle".to_string();
-        ro.acl_type = Acltype::Run;
         ro.command = "/bin/bash".to_string();
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
 
@@ -905,11 +850,7 @@ dir=/tmp
         let mut vec_eo: Vec<EnvOptions> = vec![];
         let mut bytes = 0;
         let mut ini_list: HashMap<String, bool> = HashMap::new();
-        let mut ro = RunOptions::new();
-        ro.date = NaiveDate::from_ymd(2020, 1, 1).and_hms(0, 0, 0);
-        ro.name = "ed".to_string();
-        ro.target = "root".to_string();
-        ro.acl_type = Acltype::Run;
+        let mut ro = basic_ro("ed", "root");
         ro.command = "/bin/bash".to_string();
         ro.directory = Some("/tmp".to_string());
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
@@ -931,11 +872,8 @@ regex=.*
         let mut vec_eo: Vec<EnvOptions> = vec![];
         let mut bytes = 0;
         let mut ini_list: HashMap<String, bool> = HashMap::new();
-        let mut ro = RunOptions::new();
-        ro.date = NaiveDate::from_ymd(2020, 1, 1).and_hms(0, 0, 0);
-        ro.name = "ed".to_string();
+        let mut ro = basic_ro("ed", "root");
         ro.target = "oracle".to_string();
-        ro.acl_type = Acltype::Run;
         ro.command = "/bin/bash".to_string();
         ro.directory = Some("/".to_string());
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
@@ -961,11 +899,8 @@ datematch=Fri.*UTC.*
         let mut vec_eo: Vec<EnvOptions> = vec![];
         let mut bytes = 0;
         let mut ini_list: HashMap<String, bool> = HashMap::new();
-        let mut ro = RunOptions::new();
-        ro.name = "ed".to_string();
+        let mut ro = basic_ro("ed", "root");
         ro.date = NaiveDate::from_ymd(2020, 10, 02).and_hms(22, 0, 0);
-        ro.target = "root".to_string();
-        ro.acl_type = Acltype::Run;
         ro.command = "/bin/bash".to_string();
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
 
@@ -1032,9 +967,7 @@ editmode=0644
         let mut vec_eo: Vec<EnvOptions> = vec![];
         let mut bytes = 0;
         let mut ini_list: HashMap<String, bool> = HashMap::new();
-        let mut ro = RunOptions::new();
-        ro.name = "ed".to_string();
-        ro.target = "root".to_string();
+        let mut ro = basic_ro("ed", "root");
         ro.acl_type = Acltype::Edit;
         ro.command = "/etc/please.ini".to_string();
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
@@ -1065,9 +998,7 @@ editmode=keep
     #[test]
     fn test_read_ini_config_file() {
         let mut vec_eo: Vec<EnvOptions> = vec![];
-        let mut ro = RunOptions::new();
-        ro.name = "ed".to_string();
-        ro.target = "root".to_string();
+        let mut ro = basic_ro("ed", "root");
         ro.acl_type = Acltype::Edit;
         ro.command = "/etc/please.ini".to_string();
 
@@ -1117,9 +1048,7 @@ permit=true
         let mut vec_eo: Vec<EnvOptions> = vec![];
         let mut bytes = 0;
         let mut ini_list: HashMap<String, bool> = HashMap::new();
-        let mut ro = RunOptions::new();
-        ro.name = "ed".to_string();
-        ro.target = "root".to_string();
+        let mut ro = basic_ro("ed", "root");
         ro.command = "/bin/bash".to_string();
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
 
@@ -1143,9 +1072,7 @@ reason=true
         let mut vec_eo: Vec<EnvOptions> = vec![];
         let mut bytes = 0;
         let mut ini_list: HashMap<String, bool> = HashMap::new();
-        let mut ro = RunOptions::new();
-        ro.name = "ed".to_string();
-        ro.target = "root".to_string();
+        let mut ro = basic_ro("ed", "root");
         ro.command = "/bin/bash".to_string();
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
 
@@ -1156,9 +1083,7 @@ reason=true
 
     #[test]
     fn test_regex_build_user_expansion() {
-        let mut ro = RunOptions::new();
-        ro.name = "ed".to_string();
-        ro.target = "root".to_string();
+        let mut ro = basic_ro("ed", "root");
         ro.command = "/bin/bash".to_string();
 
         let regex_re =
@@ -1182,9 +1107,7 @@ reason=true
         let mut vec_eo: Vec<EnvOptions> = vec![];
         let mut bytes = 0;
         let mut ini_list: HashMap<String, bool> = HashMap::new();
-        let mut ro = RunOptions::new();
-        ro.name = "ed".to_string();
-        ro.target = "root".to_string();
+        let mut ro = basic_ro("ed", "root");
         ro.command = "/bin/bash".to_string();
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
 
@@ -1206,9 +1129,7 @@ regex=^/usr/bin/wc (/var/log/[a-zA-Z0-9-]+(\\.\\d+)?(\\s)?)+$
         let mut vec_eo: Vec<EnvOptions> = vec![];
         let mut bytes = 0;
         let mut ini_list: HashMap<String, bool> = HashMap::new();
-        let mut ro = RunOptions::new();
-        ro.name = "ed".to_string();
-        ro.target = "root".to_string();
+        let mut ro = basic_ro("ed", "root");
 
         ro.command = "/usr/bin/wc /var/log/messages /var/log/syslog /var/log/maillog".to_string();
 
@@ -1252,9 +1173,7 @@ exitcmd = /usr/bin/please -c %{NEW}
         let mut vec_eo: Vec<EnvOptions> = vec![];
         let mut bytes = 0;
         let mut ini_list: HashMap<String, bool> = HashMap::new();
-        let mut ro = RunOptions::new();
-        ro.name = "ed".to_string();
-        ro.target = "root".to_string();
+        let mut ro = basic_ro("ed", "root");
         ro.groups.insert(String::from("lpadmin"), 1);
         ro.acl_type = Acltype::Edit;
         ro.command = "/etc/please.ini".to_string();
@@ -1270,8 +1189,7 @@ exitcmd = /usr/bin/please -c %{NEW}
 include = ./some.ini
 "
         .to_string();
-        let mut ro = RunOptions::new();
-        ro.name = "ed".to_string();
+        let mut ro = basic_ro("ed", "root");
         ro.target = "ed".to_string();
         ro.acl_type = Acltype::List;
         ro.command = "".to_string();
@@ -1320,8 +1238,7 @@ reason=false
         let mut bytes = 0;
         let mut ini_list: HashMap<String, bool> = HashMap::new();
 
-        let mut ro = RunOptions::new();
-        ro.name = "ed".to_string();
+        let mut ro = basic_ro("ed", "root");
         ro.target = "ed".to_string();
         ro.acl_type = Acltype::List;
         ro.command = "".to_string();
@@ -1404,8 +1321,7 @@ type = list
         let mut vec_eo: Vec<EnvOptions> = vec![];
         let mut bytes = 0;
         let mut ini_list: HashMap<String, bool> = HashMap::new();
-        let mut ro = RunOptions::new();
-        ro.name = "ed".to_string();
+        let mut ro = basic_ro("ed", "root");
         ro.target = "ed".to_string();
         ro.acl_type = Acltype::List;
         ro.command = "".to_string();
@@ -1426,9 +1342,7 @@ reason = false
         let mut vec_eo: Vec<EnvOptions> = vec![];
         let mut bytes = 0;
         let mut ini_list: HashMap<String, bool> = HashMap::new();
-        let mut ro = RunOptions::new();
-        ro.name = "ed".to_string();
-        ro.target = "root".to_string();
+        let mut ro = basic_ro("ed", "root");
         ro.command = "".to_string();
         ro.allow_env_list = Some(vec!["PATH".to_string()]);
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
@@ -1451,9 +1365,7 @@ regex = .*
         let mut vec_eo: Vec<EnvOptions> = vec![];
         let mut bytes = 0;
         let mut ini_list: HashMap<String, bool> = HashMap::new();
-        let mut ro = RunOptions::new();
-        ro.name = "ed".to_string();
-        ro.target = "root".to_string();
+        let mut ro = basic_ro("ed", "root");
         ro.command = "".to_string();
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
         let entry = can(&vec_eo, &ro);
@@ -1478,9 +1390,7 @@ permit_env = (HOME|PATH)
         let mut vec_eo: Vec<EnvOptions> = vec![];
         let mut bytes = 0;
         let mut ini_list: HashMap<String, bool> = HashMap::new();
-        let mut ro = RunOptions::new();
-        ro.name = "ed".to_string();
-        ro.target = "root".to_string();
+        let mut ro = basic_ro("ed", "root");
         ro.command = "".to_string();
         ro.allow_env_list = Some(vec!["PATH".to_string(), "HOME".to_string()]);
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
@@ -1501,9 +1411,7 @@ permit_env = (HOME|PATH)
         let mut vec_eo: Vec<EnvOptions> = vec![];
         let mut bytes = 0;
         let mut ini_list: HashMap<String, bool> = HashMap::new();
-        let mut ro = RunOptions::new();
-        ro.name = "ed".to_string();
-        ro.target = "root".to_string();
+        let mut ro = basic_ro("ed", "root");
         ro.command = "".to_string();
         ro.allow_env_list = Some(vec![
             "PATH".to_string(),
@@ -1527,9 +1435,7 @@ permit_env = (HOME|PATH)
         let mut vec_eo: Vec<EnvOptions> = vec![];
         let mut bytes = 0;
         let mut ini_list: HashMap<String, bool> = HashMap::new();
-        let mut ro = RunOptions::new();
-        ro.name = "ed".to_string();
-        ro.target = "root".to_string();
+        let mut ro = basic_ro("ed", "root");
         ro.command = "".to_string();
         ro.allow_env_list = None;
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
@@ -1550,9 +1456,7 @@ regex = /bin/echo [%]\\{USER\\}
         let mut vec_eo: Vec<EnvOptions> = vec![];
         let mut bytes = 0;
         let mut ini_list: HashMap<String, bool> = HashMap::new();
-        let mut ro = RunOptions::new();
-        ro.name = "ed".to_string();
-        ro.target = "root".to_string();
+        let mut ro = basic_ro("ed", "root");
         ro.command = "/bin/echo %{USER}".to_string();
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
 
@@ -1572,9 +1476,7 @@ regex = /bin/echo \\x25\\{USER\\}
         let mut vec_eo: Vec<EnvOptions> = vec![];
         let mut bytes = 0;
         let mut ini_list: HashMap<String, bool> = HashMap::new();
-        let mut ro = RunOptions::new();
-        ro.name = "ed".to_string();
-        ro.target = "root".to_string();
+        let mut ro = basic_ro("ed", "root");
         ro.command = "/bin/echo %{USER}".to_string();
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
 
@@ -1594,9 +1496,7 @@ regex = /bin/echo hello\\x5cworld
         let mut vec_eo: Vec<EnvOptions> = vec![];
         let mut bytes = 0;
         let mut ini_list: HashMap<String, bool> = HashMap::new();
-        let mut ro = RunOptions::new();
-        ro.name = "ed".to_string();
-        ro.target = "root".to_string();
+        let mut ro = basic_ro("ed", "root");
         ro.command = "/bin/echo hello\\world".to_string();
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
 
@@ -1616,9 +1516,7 @@ regex = /bin/echo hello[\\\\]world
         let mut vec_eo: Vec<EnvOptions> = vec![];
         let mut bytes = 0;
         let mut ini_list: HashMap<String, bool> = HashMap::new();
-        let mut ro = RunOptions::new();
-        ro.name = "ed".to_string();
-        ro.target = "root".to_string();
+        let mut ro = basic_ro("ed", "root");
         ro.command = "/bin/echo hello\\world".to_string();
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
 
@@ -1638,9 +1536,7 @@ exact_rule = /bin/echo hello\ world
         let mut vec_eo: Vec<EnvOptions> = vec![];
         let mut bytes = 0;
         let mut ini_list: HashMap<String, bool> = HashMap::new();
-        let mut ro = RunOptions::new();
-        ro.name = "ed".to_string();
-        ro.target = "root".to_string();
+        let mut ro = basic_ro("ed", "root");
         ro.command = replace_new_args(vec!["/bin/echo".to_string(), "hello world".to_string()]);
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
 
@@ -1660,9 +1556,7 @@ rule = /bin/echo hello\\ world
         let mut vec_eo: Vec<EnvOptions> = vec![];
         let mut bytes = 0;
         let mut ini_list: HashMap<String, bool> = HashMap::new();
-        let mut ro = RunOptions::new();
-        ro.name = "ed".to_string();
-        ro.target = "root".to_string();
+        let mut ro = basic_ro("ed", "root");
         ro.command = replace_new_args(vec!["/bin/echo".to_string(), "hello world".to_string()]);
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
 
@@ -1682,9 +1576,7 @@ rule = /bin/echo hello\\ \\\\\\ world
         let mut vec_eo: Vec<EnvOptions> = vec![];
         let mut bytes = 0;
         let mut ini_list: HashMap<String, bool> = HashMap::new();
-        let mut ro = RunOptions::new();
-        ro.name = "ed".to_string();
-        ro.target = "root".to_string();
+        let mut ro = basic_ro("ed", "root");
         ro.command = replace_new_args(vec!["/bin/echo".to_string(), "hello \\ world".to_string()]);
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
 
@@ -1704,9 +1596,7 @@ rule = /etc/fstab
         let mut vec_eo: Vec<EnvOptions> = vec![];
         let mut bytes = 0;
         let mut ini_list: HashMap<String, bool> = HashMap::new();
-        let mut ro = RunOptions::new();
-        ro.name = "ed".to_string();
-        ro.target = "root".to_string();
+        let mut ro = basic_ro("ed", "root");
         ro.acl_type = Acltype::Edit;
         ro.command = replace_new_args(vec!["/etc/fstab".to_string()]);
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
