@@ -1870,7 +1870,7 @@ pub fn log_action(service: &str, result: &str, ro: &RunOptions, command: &str) -
         facility: Facility::LOG_USER,
         hostname: None,
         process: service.into(),
-        pid: process::id() as i32,
+        pid: process::id(),
     };
 
     let cwd = match env::current_dir() {

@@ -241,7 +241,7 @@ fn main() {
                 println!("{} is a shell feature.", &ro.new_args[0]);
                 if ro.new_args.len() > 1 {
                     println!(
-                        "Try either changing to {} first or using {} -d {} instead",
+                        "Try either changing to {} first or using {} -d {} instead.",
                         &ro.new_args[1], service, &ro.new_args[1]
                     );
                 }
