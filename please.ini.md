@@ -4,7 +4,7 @@ section: 5
 header: User Manual
 footer: please 0.5.3
 author: Ed Neville (ed-please@s5h.net)
-date: 10 June 2022
+date: 05 October 2022
 ---
 
 # NAME
@@ -71,6 +71,9 @@ Sections with a name starting 'default' will retain match actions
 
 **permit_env=[regex]**
 : allow environments that match **regex** to optionally pass through
+
+**search_path=[string]**
+: configure a **:** separated directory list to locate the binary to execute,  does not configure a **PATH** environment and is searched as the user running **please**, not as the **target** user (no plans to change that at present)
 
 **regex** is a regular expression, **%{USER}** will expand to the user who is currently running `please`, **%{HOSTNAME}** expands to the hostname. See below for examples. Other **%{}** expansions may be added at a later date.
 

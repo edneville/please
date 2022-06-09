@@ -24,11 +24,11 @@ rule = .*
         let mut ini_list: HashMap<String, bool> = HashMap::new();
         let mut vec_eo: Vec<EnvOptions> = vec![];
         let mut ro = basic_ro("ed", "root");
+        basic_cmd(&mut ro, &"/bin/bash".to_string());
 
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
 
-        ro.command = "/bin/bash".to_string();
-        let can = can(&vec_eo, &ro);
+        let can = can(&vec_eo, &mut ro);
         assert_eq!(can.syslog.is_some(), false);
     }
 
@@ -49,11 +49,11 @@ rule = .*
         let mut ini_list: HashMap<String, bool> = HashMap::new();
         let mut vec_eo: Vec<EnvOptions> = vec![];
         let mut ro = basic_ro("ed", "root");
+        basic_cmd(&mut ro, &"/bin/bash".to_string());
 
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
 
-        ro.command = "/bin/bash".to_string();
-        let can = can(&vec_eo, &ro);
+        let can = can(&vec_eo, &mut ro);
         assert_eq!(can.syslog.is_some(), true);
         assert_eq!(can.syslog.unwrap(), false);
     }
@@ -74,11 +74,11 @@ rule = .*
         let mut ini_list: HashMap<String, bool> = HashMap::new();
         let mut vec_eo: Vec<EnvOptions> = vec![];
         let mut ro = basic_ro("ed", "root");
+        basic_cmd(&mut ro, &"/bin/bash".to_string());
 
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
 
-        ro.command = "/bin/bash".to_string();
-        let can = can(&vec_eo, &ro);
+        let can = can(&vec_eo, &mut ro);
         assert_eq!(can.permit(), true);
         assert_eq!(can.timeout.is_none(), true);
     }
@@ -110,11 +110,11 @@ rule = .*
         let mut ini_list: HashMap<String, bool> = HashMap::new();
         let mut vec_eo: Vec<EnvOptions> = vec![];
         let mut ro = basic_ro("ed", "root");
+        basic_cmd(&mut ro, &"/bin/bash".to_string());
 
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
 
-        ro.command = "/bin/bash".to_string();
-        let can = can(&vec_eo, &ro);
+        let can = can(&vec_eo, &mut ro);
         assert_eq!(can.syslog.is_some(), true);
         assert_eq!(can.syslog.unwrap(), false);
         assert_eq!(can.require_pass.is_some(), true);
@@ -151,11 +151,11 @@ rule = .*
         let mut ini_list: HashMap<String, bool> = HashMap::new();
         let mut vec_eo: Vec<EnvOptions> = vec![];
         let mut ro = basic_ro("ed", "root");
+        basic_cmd(&mut ro, &"/bin/bash".to_string());
 
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
 
-        ro.command = "/bin/bash".to_string();
-        let can = can(&vec_eo, &ro);
+        let can = can(&vec_eo, &mut ro);
         assert_eq!(can.syslog.is_some(), true);
         assert_eq!(can.syslog.unwrap(), false);
         assert_eq!(can.require_pass.is_none(), true);
@@ -180,11 +180,11 @@ rule = .*
         let mut ini_list: HashMap<String, bool> = HashMap::new();
         let mut vec_eo: Vec<EnvOptions> = vec![];
         let mut ro = basic_ro("ed", "root");
+        basic_cmd(&mut ro, &"/bin/bash".to_string());
 
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
 
-        ro.command = "/bin/bash".to_string();
-        let can = can(&vec_eo, &ro);
+        let can = can(&vec_eo, &mut ro);
         assert_eq!(can.syslog.is_some(), true);
         assert_eq!(can.syslog.unwrap(), false);
         assert_eq!(can.permit(), false);
@@ -207,11 +207,11 @@ rule = .*
         let mut ini_list: HashMap<String, bool> = HashMap::new();
         let mut vec_eo: Vec<EnvOptions> = vec![];
         let mut ro = basic_ro("ed", "root");
+        basic_cmd(&mut ro, &"/bin/bash".to_string());
 
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
 
-        ro.command = "/bin/bash".to_string();
-        let can = can(&vec_eo, &ro);
+        let can = can(&vec_eo, &mut ro);
         assert_eq!(can.syslog.is_some(), true);
         assert_eq!(can.syslog.unwrap(), false);
         assert_eq!(can.permit(), true);
@@ -244,11 +244,11 @@ rule = .*
         let mut ini_list: HashMap<String, bool> = HashMap::new();
         let mut vec_eo: Vec<EnvOptions> = vec![];
         let mut ro = basic_ro("ed", "root");
+        basic_cmd(&mut ro, &"/bin/bash".to_string());
 
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
 
-        ro.command = "/bin/bash".to_string();
-        let can = can(&vec_eo, &ro);
+        let can = can(&vec_eo, &mut ro);
         assert_eq!(can.syslog.is_none(), true);
         assert_eq!(can.timeout.is_none(), true);
         assert_eq!(can.permit(), true);
@@ -275,12 +275,12 @@ type = edit
         let mut ini_list: HashMap<String, bool> = HashMap::new();
         let mut vec_eo: Vec<EnvOptions> = vec![];
         let mut ro = basic_ro("ed", "root");
+        basic_cmd(&mut ro, &"/bin/bash".to_string());
         ro.acl_type = Acltype::Edit;
 
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
 
-        ro.command = "/bin/bash".to_string();
-        let can = can(&vec_eo, &ro);
+        let can = can(&vec_eo, &mut ro);
         assert_eq!(can.edit_mode, Some(EditMode::Keep(true)));
         assert_eq!(can.permit(), false);
     }
@@ -306,12 +306,12 @@ type = edit
         let mut ini_list: HashMap<String, bool> = HashMap::new();
         let mut vec_eo: Vec<EnvOptions> = vec![];
         let mut ro = basic_ro("ed", "root");
+        basic_cmd(&mut ro, &"/bin/bash".to_string());
         ro.acl_type = Acltype::Edit;
 
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
 
-        ro.command = "/bin/bash".to_string();
-        let can = can(&vec_eo, &ro);
+        let can = can(&vec_eo, &mut ro);
         assert_eq!(can.edit_mode, None);
         assert_eq!(can.permit(), true);
     }
@@ -338,12 +338,12 @@ type = edit
         let mut ini_list: HashMap<String, bool> = HashMap::new();
         let mut vec_eo: Vec<EnvOptions> = vec![];
         let mut ro = basic_ro("ed", "root");
+        basic_cmd(&mut ro, &"/bin/bash".to_string());
         ro.acl_type = Acltype::Edit;
 
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
 
-        ro.command = "/bin/bash".to_string();
-        let can = can(&vec_eo, &ro);
+        let can = can(&vec_eo, &mut ro);
         assert_eq!(can.edit_mode, Some(EditMode::Mode(0o111)));
         assert_eq!(can.permit(), true);
         assert_eq!(can.exitcmd, Some("/bin/false".to_string()));
@@ -375,13 +375,13 @@ type = edit
         let mut ini_list: HashMap<String, bool> = HashMap::new();
         let mut vec_eo: Vec<EnvOptions> = vec![];
         let mut ro = basic_ro("ed", "root");
+        basic_cmd(&mut ro, &"/bin/bash".to_string());
         ro.name = "noted".to_string();
         ro.acl_type = Acltype::Edit;
 
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
 
-        ro.command = "/bin/bash".to_string();
-        let can = can(&vec_eo, &ro);
+        let can = can(&vec_eo, &mut ro);
         assert_eq!(can.edit_mode, None);
         assert_eq!(can.permit(), true);
         assert_eq!(can.exitcmd, None);
@@ -402,13 +402,13 @@ rule = .*
         let mut ini_list: HashMap<String, bool> = HashMap::new();
         let mut vec_eo: Vec<EnvOptions> = vec![];
         let mut ro = basic_ro("ed", "root");
+        basic_cmd(&mut ro, &"/bin/bash".to_string());
         ro.name = "ed".to_string();
         ro.acl_type = Acltype::Run;
 
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
 
-        ro.command = "/bin/bash".to_string();
-        let can = can(&vec_eo, &ro);
+        let can = can(&vec_eo, &mut ro);
         assert_eq!(can.edit_mode, None);
         assert_eq!(can.permit(), true);
         assert_eq!(can.exitcmd, None);
@@ -430,13 +430,13 @@ require_pass = false
         let mut ini_list: HashMap<String, bool> = HashMap::new();
         let mut vec_eo: Vec<EnvOptions> = vec![];
         let mut ro = basic_ro("ed", "root");
+        basic_cmd(&mut ro, &"/bin/bash".to_string());
         ro.name = "ed".to_string();
         ro.acl_type = Acltype::Run;
 
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
 
-        ro.command = "/bin/bash".to_string();
-        let can = can(&vec_eo, &ro);
+        let can = can(&vec_eo, &mut ro);
         assert_eq!(can.edit_mode, None);
         assert_eq!(can.permit(), true);
         assert_eq!(can.exitcmd, None);
@@ -460,11 +460,11 @@ require_pass = true
         let mut bytes = 0;
         let mut ini_list: HashMap<String, bool> = HashMap::new();
         let mut vec_eo: Vec<EnvOptions> = vec![];
+        basic_cmd(&mut ro, &"/bin/bash".to_string());
 
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
 
-        ro.command = "/bin/bash".to_string();
-        let can = pleaser::can(&vec_eo, &ro);
+        let can = pleaser::can(&vec_eo, &mut ro);
         assert_eq!(can.permit(), true);
         assert_eq!(can.require_pass(), false);
         assert_eq!(can.last, Some(true));

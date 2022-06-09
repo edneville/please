@@ -419,7 +419,7 @@ fn main() {
         std::process::exit(1);
     }
 
-    let entry = can(&vec_eo, &ro);
+    let entry = can(&vec_eo, &mut ro);
 
     if entry.syslog.is_some() {
         ro.syslog = entry.syslog.unwrap();
