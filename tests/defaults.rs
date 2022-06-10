@@ -387,4 +387,91 @@ type = edit
         assert_eq!(can.exitcmd, None);
         assert_eq!(can.reason, None);
     }
+
+    #[test]
+    fn test_default_require_pass() {
+        let config = "
+
+[ed]
+name = ed
+rule = .*
+"
+        .to_string();
+
+        let mut bytes = 0;
+        let mut ini_list: HashMap<String, bool> = HashMap::new();
+        let mut vec_eo: Vec<EnvOptions> = vec![];
+        let mut ro = basic_ro("ed", "root");
+        ro.name = "ed".to_string();
+        ro.acl_type = Acltype::Run;
+
+        read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
+
+        ro.command = "/bin/bash".to_string();
+        let can = can(&vec_eo, &ro);
+        assert_eq!(can.edit_mode, None);
+        assert_eq!(can.permit(), true);
+        assert_eq!(can.exitcmd, None);
+        assert_eq!(can.reason, None);
+        assert_eq!(can.require_pass(), true);
+    }
+
+    #[test]
+    fn test_default_require_pass_inherit() {
+        let config = "
+[default_all]
+name = .*
+rule = .*
+require_pass = false
+"
+        .to_string();
+
+        let mut bytes = 0;
+        let mut ini_list: HashMap<String, bool> = HashMap::new();
+        let mut vec_eo: Vec<EnvOptions> = vec![];
+        let mut ro = basic_ro("ed", "root");
+        ro.name = "ed".to_string();
+        ro.acl_type = Acltype::Run;
+
+        read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
+
+        ro.command = "/bin/bash".to_string();
+        let can = can(&vec_eo, &ro);
+        assert_eq!(can.edit_mode, None);
+        assert_eq!(can.permit(), true);
+        assert_eq!(can.exitcmd, None);
+        assert_eq!(can.reason, None);
+        assert_eq!(can.require_pass(), false);
+
+        let config = "
+[default_all]
+name = .*
+rule = .*
+require_pass = false
+last = true
+
+[ed]
+name = ed
+rule = /bin/bash
+require_pass = true
+"
+        .to_string();
+
+        let mut bytes = 0;
+        let mut ini_list: HashMap<String, bool> = HashMap::new();
+        let mut vec_eo: Vec<EnvOptions> = vec![];
+
+        read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
+
+        ro.command = "/bin/bash".to_string();
+        let can = pleaser::can(&vec_eo, &ro);
+        assert_eq!(can.permit(), true);
+        assert_eq!(can.require_pass(), false);
+        assert_eq!(can.last, Some(true));
+        assert_eq!(can.reason, None);
+        assert_eq!(can.syslog, None);
+        assert_eq!(can.exitcmd, None);
+        assert_eq!(can.edit_mode, None);
+        assert_eq!(can.section, "default_all".to_string());
+    }
 }

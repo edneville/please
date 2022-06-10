@@ -2,9 +2,9 @@
 title: please.ini
 section: 5
 header: User Manual
-footer: please 0.5.2
+footer: please 0.5.3
 author: Ed Neville (ed-please@s5h.net)
-date: 09 June 2022
+date: 10 June 2022
 ---
 
 # NAME
