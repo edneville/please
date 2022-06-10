@@ -139,6 +139,13 @@ impl EnvOptions {
 
         true
     }
+    pub fn require_pass(&self) -> bool {
+        if self.require_pass.is_some() && !self.require_pass.unwrap() {
+            return false;
+        }
+
+        true
+    }
 }
 
 impl Default for EnvOptions {
@@ -1406,7 +1413,7 @@ pub fn handler_shim<T: pam::Converse>(
 /// read password of user via rpassword
 /// should pam require a password, and it is successful, then we set a token
 pub fn challenge_password(ro: &RunOptions, entry: &EnvOptions, service: &str) -> bool {
-    if entry.require_pass.is_some() && entry.require_pass.unwrap() {
+    if entry.require_pass() {
         if tty_name().is_none() {
             println!("Cannot read password without tty");
             return false;
@@ -1641,11 +1648,7 @@ pub fn produce_list(vec_eo: &[EnvOptions], ro: &RunOptions) -> Vec<String> {
             item.section,
             prefix,
             list_target(item),
-            if item.require_pass.is_some() {
-                item.require_pass.unwrap()
-            } else {
-                false
-            },
+            item.require_pass(),
             list_dir(item),
             list_rule(item)
         ));
