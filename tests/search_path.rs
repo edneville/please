@@ -8,12 +8,12 @@ mod test {
     use pleaser::*;
 
     #[test]
-    fn test_reason_abscence() {
+    fn test_search_path() {
         let config = "[ed]
 exact_name=ed
 exact_target=root
 exact_rule = /bin/bash
-reason = true
+search_path = :
 "
         .to_string();
 
@@ -22,20 +22,19 @@ reason = true
         let mut vec_eo: Vec<EnvOptions> = vec![];
         let mut ro = basic_ro("ed", "root");
 
-        basic_cmd(&mut ro, &"/bin/bash".to_string());
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
-        let can_do = can(&vec_eo, &mut ro);
-        assert_eq!((can_do).permit(), true);
-        assert_eq!(reason_ok(&can_do, &ro), false);
+
+        basic_cmd(&mut ro, &"bash".to_string());
+        assert_eq!(can(&vec_eo, &mut ro).permit(), false);
     }
 
     #[test]
-    fn test_reason_present() {
+    fn test_search_empty_path() {
         let config = "[ed]
 exact_name=ed
 exact_target=root
 exact_rule = /bin/bash
-reason = true
+search_path =
 "
         .to_string();
 
@@ -43,22 +42,20 @@ reason = true
         let mut ini_list: HashMap<String, bool> = HashMap::new();
         let mut vec_eo: Vec<EnvOptions> = vec![];
         let mut ro = basic_ro("ed", "root");
-        ro.reason = Some("simple reason".to_string());
 
-        basic_cmd(&mut ro, &"/bin/bash".to_string());
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
-        let can_do = can(&vec_eo, &mut ro);
-        assert_eq!((can_do).permit(), true);
-        assert_eq!(reason_ok(&can_do, &ro), true);
+
+        basic_cmd(&mut ro, &"bash".to_string());
+        assert_eq!(can(&vec_eo, &mut ro).permit(), false);
     }
 
     #[test]
-    fn test_reason_present_bad_match() {
+    fn test_search_unlikely_to_exist_dir() {
         let config = "[ed]
 exact_name=ed
 exact_target=root
-exact_rule = /bin/bash
-reason = bigdb
+rule = .*/bash
+search_path = /nonexistent
 "
         .to_string();
 
@@ -66,22 +63,20 @@ reason = bigdb
         let mut ini_list: HashMap<String, bool> = HashMap::new();
         let mut vec_eo: Vec<EnvOptions> = vec![];
         let mut ro = basic_ro("ed", "root");
-        ro.reason = Some("simple reason".to_string());
 
-        basic_cmd(&mut ro, &"/bin/bash".to_string());
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
-        let can_do = can(&vec_eo, &mut ro);
-        assert_eq!((can_do).permit(), true);
-        assert_eq!(reason_ok(&can_do, &ro), false);
+
+        basic_cmd(&mut ro, &"bash".to_string());
+        assert_eq!(can(&vec_eo, &mut ro).permit(), false);
     }
 
     #[test]
-    fn test_reason_present_good_match() {
+    fn test_search_bin() {
         let config = "[ed]
 exact_name=ed
 exact_target=root
-exact_rule = /bin/bash
-reason = bigdb
+rule = .*/bash
+search_path = /bin
 "
         .to_string();
 
@@ -89,22 +84,28 @@ reason = bigdb
         let mut ini_list: HashMap<String, bool> = HashMap::new();
         let mut vec_eo: Vec<EnvOptions> = vec![];
         let mut ro = basic_ro("ed", "root");
-        ro.reason = Some("bigdb".to_string());
-        basic_cmd(&mut ro, &"/bin/bash".to_string());
 
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
-        let can_do = can(&vec_eo, &mut ro);
-        assert_eq!((can_do).permit(), true);
-        assert_eq!(reason_ok(&can_do, &ro), true);
+
+        basic_cmd(&mut ro, &"bash".to_string());
+        let c = can(&vec_eo, &mut ro);
+        assert_eq!(c.permit(), true);
+        assert_eq!(ro.command, "/bin/bash");
     }
 
     #[test]
-    fn test_reason_present_good_host_match() {
-        let config = "[ed]
+    fn test_search_bin_default() {
+        let config = "
+[default_all]
+name = .*
+target = root
+rule = .*
+search_path = /bin 
+
+[ed]
 exact_name=ed
 exact_target=root
-exact_rule = /bin/bash
-reason = .*%{HOSTNAME}.*
+rule = .*/bash
 "
         .to_string();
 
@@ -112,18 +113,43 @@ reason = .*%{HOSTNAME}.*
         let mut ini_list: HashMap<String, bool> = HashMap::new();
         let mut vec_eo: Vec<EnvOptions> = vec![];
         let mut ro = basic_ro("ed", "root");
-        ro.reason = Some("bash on localhost".to_string());
-        basic_cmd(&mut ro, &"/bin/bash".to_string());
 
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
-        let can_do = can(&vec_eo, &mut ro);
-        assert_eq!((can_do).permit(), true);
-        assert_eq!(reason_ok(&can_do, &ro), true);
 
-        ro.reason = Some("power off".to_string());
-        assert_eq!(reason_ok(&can_do, &ro), false);
+        basic_cmd(&mut ro, &"bash".to_string());
+        let c = can(&vec_eo, &mut ro);
+        assert_eq!(ro.command, "/bin/bash");
+        assert_eq!(c.permit(), true);
+    }
 
-        ro.reason = Some("localhost".to_string());
-        assert_eq!(reason_ok(&can_do, &ro), true);
+    #[test]
+    fn test_search_bin_default_sbin() {
+        let config = "
+[default:all]
+name = .*
+target = .*
+rule = .*
+search_path = /sbin
+
+[ed]
+name=ed
+target=root
+rule = .*/e2fsck
+"
+        .to_string();
+
+        let mut bytes = 0;
+        let mut ini_list: HashMap<String, bool> = HashMap::new();
+        let mut vec_eo: Vec<EnvOptions> = vec![];
+        let mut ro = basic_ro("ed", "root");
+
+        read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
+
+        basic_cmd(&mut ro, &"e2fsck".to_string());
+        let c = can(&vec_eo, &mut ro);
+        dbg!(&c);
+        assert_eq!(c.permit(), true);
+        assert_eq!(ro.command, "/sbin/e2fsck");
+        assert_eq!(c.search_path, Some("/sbin".to_string()));
     }
 }

@@ -55,7 +55,7 @@ pub enum ReasonType {
     Text(String),
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct EnvOptions {
     pub name: Option<String>,
     pub exact_name: Option<String>,
@@ -87,6 +87,7 @@ pub struct EnvOptions {
     pub env_permit: Option<String>,
     pub env_assign: Option<HashMap<String, String>>,
     pub timeout: Option<u32>,
+    pub search_path: Option<String>,
 }
 
 impl EnvOptions {
@@ -122,6 +123,7 @@ impl EnvOptions {
             env_permit: None,
             env_assign: None,
             timeout: None,
+            search_path: None,
         }
     }
     fn new_deny() -> EnvOptions {
@@ -154,7 +156,7 @@ impl Default for EnvOptions {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct RunOptions {
     pub name: String,
     pub original_uid: nix::unistd::Uid,
@@ -178,6 +180,8 @@ pub struct RunOptions {
     pub old_envs: Option<HashMap<String, String>>,
     pub allow_env_list: Option<Vec<String>>,
     pub env_options: Option<EnvOptions>,
+    pub cloned_args: Option<Vec<String>>,
+    pub located_bin: HashMap<String, Option<String>>,
 }
 
 impl RunOptions {
@@ -205,6 +209,8 @@ impl RunOptions {
             old_envs: None,
             allow_env_list: None,
             env_options: None,
+            cloned_args: None,
+            located_bin: HashMap::new(),
         }
     }
 }
@@ -454,12 +460,10 @@ pub fn common_opt_arguments(
         std::process::exit(0);
     }
 
-    let mut buf = [0u8; 64];
-    ro.hostname = gethostname(&mut buf)
+    ro.hostname = gethostname()
         .expect("Failed getting hostname")
-        .to_str()
-        .expect("Hostname wasn't valid UTF-8")
-        .to_string();
+        .into_string()
+        .expect("Hostname wasn't valid UTF-8");
 }
 
 /// read an ini file and traverse includes
@@ -743,7 +747,9 @@ pub fn read_ini(
                     opt.timeout = Some(timeout.unwrap());
                 }
             }
-
+            "search_path" => {
+                opt.search_path = Some(value.to_string());
+            }
             &_ => {
                 println!("Error parsing {}:{}", config_path, line_number);
                 faulty = true;
@@ -960,6 +966,7 @@ pub fn rule_match(item: &EnvOptions, ro: &RunOptions, line: Option<i32>) -> bool
     if item.exact_rule.is_some() {
         let exact_rule = item.exact_rule.as_ref().unwrap();
         if exact_rule == &ro.command {
+            // println!("{}: exact rule match: {} == {}", item.section, exact_rule, ro.command);
             return true;
         }
         // println!("{}: exact rule mismatch: {} != {}", item.section, exact_rule, ro.command);
@@ -986,6 +993,7 @@ pub fn rule_match(item: &EnvOptions, ro: &RunOptions, line: Option<i32>) -> bool
             // opt = item.clone();
             return true;
         }
+        // println!("{}: item rule is not match", &item.rule.as_ref().unwrap());
         return false;
     }
     false
@@ -1184,7 +1192,7 @@ pub fn group_matches(item: &EnvOptions, ro: &RunOptions, line: Option<i32>) -> b
     false
 }
 
-pub fn matching(item: &EnvOptions, ro: &RunOptions, line_error: Option<i32>) -> bool {
+pub fn matching(item: &EnvOptions, ro: &mut RunOptions, line_error: Option<i32>) -> bool {
     if !permitted_dates_ok(item, ro, line_error) {
         // println!("Didn't match permitted dates");
         return false;
@@ -1228,6 +1236,34 @@ pub fn matching(item: &EnvOptions, ro: &RunOptions, line_error: Option<i32>) -> 
     if item.acl_type == Acltype::List {
         // println!("{}: is list", item.section);
         return true;
+    }
+
+    // cloned_args and command should be reset each loop
+    // search_path could expose privilege paths that may appear
+    // in error messaging
+
+    // shouldn't matter if setuid running user happened first, but even
+    // so better than to be sorry later
+    if ro.cloned_args.is_some() {
+        ro.cloned_args = None;
+    }
+    ro.command = replace_new_args(ro.new_args.clone());
+
+    if item.acl_type == Acltype::Run {
+        match search_path(ro, item) {
+            None => {
+                return false;
+            }
+            Some(x) => {
+                ro.cloned_args = Some(ro.new_args.clone());
+                ro.cloned_args.as_mut().unwrap()[0] = x;
+                ro.command = replace_new_args(ro.cloned_args.as_ref().unwrap().clone());
+            }
+        }
+    }
+    if item.acl_type == Acltype::Edit {
+        let edit_file = vec![ro.new_args[0].clone()];
+        ro.command = replace_new_args(edit_file);
     }
 
     rule_match(item, ro, line_error)
@@ -1286,11 +1322,16 @@ pub fn merge_default(default: &EnvOptions, item: &EnvOptions) -> EnvOptions {
         merged.permit = default.permit;
     }
 
+    if default.search_path.is_some() && item.search_path.is_none() {
+        // println!("merging search_path");
+        merged.search_path = default.search_path.clone();
+    }
+
     merged
 }
 
 /// search the EnvOptions list for matching RunOptions and return the match
-pub fn can(vec_eo: &[EnvOptions], ro: &RunOptions) -> EnvOptions {
+pub fn can(vec_eo: &[EnvOptions], ro: &mut RunOptions) -> EnvOptions {
     let mut opt = EnvOptions::new_deny();
     let mut default = EnvOptions::new();
 
@@ -1656,24 +1697,73 @@ pub fn produce_list(vec_eo: &[EnvOptions], ro: &RunOptions) -> Vec<String> {
     str_list
 }
 
+/// return result from search cache lookup
+pub fn search_path_cache(ro: &RunOptions, binary: &str) -> Option<String> {
+    match ro.located_bin.get(binary) {
+        Some(k) => {
+            if k.is_none() {
+                // println!("{} returning None (cached lookup)", item.section);
+                return None;
+            }
+            // println!("{} returning Some({})", item.section, k.as_ref().unwrap().to_string());
+            return Some(k.as_ref().unwrap().to_string());
+        }
+        None => {
+            // println!("{} returning None (not a cached lookup)", item.section);
+            None
+        }
+    }
+}
+
 /// if binary is not an absolute/relative path, look for it in usual places
-pub fn search_path(binary: &str) -> Option<String> {
-    let p = Path::new(binary);
+pub fn search_path(ro: &mut RunOptions, item: &EnvOptions) -> Option<String> {
+    let binary = &ro.new_args[0];
+    let p = Path::new(&binary);
+    // println!("Searching for {binary}");
+
     if binary.starts_with('/') || binary.starts_with("./") {
+        let lookup = search_path_cache(ro, binary);
+        if lookup.is_some() {
+            return lookup;
+        }
+
         if !p.exists() {
+            ro.located_bin.insert(binary.to_string(), None);
             return None;
         } else {
+            ro.located_bin
+                .insert(binary.to_string(), Some(binary.to_string()));
             return Some(binary.to_string());
         }
     }
 
-    for dir in "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin".split(':') {
+    let dirs = if item.search_path.is_some() {
+        item.search_path.as_ref().unwrap()
+    } else {
+        "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+    };
+
+    for dir in dirs.split(':') {
+        if dir.trim() == "" {
+            continue;
+        }
+        let dir = dir.trim_end_matches('/');
         let path_name = format!("{}/{}", &dir, &binary);
+
+        if let Some(lookup) = search_path_cache(ro, binary) {
+            return Some(lookup);
+        }
+
         let p = Path::new(&path_name);
 
         if !p.exists() {
+            ro.located_bin.insert(binary.to_string(), None);
             continue;
         }
+
+        // println!("inserting {binary} = {}", path_name.clone());
+        ro.located_bin
+            .insert(binary.to_string(), Some(path_name.clone()));
         return Some(path_name);
     }
 
@@ -2098,7 +2188,7 @@ pub fn group_hash(groups: Vec<Group>) -> HashMap<String, u32> {
 pub fn replace_new_args(new_args: Vec<String>) -> String {
     let mut args = vec![];
     for arg in &new_args {
-        args.push(arg.replace('\\', "\\\\").replace(' ', "\\ "));
+        args.push(arg.replace('\\', r#"\\"#).replace(' ', r#"\ "#));
     }
 
     args.join(" ")

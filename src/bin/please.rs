@@ -30,9 +30,9 @@ use users::*;
 /// walk through user ACL
 fn do_list(ro: &mut RunOptions, vec_eo: &[EnvOptions], service: &str) {
     let name = if ro.target == ro.name || ro.target.is_empty() {
-        "You"
+        "You".to_string()
     } else {
-        &ro.target
+        ro.target.clone()
     };
 
     let can_do = can(vec_eo, ro);
@@ -159,6 +159,9 @@ fn general_options(
         let mut vec = vec![];
 
         for s in matches.opt_str("a").unwrap().split(',') {
+            if s.trim() == "" {
+                continue;
+            }
             vec.push(s.to_string());
         }
         ro.allow_env_list = Some(vec);
@@ -179,6 +182,28 @@ fn general_options(
         print_usage(&opts, &header);
         print_version(service);
         std::process::exit(0);
+    }
+}
+
+fn exit_if_command_not_found(ro: &RunOptions, service: &str) {
+    if let Some(k) = ro.located_bin.get(&ro.new_args[0]) {
+        if k.is_none() {
+            println!("[{service}] command not found");
+            std::process::exit(1);
+        }
+    }
+}
+
+fn is_command_cd(ro: &RunOptions, service: &str) {
+    if ro.cloned_args.is_none() && &ro.new_args[0] == "cd" {
+        println!("[{service}] {} is a shell feature.", &ro.new_args[0]);
+        if ro.new_args.len() > 1 {
+            println!(
+                "Try either changing to {} first or using {} -d {} instead.",
+                &ro.new_args[1], service, &ro.new_args[1]
+            );
+        }
+        std::process::exit(1);
     }
 }
 
@@ -233,6 +258,8 @@ fn main() {
         std::process::exit(1);
     }
 
+    ro.command = replace_new_args(ro.new_args.clone());
+
     if ro.acl_type == Acltype::List {
         if ro.target.is_empty() {
             ro.target = ro.name.to_string();
@@ -245,37 +272,20 @@ fn main() {
         ro.target = "root".to_string();
     }
 
-    ro.command = replace_new_args(ro.new_args.clone());
-
-    match search_path(&ro.new_args[0]) {
-        None => {
-            println!("[{}]: command not found", service);
-            if &ro.new_args[0] == "cd" {
-                println!("{} is a shell feature.", &ro.new_args[0]);
-                if ro.new_args.len() > 1 {
-                    println!(
-                        "Try either changing to {} first or using {} -d {} instead.",
-                        &ro.new_args[1], service, &ro.new_args[1]
-                    );
-                }
-            }
-
-            std::process::exit(1);
-        }
-        Some(x) => {
-            ro.new_args[0] = x;
-            ro.command = replace_new_args(ro.new_args.clone());
-        }
-    }
-
-    let entry = can(&vec_eo, &ro);
+    let entry = can(&vec_eo, &mut ro);
     ro.env_options = Some(entry.clone());
 
     if entry.syslog.is_some() {
         ro.syslog = entry.syslog.unwrap();
     }
+
     if !entry.permit() {
         log_action(&service, "deny", &ro, &ro.original_command.join(" "));
+
+        is_command_cd(&ro, &service);
+
+        exit_if_command_not_found(&ro, &service);
+
         print_may_not(&ro);
         std::process::exit(1);
     }
@@ -286,6 +296,7 @@ fn main() {
         std::process::exit(1);
     }
 
+    // password required?
     if !challenge_password(&ro, &entry, &service) {
         log_action(&service, "deny", &ro, &ro.original_command.join(" "));
         std::process::exit(1);
@@ -295,6 +306,7 @@ fn main() {
         std::process::exit(1);
     }
 
+    // target user
     let lookup_name = get_user_by_name(&ro.target);
     if lookup_name.is_none() {
         println!("Could not lookup {}", &ro.target);
@@ -311,6 +323,7 @@ fn main() {
         std::process::exit(1);
     }
 
+    // change to target dir
     do_dir_changes(&ro, &service);
 
     if !drop_privs(&ro) {
@@ -331,11 +344,13 @@ fn main() {
 
     nix::sys::stat::umask(ro.old_umask.unwrap());
 
-    if ro.new_args.len() > 1 {
-        Command::new(&ro.new_args[0])
-            .args(ro.new_args.clone().split_off(1))
+    if ro.cloned_args.as_ref().unwrap().len() > 1 {
+        Command::new(&ro.cloned_args.as_ref().unwrap()[0])
+            .args(ro.cloned_args.as_ref().unwrap().clone().split_off(1))
             .exec();
     } else {
-        Command::new(&ro.new_args[0]).exec();
+        Command::new(&ro.cloned_args.as_ref().unwrap()[0]).exec();
     }
+    println!("Error executing");
+    std::process::exit(1);
 }

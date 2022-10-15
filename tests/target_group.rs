@@ -25,14 +25,14 @@ target_group = potato
 
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
 
-        ro.command = "/bin/bash".to_string();
-        assert_eq!(can(&vec_eo, &ro).permit(), true);
+        basic_cmd(&mut ro, &"/bin/bash".to_string());
+        assert_eq!(can(&vec_eo, &mut ro).permit(), true);
 
         ro.target_group = Some("potatoes".to_string());
-        assert_eq!(can(&vec_eo, &ro).permit(), false);
+        assert_eq!(can(&vec_eo, &mut ro).permit(), false);
 
         ro.target_group = None;
-        assert_eq!(can(&vec_eo, &ro).permit(), false);
+        assert_eq!(can(&vec_eo, &mut ro).permit(), false);
     }
 
     #[test]
@@ -53,14 +53,14 @@ exact_target_group = potato
 
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
 
-        ro.command = "/bin/bash".to_string();
-        assert_eq!(can(&vec_eo, &ro).permit(), true);
+        basic_cmd(&mut ro, &"/bin/bash".to_string());
+        assert_eq!(can(&vec_eo, &mut ro).permit(), true);
 
         ro.target_group = Some("potatoes".to_string());
-        assert_eq!(can(&vec_eo, &ro).permit(), false);
+        assert_eq!(can(&vec_eo, &mut ro).permit(), false);
 
         ro.target_group = None;
-        assert_eq!(can(&vec_eo, &ro).permit(), false);
+        assert_eq!(can(&vec_eo, &mut ro).permit(), false);
     }
 
     #[test]
@@ -78,15 +78,15 @@ target_group = oracle
         let mut bytes = 0;
         let mut ini_list: HashMap<String, bool> = HashMap::new();
         let mut ro = basic_ro("ed", "root");
-        ro.command = "/etc/please.ini".to_string();
+        basic_cmd(&mut ro, &"/etc/please.ini".to_string());
         ro.target_group = Some("oracle".to_string());
         ro.acl_type = Acltype::Edit;
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
 
-        assert_eq!(can(&vec_eo, &ro).permit(), true);
+        assert_eq!(can(&vec_eo, &mut ro).permit(), true);
 
-        ro.command = "".to_string();
-        assert_eq!(can(&vec_eo, &ro).permit(), false);
+        basic_cmd(&mut ro, &"".to_string());
+        assert_eq!(can(&vec_eo, &mut ro).permit(), false);
     }
 
     #[test]
@@ -95,7 +95,7 @@ target_group = oracle
 [please_ini]
 name = ed
 group = false
-regex = /etc/please.ini
+regex = /etc/missing
 type = run
 target_group = oracle
 "
@@ -104,14 +104,15 @@ target_group = oracle
         let mut bytes = 0;
         let mut ini_list: HashMap<String, bool> = HashMap::new();
         let mut ro = basic_ro("ed", "root");
-        ro.command = "/etc/please.ini".to_string();
+        basic_cmd(&mut ro, &"/etc/missing".to_string());
         ro.target_group = Some("oracle".to_string());
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
 
-        assert_eq!(can(&vec_eo, &ro).permit(), true);
+        assert_eq!(can(&vec_eo, &mut ro).permit(), false);
 
         ro.command = "".to_string();
-        assert_eq!(can(&vec_eo, &ro).permit(), false);
+        basic_cmd(&mut ro, &"".to_string());
+        assert_eq!(can(&vec_eo, &mut ro).permit(), false);
     }
 
     // group has no effect in list context
@@ -130,15 +131,15 @@ target_group = oracle
         let mut bytes = 0;
         let mut ini_list: HashMap<String, bool> = HashMap::new();
         let mut ro = basic_ro("ed", "root");
-        ro.command = "/etc/please.ini".to_string();
+        basic_cmd(&mut ro, &"/etc/please.ini".to_string());
         ro.target_group = Some("oracle".to_string());
         ro.acl_type = Acltype::List;
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
 
-        assert_eq!(can(&vec_eo, &ro).permit(), true);
+        assert_eq!(can(&vec_eo, &mut ro).permit(), true);
 
-        ro.command = "".to_string();
-        assert_eq!(can(&vec_eo, &ro).permit(), true);
+        basic_cmd(&mut ro, &"".to_string());
+        assert_eq!(can(&vec_eo, &mut ro).permit(), true);
     }
 
     #[test]
@@ -155,10 +156,10 @@ type = edit
         let mut bytes = 0;
         let mut ini_list: HashMap<String, bool> = HashMap::new();
         let mut ro = basic_ro("ed", "root");
-        ro.command = "/etc/please.ini".to_string();
+        basic_cmd(&mut ro, &"/etc/please.ini".to_string());
         ro.target_group = Some("oracle".to_string());
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
 
-        assert_eq!(can(&vec_eo, &ro).permit(), false);
+        assert_eq!(can(&vec_eo, &mut ro).permit(), false);
     }
 }

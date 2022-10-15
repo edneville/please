@@ -135,6 +135,7 @@ The options are as follows:
 | target_group=regex          | When set a group must be provided that matches |
 | dir=regex                   | Permit switching to regex defined directory prior to execution. |
 | permit_env=regex            | When combined with `-a`, permit matching environments keys |
+| search_path=string          | Change search_path to `:` separated directory list |
 
 Exact counterparts, which must match exactly. When both regex and exact rules are present, the exact rule match will have precedence.
 
