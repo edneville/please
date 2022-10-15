@@ -143,6 +143,18 @@ fn general_options(
         ) as i32);
     }
 
+    let root_uid = nix::unistd::Uid::from_raw(0);
+    let root_gid = nix::unistd::Gid::from_raw(0);
+    if nix::unistd::getuid() != root_uid {
+        if !set_privs("root", root_uid, root_gid) {
+            std::process::exit(1);
+        }
+
+        if !drop_privs(ro) {
+            std::process::exit(1);
+        }
+    }
+
     if matches.opt_present("a") {
         let mut vec = vec![];
 
@@ -209,13 +221,14 @@ fn main() {
 
     let root_uid = nix::unistd::Uid::from_raw(0);
     let root_gid = nix::unistd::Gid::from_raw(0);
+    if nix::unistd::getuid() == root_uid {
+        if !set_privs("root", root_uid, root_gid) {
+            std::process::exit(1);
+        }
 
-    if !set_privs("root", root_uid, root_gid) {
-        std::process::exit(1);
-    }
-
-    if !drop_privs(&ro) {
-        std::process::exit(1);
+        if !drop_privs(&ro) {
+            std::process::exit(1);
+        }
     }
 
     general_options(&mut ro, args, &service, &mut vec_eo);

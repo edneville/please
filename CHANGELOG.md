@@ -1,3 +1,11 @@
+0.5.4
+
+* check mode can run when the please binary is not setuid (github#4)
+
+0.5.3
+
+* [fix] require_pass handling spotted by voidpin
+
 0.5.2
 
 * do not read config files that have already been processed

@@ -1250,7 +1250,7 @@ pub fn matching(item: &EnvOptions, ro: &mut RunOptions, line_error: Option<i32>)
     ro.command = replace_new_args(ro.new_args.clone());
 
     if item.acl_type == Acltype::Run {
-        match search_path(&mut *ro, item) {
+        match search_path(ro, item) {
             None => {
                 return false;
             }

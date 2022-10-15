@@ -4,7 +4,7 @@ section: 5
 header: User Manual
 footer: please 0.5.3
 author: Ed Neville (ed-please@s5h.net)
-date: 05 October 2022
+date: 15 October 2022
 ---
 
 # NAME
@@ -32,7 +32,7 @@ The properties permitted are described below and should appear at most once per 
 **includedir=[directory]**
 : read .ini files in directory, and continue to next section, if the directory does not exist config parse will fail
 
-Sections with a name starting 'default' will retain match actions 
+Sections with a name starting 'default' will retain match actions including implicit **permit**. 
 
 # MATCHES
 
@@ -237,6 +237,25 @@ name = ^%{USER}$
 permit = true
 type = list
 target = ^%{USER}$
+```
+
+# DEFAULT SECTION
+
+Sections that are named starting with **default** retain their actions, which can be useful for turning off **syslog** globally, but they will retain **permit** which implicitly is **true**, it is therefore sensible to negate this and set as **true** where needed.
+
+```
+[default:nosyslog]
+name = .*
+rule = .*
+require_pass = false
+syslog = false
+permit = false
+[mailusers]
+name = mailadm
+group = true
+rule = ^/usr/sbin/postcat$
+require_pass = true
+permit=true
 ```
 
 # EXITCMD
