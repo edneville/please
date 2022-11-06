@@ -19,8 +19,23 @@ before_script:
 
 # Use cargo to test the project
 test:cargo:
-  script:
-    - rustc --version && cargo --version  # Print version info for debugging
-    - cargo test --workspace --verbose
-    # only on nightly
-    # - cargo bench --workspace --verbose
+  script: |
+    rustc --version && cargo --version  # Print version info for debugging
+    cargo test --workspace --verbose
+    install -oroot -groot -m4755 target/debug/please target/debug/pleaseedit /usr/bin 
+    ls -al /usr/bin/please /usr/bin/pleaseedit
+    sh bintest/make_user.sh
+    set +e
+    find bintest -type f -name test.sh | sort -rn | while IFS= read -r F; do
+      echo "$F"
+      D=`echo "$F" | sed -e 's_/test.sh__g'`
+      /bin/rm -rf /etc/please.ini /etc/please.d
+      /bin/cp -R ${D}/please* /etc
+      sh "${F}" >/tmp/out 2>/tmp/err
+      if test $? -ne 0; then
+        echo "Failed:"
+        cat /tmp/out /tmp/err
+        exit 1
+      fi
+    done
+
