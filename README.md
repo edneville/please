@@ -226,7 +226,7 @@ datematch = ^Mon.*
 
 # Default sections
 
-When a matching section name begins with `default` the actions will remain set until overwritten by another matching section.
+When a matching section name begins with `default` the actions will remain set until overwritten by another matching section. It is important to note that **permit=true** will be set implicitly on matches, therefore, unless there is good reason, set **permit=false** in default sections and **permit=true** in subsequent matching sections. See **please.ini** for further details.
 
 # pleaseedit
 
