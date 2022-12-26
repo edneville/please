@@ -3,6 +3,7 @@
 * check mode can run when the please binary is not setuid (github#4)
 * improve documentation around default sections
 * add search_path to search directories for binary
+* add token_timeout to configure token expiration
 
 0.5.3
 
