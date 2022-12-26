@@ -474,4 +474,110 @@ require_pass = true
         assert_eq!(can.edit_mode, None);
         assert_eq!(can.section, "default_all".to_string());
     }
+
+    #[test]
+    fn test_empty_token_timeout() {
+        let config = r#"
+[ed]
+name = ed
+rule = .*
+"#
+        .to_string();
+
+        let mut bytes = 0;
+        let mut ini_list: HashMap<String, bool> = HashMap::new();
+        let mut vec_eo: Vec<EnvOptions> = vec![];
+        let mut ro = basic_ro("ed", "root");
+        basic_cmd(&mut ro, &"/bin/bash".to_string());
+        ro.name = "ed".to_string();
+        ro.acl_type = Acltype::Run;
+
+        read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
+
+        let can = can(&vec_eo, &mut ro);
+        assert_eq!(can.token_timeout, None);
+    }
+
+    #[test]
+    fn test_default_empty_token_timeout() {
+        let config = r#"
+[default_ed]
+name = ed
+rule = .*
+
+[ed]
+name = ed
+rule = .*
+"#
+        .to_string();
+
+        let mut bytes = 0;
+        let mut ini_list: HashMap<String, bool> = HashMap::new();
+        let mut vec_eo: Vec<EnvOptions> = vec![];
+        let mut ro = basic_ro("ed", "root");
+        basic_cmd(&mut ro, &"/bin/bash".to_string());
+        ro.name = "ed".to_string();
+        ro.acl_type = Acltype::Run;
+
+        read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
+
+        let can = can(&vec_eo, &mut ro);
+        assert_eq!(can.token_timeout, None);
+    }
+
+    #[test]
+    fn test_token_timeout_default_set() {
+        let config = r#"
+[default_ed]
+name = ed
+rule = .*
+token_timeout = 60
+
+[ed]
+name = ed
+rule = .*
+"#
+        .to_string();
+
+        let mut bytes = 0;
+        let mut ini_list: HashMap<String, bool> = HashMap::new();
+        let mut vec_eo: Vec<EnvOptions> = vec![];
+        let mut ro = basic_ro("ed", "root");
+        basic_cmd(&mut ro, &"/bin/bash".to_string());
+        ro.name = "ed".to_string();
+        ro.acl_type = Acltype::Run;
+
+        read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
+
+        let can = can(&vec_eo, &mut ro);
+        assert_eq!(can.token_timeout, Some(60));
+    }
+
+    #[test]
+    fn test_token_timeout_match_set() {
+        let config = r#"
+[default_ed]
+name = ed
+rule = .*
+
+[ed]
+name = ed
+rule = .*
+token_timeout = 60
+"#
+        .to_string();
+
+        let mut bytes = 0;
+        let mut ini_list: HashMap<String, bool> = HashMap::new();
+        let mut vec_eo: Vec<EnvOptions> = vec![];
+        let mut ro = basic_ro("ed", "root");
+        basic_cmd(&mut ro, &"/bin/bash".to_string());
+        ro.name = "ed".to_string();
+        ro.acl_type = Acltype::Run;
+
+        read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
+
+        let can = can(&vec_eo, &mut ro);
+        assert_eq!(can.token_timeout, Some(60));
+    }
 }

@@ -156,7 +156,9 @@ Exact counterparts, which must match exactly. When both regex and exact rules ar
 | require_pass=[true/false]   | Defaults to true |
 | last=[true/false]           | When true, stop processing when matched, defaults to false |
 | reason=[true/false/regex]   | When set, require a reason provided by `-r`, defaults to false |
+| timeout=[number]            | How long to wait for password input, in whole seconds |
 | syslog=[true/false]         | Log this activity to syslog, default = true |
+| token_timeout=[number]      | How long the authentication token is valid for, in whole seconds |
 | env_assign.key=value        | Force environment **key** to be assigned **value** |
 | exitcmd=[program]           | (pleaseedit) Continue with file replacement if `program` exits 0 |
 | editmode=[octal mode/keep]  | (pleaseedit) Set destination file mode to `octal mode`, or keep the mode of an existing file. If the file is not present, or mode is not declared, then mode falls back to 0600. If there is a file present, then the mode is read and used just prior to file rename |

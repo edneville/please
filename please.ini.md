@@ -4,7 +4,7 @@ section: 5
 header: User Manual
 footer: please 0.5.3
 author: Ed Neville (ed-please@s5h.net)
-date: 16 November 2022
+date: 26 December 2022
 ---
 
 # NAME
@@ -119,6 +119,9 @@ Rules starting **exact** are string matches and not **regex** processed and take
 
 **reason=[true|false|regex]**
 : require a reason for execution/edit. If reason is **true** then any reason will satisfy. Any string other than **true** or **false** will be treated as a regex match. Defaults to false
+
+**token_timeout=[number]**
+: length of timeout for token authentication in whole seconds
 
 **syslog=[true|false]**
 : log this activity to syslog, defaults to true
@@ -241,7 +244,7 @@ target = ^%{USER}$
 
 # DEFAULT SECTION
 
-Sections that are named starting with **default** retain their actions, which can be useful for turning off **syslog** globally, for example, but they will retain **permit** which implicitly is **true**, it is therefore sensible to negate this (setting **permit=false**) and set **permit=true** in subsequent sections as needed.
+Sections that are named starting with **default** retain their actions, which can be useful for turning off **syslog** or setting a **token_timeout** globally, for example, but they will retain **permit** which implicitly is **true**, it is therefore sensible to negate this (setting **permit=false**) and set **permit=true** in subsequent sections as needed.
 
 ```
 [default:nosyslog]
@@ -250,6 +253,7 @@ rule = .*
 require_pass = false
 syslog = false
 permit = false
+token_timeout = 1800
 [mailusers]
 name = mailadm
 group = true

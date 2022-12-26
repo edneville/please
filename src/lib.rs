@@ -88,6 +88,7 @@ pub struct EnvOptions {
     pub env_assign: Option<HashMap<String, String>>,
     pub timeout: Option<u32>,
     pub search_path: Option<String>,
+    pub token_timeout: Option<u64>,
 }
 
 impl EnvOptions {
@@ -124,6 +125,7 @@ impl EnvOptions {
             env_assign: None,
             timeout: None,
             search_path: None,
+            token_timeout: None,
         }
     }
     fn new_deny() -> EnvOptions {
@@ -750,6 +752,14 @@ pub fn read_ini(
             "search_path" => {
                 opt.search_path = Some(value.to_string());
             }
+            "token_timeout" => {
+                let token_timeout: Result<u64, core::num::ParseIntError> = value.parse();
+                if fail_error && token_timeout.is_err() {
+                    faulty = true;
+                } else {
+                    opt.token_timeout = Some(token_timeout.unwrap());
+                }
+            }
             &_ => {
                 println!("Error parsing {}:{}", config_path, line_number);
                 faulty = true;
@@ -1327,6 +1337,11 @@ pub fn merge_default(default: &EnvOptions, item: &EnvOptions) -> EnvOptions {
         merged.search_path = default.search_path.clone();
     }
 
+    if default.token_timeout.is_some() && item.token_timeout.is_none() {
+        // println!("merging token_timeout");
+        merged.token_timeout = default.token_timeout;
+    }
+
     merged
 }
 
@@ -1466,7 +1481,7 @@ pub fn challenge_password(ro: &RunOptions, entry: &EnvOptions, service: &str) ->
             std::process::exit(1);
         }
 
-        if valid_token(&ro.name) {
+        if valid_token(&ro.name, entry) {
             update_token(&ro.name);
             return true;
         }
@@ -2057,7 +2072,7 @@ pub fn boot_secs() -> libc::timespec {
 /// does the user have a valid token
 /// return false if time stamp is in the future
 /// return true if token was set within 600 seconds of wall and boot time
-pub fn valid_token(user: &str) -> bool {
+pub fn valid_token(user: &str, eo: &EnvOptions) -> bool {
     if !create_token_dir() {
         return false;
     }
@@ -2067,7 +2082,7 @@ pub fn valid_token(user: &str) -> bool {
         return false;
     }
 
-    let secs = 600;
+    let secs = eo.token_timeout.unwrap_or(600);
 
     let token_path = token_path.unwrap();
     match fs::metadata(token_path) {
