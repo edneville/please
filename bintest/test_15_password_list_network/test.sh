@@ -16,6 +16,9 @@ expect -re ".*password.*"
 send "password\r" 
 expect eof
 EOF
+if test $? -ne 0; then
+    exit 1
+fi
 echo "list reason and password passed"
 EOT
 
