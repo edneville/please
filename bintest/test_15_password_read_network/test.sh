@@ -11,7 +11,7 @@ echo "test list password"
 cat <<'EOF' | expect | grep "You may"
 spawn please -l
 expect -re ".*password.*"
-send "password\r" 
+send "password\r"
 expect eof
 EOF
 echo "list passed"
