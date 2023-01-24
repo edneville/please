@@ -1,0 +1,45 @@
+#compdef please pleaseedit
+
+setopt localoptions extended_glob
+
+local environ e cmd cpp
+local -a args _comp_priv_prefix
+local -A opt_args
+
+zstyle -a ":completion:${curcontext}:" environ environ
+
+for e in "${environ[@]}"
+do local -x "$e"
+done
+
+args=(
+  '(-u --user)'{-u+,--user=}'[run command (or edit file) as specified user]:user:_users'
+  '(-t --target)'{-t+,--target=}'[run command (or edit file) as specified user]:user:_users'
+  '(-g --group)'{-g+,--group=}'[run command as the specified group name or ID]:group:_groups'
+  '(-n --noprompt)'{-n,--noprompt}'[do nothing if a password is required]'
+  '(-w --warm)'{-w,--warm}"[update user's timestamp without running a command]"
+  '(-p --purge)'{-p,--purge}'[purge timestamp file]'
+  '(-r --reason)'{-r,--reason}'[provide reason for execution/edit]'
+  '(-)'{-h,--help}'[display help message and exit]'
+  '(-)'{-v,--version}'[display version information and exit]'
+)
+
+if [[ $service = pleaseedit ]]; then
+  args=( -A "-*" $args '*:file:_files' )
+else
+  cmd="$words[1]"
+  cpp='_comp_priv_prefix=(
+    $cmd -n
+    ${(kv)opt_args[(I)(-[utgda]|--(user|target|group|dir|allowenv))]}
+  )'
+  args+=(
+    '(-d --dir)'{-d+,--dir=}'[change the working directory before running command]:directory:_directories'
+    '(-a --allowenv)'{-a+,--allowenv=}'[preserve comma separated user environment variables]::environment variable:_sequence _parameters -g "*export*"'
+    '(-c --check)'{-c+,--check=}'[check config file]:file:_files'
+    '(-l --list)'{-l,--list}"[list user's privileges or check a specific command]"
+    "(-)1: :{ $cpp; _command_names -e }"
+    "*:: :{ $cpp; _normal }"
+  )
+fi
+
+_arguments -s -S $args
