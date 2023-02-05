@@ -11,9 +11,10 @@ readme = "README.md"
 categories = ["command-line-utilities"]
 documentation = "https://www.usenix.org.uk/content/please.html"
 keywords = ["please", "access", "elevation", "edit", "regex"]
+exclude = ["/bintest"]
 
 [dependencies]
-regex = "1.6"
+regex = "1.7"
 chrono = "0.4"
 getopts = "0.2"
 nix = ">= 0.25"
