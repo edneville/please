@@ -2,9 +2,9 @@
 title: please.ini
 section: 5
 header: User Manual
-footer: please 0.5.3
+footer: please 0.5.4
 author: Ed Neville (ed-please@s5h.net)
-date: 05 February 2023
+date: 08 February 2023
 ---
 
 # NAME
@@ -121,7 +121,7 @@ Rules starting **exact** are string matches and not **regex** processed and take
 : require a reason for execution/edit. If reason is **true** then any reason will satisfy. Any string other than **true** or **false** will be treated as a regex match. Defaults to false
 
 **token_timeout=[number]**
-: length of timeout for token authentication in whole seconds
+: length of timeout for token authentication in whole seconds (default 600)
 
 **syslog=[true|false]**
 : log this activity to syslog, defaults to true

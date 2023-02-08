@@ -1,33 +1,49 @@
 _please()
 {
-	local cur prev OPTS
-	COMPREPLY=()
-	cur="${COMP_WORDS[COMP_CWORD]}"
-	prev="${COMP_WORDS[COMP_CWORD-1]}"
-	case $prev in
-		'-u'|'--user'|'-t'|'--target')
-			COMPREPLY=( $(compgen -u -- $cur) )
-			return 0
-			;;
-		'-g'|'--group')
-			COMPREPLY=( $(compgen -g -- $cur) )
-			return 0
-			;;
-		'-h'|'--help'|'-V'|'--version')
-			return 0
-			;;
-	esac
-	case $cur in
-		-*)
-            local opts=$(_parse_help "$1")
-            COMPREPLY=($(compgen -W '${opts:-$(_parse_usage "$1")}' -- "$cur"))
-            [[ ${COMPREPLY-} == *= ]] && compopt -o nospace
-              return
-			;;
-	esac
-	local IFS=$'\n'
-	compopt -o filenames
-	COMPREPLY=( $(compgen -f -- $cur) )
-	return 0
-}
-complete -F _please please pleaseedit
+    local cur prev words cword split
+    _init_completion -s || return
+    local i mode=normal
+
+    [[ $1 == *pleaseedit ]] && mode=edit
+
+    [[ $mode == normal ]] &&
+        for ((i = 1; i <= cword; i++)); do
+            if [[ ${words[i]} != -* ]]; then
+                local PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+                local root_command=${words[i]}
+                _command_offset $i
+                return
+            fi
+            [[ ${words[i]} == -[utgrad] || ${words[i]} == --@(user|target|group|reason|allowenv|dir) ]]
+                ((i++))
+        done
+
+    case "$prev" in
+        --dir | -!(-*)[d])
+            _filedir
+            return
+            ;;
+        --user | --target | -!(-*)[ut])
+            COMPREPLY=($(compgen -u -- "$cur"))
+            return
+            ;;
+        --group | -!(-*)g)
+            COMPREPLY=($(compgen -g -- "$cur"))
+            return
+            ;;
+    esac
+
+    $split && return
+
+    if [[ $cur == -* ]]; then
+        local opts=$(_parse_help "$1")
+        COMPREPLY=($(compgen -W '${opts:-$(_parse_usage "$1")}' -- "$cur"))
+        [[ ${COMPREPLY-} == *= ]] && compopt -o nospace
+        return
+    fi
+    if [[ $mode == edit ]]; then
+        _filedir
+    fi
+} &&
+    complete -F _please please pleaseedit
+
