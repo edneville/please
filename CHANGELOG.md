@@ -4,8 +4,9 @@
 * improve documentation around default sections
 * add search_path to search directories for binary
 * add token_timeout to configure token expiration
-* zsh tab completion from @Mynacol (github!62)
-* bump regex to 1.7, nix to 0.25
+* zsh tab completion from @Mynacol (gitlab!62)
+* bash tab completion (experimental)
+* bump regex to 1.7, nix to 0.25, rpassword to 6.0 (dkg)
 
 0.5.3
 

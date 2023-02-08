@@ -234,10 +234,10 @@ impl pam::Converse for PamConvo {
         CString::new(self.login.clone()).map_err(|_| ())
     }
     fn prompt_blind(&mut self, _msg: &CStr) -> Result<CString, ()> {
-        match rpassword::read_password_from_tty(Some(&format!(
+        match rpassword::prompt_password(format!(
             "[{}] password for {}: ",
             self.service, self.login
-        ))) {
+        )) {
             Ok(password) => self.passwd = Some(password),
             Err(_) => {
                 println!("Cannot read from terminal");
