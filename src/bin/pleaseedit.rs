@@ -19,6 +19,7 @@
 use pleaser::*;
 
 use std::convert::TryFrom;
+use std::convert::TryInto;
 use std::fs::OpenOptions;
 use std::os::unix::fs::OpenOptionsExt;
 
@@ -253,7 +254,7 @@ fn remove_tmp_edit(ro: &RunOptions, edit_file: &str) {
 fn edit_mode(entry: &EnvOptions, source_file: &Path) -> nix::sys::stat::Mode {
     match &entry.edit_mode {
         Some(mode) => match mode {
-            EditMode::Mode(x) => nix::sys::stat::Mode::from_bits(*x as u32).unwrap(),
+            EditMode::Mode(x) => nix::sys::stat::Mode::from_bits((*x).try_into().unwrap()).unwrap(),
             EditMode::Keep(_x) => match nix::sys::stat::stat(source_file) {
                 Ok(m) => nix::sys::stat::Mode::from_bits_truncate(m.st_mode),
                 _ => nix::sys::stat::Mode::from_bits(0o600).unwrap(),
@@ -322,7 +323,7 @@ fn rename_to_source(
         }
     }
 
-    if std::fs::rename(&dir_parent_tmp, source_file).is_err() {
+    if std::fs::rename(dir_parent_tmp, source_file).is_err() {
         println!(
             "Could not rename {} to {}",
             &dir_parent_tmp,
@@ -514,12 +515,9 @@ fn main() {
 
             let args: Vec<&str> = editor.as_str().split(' ').collect();
             if args.len() == 1 {
-                Command::new(editor.as_str()).arg(&edit_file).exec();
+                Command::new(editor.as_str()).arg(edit_file).exec();
             } else {
-                Command::new(&args[0])
-                    .args(&args[1..])
-                    .arg(&edit_file)
-                    .exec();
+                Command::new(args[0]).args(&args[1..]).arg(edit_file).exec();
             }
             println!("Could not execute {}", editor.as_str());
             std::process::exit(1);

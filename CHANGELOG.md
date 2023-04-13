@@ -1,4 +1,9 @@
-0.5.4 (Next)
+0.5.5
+
+* and_hms -> and_hms_opt
+* macos beta support
+
+0.5.4
 
 * check mode can run when the please binary is not setuid (github#4)
 * improve documentation around default sections
