@@ -37,7 +37,7 @@ use users::os::unix::UserExt;
 use users::*;
 
 use getopts::{Matches, Options};
-use nix::unistd::{alarm, gethostname, initgroups, setegid, seteuid, setgid, setuid};
+use nix::unistd::{alarm, gethostname, setegid, seteuid, setgid, setuid};
 use pam::Authenticator;
 
 use rand::distributions::Alphanumeric;
@@ -572,11 +572,10 @@ pub fn read_ini(
                         }
                         collect.sort();
                         for file in collect {
-                            let incf = file;
-                            if !can_dir_include(&incf) {
+                            if !can_dir_include(&file) {
                                 continue;
                             }
-                            if read_ini_config_file(&incf, vec_eo, ro, fail_error, bytes, ini_list)
+                            if read_ini_config_file(&file, vec_eo, ro, fail_error, bytes, ini_list)
                             {
                                 println!("Could not include file");
                                 return true;
@@ -664,14 +663,16 @@ pub fn read_ini(
                 opt.notbefore = Some(
                     parse_date_from_str(value, "%Y%m%d")
                         .unwrap()
-                        .and_hms(0, 0, 0),
+                        .and_hms_opt(0, 0, 0)
+                        .unwrap(),
                 )
             }
             "notafter" if value.len() == 8 => {
                 opt.notafter = Some(
                     parse_date_from_str(value, "%Y%m%d")
                         .unwrap()
-                        .and_hms(23, 59, 59),
+                        .and_hms_opt(23, 59, 59)
+                        .unwrap(),
                 )
             }
             "notbefore" if value.len() == 14 => {
@@ -787,7 +788,7 @@ pub fn read_ini_config_file(
     let path = Path::new(config_path);
     let display = path.display();
 
-    let file = match File::open(&path) {
+    let file = match File::open(path) {
         Err(why) => {
             println!("Could not open {}: {}", display, why);
             return true;
@@ -1018,7 +1019,7 @@ pub fn directory_check_ok(item: &EnvOptions, ro: &RunOptions, line: Option<i32>)
 
         let exact_dir = item.exact_dir.as_ref().unwrap();
 
-        if (&ro.directory.as_ref()).is_some() && exact_dir != ro.directory.as_ref().unwrap() {
+        if (ro.directory.as_ref()).is_some() && exact_dir != ro.directory.as_ref().unwrap() {
             return false;
         }
         return true;
@@ -1043,7 +1044,7 @@ pub fn directory_check_ok(item: &EnvOptions, ro: &RunOptions, line: Option<i32>)
             }
         };
 
-        if (&ro.directory.as_ref()).is_some() && !dir_re.is_match(ro.directory.as_ref().unwrap()) {
+        if (ro.directory.as_ref()).is_some() && !dir_re.is_match(ro.directory.as_ref().unwrap()) {
             // && ro.directory != "." {
             return false;
         }
@@ -1893,10 +1894,25 @@ pub fn bad_priv_msg() {
 
 /// set privs of usr to target_uid and target_gid. return false if fails
 pub fn set_privs(user: &str, target_uid: nix::unistd::Uid, target_gid: nix::unistd::Gid) -> bool {
-    let user = CString::new(user).unwrap();
-    if initgroups(&user, target_gid).is_err() {
-        bad_priv_msg();
-        return false;
+    let name = CString::new(user.as_bytes()).unwrap();
+
+    unsafe {
+        if libc::setgroups(0, std::ptr::null()) != 0 {
+            bad_priv_msg();
+            return false;
+        }
+
+        #[cfg(not(target_os = "macos"))]
+        if libc::initgroups(name.as_ptr(), target_gid.as_raw()) != 0 {
+            bad_priv_msg();
+            return false;
+        }
+
+        #[cfg(target_os = "macos")]
+        if libc::initgroups(name.as_ptr(), target_gid.as_raw() as i32) != 0 {
+            bad_priv_msg();
+            return false;
+        }
     }
 
     if setgid(target_gid).is_err() {
@@ -2045,7 +2061,7 @@ pub fn token_path(user: &str) -> Option<String> {
 }
 
 pub fn create_token_dir() -> bool {
-    if !Path::new(&token_dir()).is_dir() && fs::create_dir_all(&token_dir()).is_err() {
+    if !Path::new(&token_dir()).is_dir() && fs::create_dir_all(token_dir()).is_err() {
         println!("Could not create token directory");
         return false;
     }
@@ -2161,7 +2177,7 @@ pub fn update_token(user: &str) {
         return;
     }
 
-    if std::fs::rename(&token_path_tmp.as_str(), token_path).is_err() {
+    if std::fs::rename(token_path_tmp.as_str(), token_path).is_err() {
         println!("Could not update token");
     }
 }

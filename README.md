@@ -20,7 +20,7 @@ If not, it is a simple install:
 git clone https://gitlab.com/edneville/please.git
 cd please
 cargo test && cargo build --release \
-&& install -oroot -groot -D -m4755 target/release/please target/release/pleaseedit /usr/local/bin
+&& install -o 0 -g 0 -m4755 target/release/please target/release/pleaseedit /usr/local/bin
 ```
 
 Arch:

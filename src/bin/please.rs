@@ -82,7 +82,7 @@ fn do_list(ro: &mut RunOptions, vec_eo: &[EnvOptions], service: &str) {
 /// navigate to directory or exit 1
 fn do_dir_changes(ro: &RunOptions, service: &str) {
     if ro.directory.is_some() {
-        if let Err(x) = std::env::set_current_dir(&ro.directory.as_ref().unwrap()) {
+        if let Err(x) = std::env::set_current_dir(ro.directory.as_ref().unwrap()) {
             println!(
                 "[{}] cannot cd into {}: {}",
                 &service,
