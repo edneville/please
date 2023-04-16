@@ -4,7 +4,7 @@ section: 1
 header: User Manual
 footer: please 0.5.4
 author: Ed Neville (ed-please@s5h.net)
-date: 13 April 2023
+date: 16 April 2023
 ---
 
 # NAME
@@ -22,6 +22,8 @@ please - a tool for access elevation.
 **pleaseedit [-g/\--group groupname] filename**
 
 **pleaseedit [-t/\--target username] filename**
+
+**pleaseedit [\--resume] filename**
 
 **please [-a/\--allowenv list]**
 
@@ -59,7 +61,7 @@ please - a tool for access elevation.
 
 The aim is to allow admins to delegate accurate principle of least privilege access with ease. **please.ini** allows for very specific and flexible regex defined permissions.
 
-**pleaseedit** adds a layer of safety to editing files. The file is copied to /tmp, where it can be updated. When **EDITOR** exits cleanly the file is copied alongside the target, the file will then be renamed over the original, but if a **exitcmd** is configured it must exit cleanly first.
+**pleaseedit** adds a layer of safety to editing files. The file is copied to /tmp, where it can be updated. When **EDITOR** exits cleanly the file is copied alongside the target, the file will then be renamed over the original, but if a **exitcmd** is configured it must exit cleanly first. **resume** will continue editing when **exitcmd** fails.
 
 **-a**/**\--allowenv list**
 : allow environments separated by **,** to be passed through
