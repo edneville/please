@@ -184,6 +184,7 @@ pub struct RunOptions {
     pub env_options: Option<EnvOptions>,
     pub cloned_args: Option<Vec<String>>,
     pub located_bin: HashMap<String, Option<String>>,
+    pub resume: Option<bool>,
 }
 
 impl RunOptions {
@@ -213,6 +214,7 @@ impl RunOptions {
             env_options: None,
             cloned_args: None,
             located_bin: HashMap::new(),
+            resume: None,
         }
     }
 }

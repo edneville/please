@@ -2,6 +2,7 @@
 
 * and_hms -> and_hms_opt
 * macos beta support
+* optionally resume when pleasedit exitcmd fails
 
 0.5.4
 

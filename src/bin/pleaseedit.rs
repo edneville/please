@@ -41,6 +41,11 @@ use nix::sys::wait::WaitStatus::Exited;
 use nix::unistd::{fchown, fork, ForkResult};
 use users::*;
 
+struct UidGid {
+    target_uid: nix::unistd::Uid,
+    target_gid: nix::unistd::Gid,
+}
+
 /// return a path string to work on in /tmp
 fn tmp_edit_file_name(source_file: &Path, service: &str, original_user: &str) -> String {
     format!(
@@ -68,14 +73,19 @@ fn setup_temp_edit_file(
     service: &str,
     source_file: &Path,
     ro: &RunOptions,
-    target_uid: nix::unistd::Uid,
-    target_gid: nix::unistd::Gid,
+    target_uid_gid: UidGid,
+    prev_file_data: Option<String>,
+    temp_file_name: Option<String>,
 ) -> String {
     if !drop_privs(ro) {
         std::process::exit(1);
     }
 
-    let tmp_edit_file = tmp_edit_file_name(source_file, service, &ro.name);
+    let tmp_edit_file = match temp_file_name {
+        Some(x) => x,
+        None => tmp_edit_file_name(source_file, service, &ro.name),
+    };
+
     let tmp_edit_file_path = Path::new(&tmp_edit_file);
 
     if tmp_edit_file_path.exists() && std::fs::remove_file(tmp_edit_file_path).is_err() {
@@ -83,27 +93,29 @@ fn setup_temp_edit_file(
         std::process::exit(1);
     }
 
-    if !esc_privs() {
-        std::process::exit(1);
-    }
-    if !set_eprivs(target_uid, target_gid) {
-        std::process::exit(1);
-    }
     let mut file_data: Result<String, std::io::Error> = Ok("".to_string());
-
-    if source_file.exists() {
-        file_data = std::fs::read_to_string(source_file);
-        if file_data.is_err() {
-            println!(
-                "Could not read source file {}",
-                source_file.to_str().unwrap(),
-            );
+    if prev_file_data.is_none() {
+        if !esc_privs() {
             std::process::exit(1);
         }
-    }
+        if !set_eprivs(target_uid_gid.target_uid, target_uid_gid.target_gid) {
+            std::process::exit(1);
+        }
 
-    if !drop_privs(ro) {
-        std::process::exit(1);
+        if source_file.exists() {
+            file_data = std::fs::read_to_string(source_file);
+            if file_data.is_err() {
+                println!(
+                    "Could not read source file {}",
+                    source_file.to_str().unwrap(),
+                );
+                std::process::exit(1);
+            }
+        }
+
+        if !drop_privs(ro) {
+            std::process::exit(1);
+        }
     }
 
     let mut options = OpenOptions::new();
@@ -136,11 +148,20 @@ fn setup_temp_edit_file(
         std::process::exit(1);
     }
 
-    if file_data.is_ok()
-        && file
-            .unwrap()
-            .write(file_data.as_ref().unwrap().as_bytes())
-            .is_err()
+    if prev_file_data.is_none() {
+        if file_data.is_ok()
+            && file
+                .unwrap()
+                .write(file_data.as_ref().unwrap().as_bytes())
+                .is_err()
+        {
+            println!("Could not write data to {}", &tmp_edit_file);
+            std::process::exit(1);
+        }
+    } else if file
+        .unwrap()
+        .write(prev_file_data.as_ref().unwrap().as_bytes())
+        .is_err()
     {
         println!("Could not write data to {}", &tmp_edit_file);
         std::process::exit(1);
@@ -186,6 +207,7 @@ fn general_options(ro: &mut RunOptions, args: Vec<String>, service: &str) {
     opts.optflag("n", "noprompt", "do nothing if a password is required");
     opts.optflag("p", "purge", "purge access token");
     opts.optopt("r", "reason", "provide reason for edit", "REASON");
+    opts.optflag("", "resume", "resume edit when exitcmd fails");
     opts.optopt("t", "target", "edit as target user", "USER");
     opts.optopt("u", "user", "edit as target user", "USER");
     opts.optflag("v", "version", "print version and exit");
@@ -202,6 +224,10 @@ fn general_options(ro: &mut RunOptions, args: Vec<String>, service: &str) {
     let header = format!("{} [arguments] </path/to/file>", &service);
     common_opt_arguments(&matches, &opts, ro, service, &header);
 
+    if matches.opt_present("resume") {
+        ro.resume = Some(true);
+    }
+
     if (ro.new_args.is_empty() || ro.new_args.len() > 1) && !ro.warm_token && !ro.purge_token {
         println!("You must provide one file to edit");
         print_usage(&opts, &header);
@@ -213,13 +239,12 @@ fn general_options(ro: &mut RunOptions, args: Vec<String>, service: &str) {
 fn write_target_tmp_file(
     dir_parent_tmp: &str,
     file_data: &Result<String, std::io::Error>,
-    target_uid: nix::unistd::Uid,
-    target_gid: nix::unistd::Gid,
+    target_uid_gid: UidGid,
 ) -> std::fs::File {
     if !esc_privs() {
         std::process::exit(1);
     }
-    if !set_eprivs(target_uid, target_gid) {
+    if !set_eprivs(target_uid_gid.target_uid, target_uid_gid.target_gid) {
         std::process::exit(1);
     }
 
@@ -274,21 +299,21 @@ fn rename_to_source(
     entry: &EnvOptions,
     lookup_name: &User,
     dir_parent_tmp_file: &std::fs::File,
-    target_uid: nix::unistd::Uid,
-    target_gid: nix::unistd::Gid,
+    target_uid_gid: UidGid,
+    ro: &RunOptions,
 ) -> bool {
     if !esc_privs() {
         std::process::exit(1);
     }
 
-    if !set_eprivs(target_uid, target_gid) {
+    if !set_eprivs(target_uid_gid.target_uid, target_uid_gid.target_gid) {
         std::process::exit(1);
     }
 
     fchown(
         dir_parent_tmp_file.as_raw_fd(),
         Some(nix::unistd::Uid::from_raw(lookup_name.uid())),
-        Some(target_gid),
+        Some(target_uid_gid.target_gid),
     )
     .unwrap();
 
@@ -302,22 +327,40 @@ fn rename_to_source(
         let mut cmd = build_exitcmd(entry, source_file.to_str().unwrap(), dir_parent_tmp);
         match cmd.output() {
             Err(x) => {
-                println!("Aborting as exitcmd was non-zero when executing, removing tmp file:");
-                println!("{}", x);
-                if nix::unistd::unlink(dir_parent_tmp).is_err() {
-                    println!("Could not remove tmp file either, giving up");
+                if ro.resume == Some(true) {
+                    println!("Aborting as exitcmd was non-zero when executing, removing tmp file:");
+                    println!("{}", x);
+                    if nix::unistd::unlink(dir_parent_tmp).is_err() {
+                        println!("Could not remove tmp file either, giving up");
+                    }
+                    std::process::exit(1);
+                } else {
+                    if nix::unistd::unlink(dir_parent_tmp).is_err() {
+                        println!("Could not remove tmp file, giving up");
+                        std::process::exit(1);
+                    }
+
+                    return false;
                 }
-                std::process::exit(1);
             }
             Ok(out) => {
                 io::stdout().write_all(&out.stdout).unwrap();
                 io::stderr().write_all(&out.stderr).unwrap();
                 if !out.status.success() {
-                    println!("Aborting as exitcmd was non-zero, removing tmp file");
-                    if nix::unistd::unlink(dir_parent_tmp).is_err() {
-                        println!("Could not remove tmp file either, giving up");
+                    if ro.resume.is_none() || ro.resume == Some(false) {
+                        println!("Aborting as exitcmd was non-zero, removing tmp file");
+                        if nix::unistd::unlink(dir_parent_tmp).is_err() {
+                            println!("Could not remove tmp file either, giving up");
+                        }
+                        std::process::exit(1);
+                    } else {
+                        if nix::unistd::unlink(dir_parent_tmp).is_err() {
+                            println!("Could not remove tmp file, giving up");
+                            std::process::exit(1);
+                        }
+
+                        return false;
                     }
-                    std::process::exit(1);
                 }
             }
         }
@@ -462,96 +505,131 @@ fn main() {
     }
 
     set_environment(&ro, &entry, &original_user, original_uid, &lookup_name);
-    let edit_file = &setup_temp_edit_file(&service, source_file, &ro, target_uid, target_gid);
 
-    std::env::set_var("PLEASE_EDIT_FILE", edit_file);
+    let mut edit_file: Option<String> = None;
+    let mut file_data: Option<String> = None;
+
     std::env::set_var("PLEASE_SOURCE_FILE", source_file.to_str().unwrap());
 
-    let mut good_edit = false;
+    // loop around if resume on failure is set
+    loop {
+        edit_file = Some(setup_temp_edit_file(
+            &service,
+            source_file,
+            &ro,
+            UidGid {
+                target_uid,
+                target_gid,
+            },
+            file_data,
+            edit_file,
+        ));
+        std::env::set_var("PLEASE_EDIT_FILE", edit_file.as_ref().unwrap());
 
-    let sig_action = signal::SigAction::new(
-        signal::SigHandler::SigAction(handle_sigtstp),
-        signal::SaFlags::SA_RESTART,
-        signal::SigSet::all(),
-    );
+        let mut good_edit = false;
 
-    match unsafe { fork() } {
-        Ok(ForkResult::Parent { .. }) => {
-            unsafe {
-                signal::sigaction(signal::SIGCHLD, &sig_action).unwrap();
-            };
+        let sig_action = signal::SigAction::new(
+            signal::SigHandler::SigAction(handle_sigtstp),
+            signal::SaFlags::SA_RESTART,
+            signal::SigSet::all(),
+        );
 
-            match nix::sys::wait::wait() {
-                Ok(Exited(_pid, ret)) if ret == 0 => {
-                    good_edit = true;
+        match unsafe { fork() } {
+            Ok(ForkResult::Parent { .. }) => {
+                unsafe {
+                    signal::sigaction(signal::SIGCHLD, &sig_action).unwrap();
+                };
+
+                match nix::sys::wait::wait() {
+                    Ok(Exited(_pid, ret)) if ret == 0 => {
+                        good_edit = true;
+                    }
+                    Ok(_) => {}
+                    Err(_x) => {}
                 }
-                Ok(_) => {}
-                Err(_x) => {}
+                unsafe {
+                    signal::signal(signal::SIGCHLD, signal::SigHandler::SigDfl).unwrap();
+                };
             }
-            unsafe {
-                signal::signal(signal::SIGCHLD, signal::SigHandler::SigDfl).unwrap();
-            };
+            Ok(ForkResult::Child) => {
+                if !esc_privs() {
+                    std::process::exit(1);
+                }
+                if !set_privs(&ro.name, ro.original_uid, ro.original_gid) {
+                    std::process::exit(1);
+                }
+
+                let editor = get_editor();
+
+                nix::sys::stat::umask(ro.old_umask.unwrap());
+
+                if ro.old_envs.is_some() {
+                    for (key, _) in std::env::vars() {
+                        std::env::remove_var(key);
+                    }
+                    for (key, val) in ro.old_envs.as_ref().unwrap().iter() {
+                        std::env::set_var(key, val);
+                    }
+                }
+
+                let args: Vec<&str> = editor.as_str().split(' ').collect();
+                if args.len() == 1 {
+                    Command::new(editor.as_str())
+                        .arg(edit_file.as_ref().unwrap())
+                        .exec();
+                } else {
+                    Command::new(args[0])
+                        .args(&args[1..])
+                        .arg(edit_file.as_ref().unwrap())
+                        .exec();
+                }
+                println!("Could not execute {}", editor.as_str());
+                std::process::exit(1);
+            }
+            Err(_) => println!("Fork failed"),
         }
-        Ok(ForkResult::Child) => {
-            if !esc_privs() {
-                std::process::exit(1);
-            }
-            if !set_privs(&ro.name, ro.original_uid, ro.original_gid) {
-                std::process::exit(1);
-            }
 
-            let editor = get_editor();
-
-            nix::sys::stat::umask(ro.old_umask.unwrap());
-
-            if ro.old_envs.is_some() {
-                for (key, _) in std::env::vars() {
-                    std::env::remove_var(key);
-                }
-                for (key, val) in ro.old_envs.as_ref().unwrap().iter() {
-                    std::env::set_var(key, val);
-                }
-            }
-
-            let args: Vec<&str> = editor.as_str().split(' ').collect();
-            if args.len() == 1 {
-                Command::new(editor.as_str()).arg(edit_file).exec();
-            } else {
-                Command::new(args[0]).args(&args[1..]).arg(edit_file).exec();
-            }
-            println!("Could not execute {}", editor.as_str());
+        if !good_edit {
+            println!("Exiting as editor or child did not close cleanly.");
             std::process::exit(1);
         }
-        Err(_) => println!("Fork failed"),
+
+        // drop privs to original user and read into memory
+        log_action(&service, "permit", &ro, &ro.original_command.join(" "));
+        let dir_parent_tmp =
+            source_tmp_file_name(source_file, format!("{}.copy", service).as_str(), &ro.name);
+
+        let file_read = edit_file_to_memory(source_file, edit_file.as_ref().unwrap());
+
+        // become the target user and create file
+        let dir_parent_tmp_file = write_target_tmp_file(
+            &dir_parent_tmp,
+            &file_read,
+            UidGid {
+                target_uid,
+                target_gid,
+            },
+        );
+
+        // original user, remove tmp edit file
+        remove_tmp_edit(&ro, edit_file.as_ref().unwrap());
+
+        // rename file to source if exitcmd is clean
+        if rename_to_source(
+            &dir_parent_tmp,
+            source_file,
+            &entry,
+            &lookup_name,
+            &dir_parent_tmp_file,
+            UidGid {
+                target_uid,
+                target_gid: runopt_target_gid(&ro, &lookup_name),
+            },
+            &ro,
+        ) {
+            break;
+        }
+
+        file_data = Some(file_read.unwrap());
     }
-
-    if !good_edit {
-        println!("Exiting as editor or child did not close cleanly.");
-        std::process::exit(1);
-    }
-
-    // drop privs to original user and read into memory
-    log_action(&service, "permit", &ro, &ro.original_command.join(" "));
-    let dir_parent_tmp =
-        source_tmp_file_name(source_file, format!("{}.copy", service).as_str(), &ro.name);
-
-    let file_data = edit_file_to_memory(source_file, edit_file);
-
-    // become the target user and create file
-    let dir_parent_tmp_file =
-        write_target_tmp_file(&dir_parent_tmp, &file_data, target_uid, target_gid);
-
-    // original user, remove tmp edit file
-    remove_tmp_edit(&ro, edit_file);
-
-    // rename file to source if exitcmd is clean
-    rename_to_source(
-        &dir_parent_tmp,
-        source_file,
-        &entry,
-        &lookup_name,
-        &dir_parent_tmp_file,
-        target_uid,
-        runopt_target_gid(&ro, &lookup_name),
-    );
 }
