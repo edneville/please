@@ -73,7 +73,7 @@ fn setup_temp_edit_file(
     service: &str,
     source_file: &Path,
     ro: &RunOptions,
-    target_uid_gid: UidGid,
+    target_uid_gid: &UidGid,
     prev_file_data: Option<String>,
     temp_file_name: Option<String>,
 ) -> String {
@@ -239,7 +239,7 @@ fn general_options(ro: &mut RunOptions, args: Vec<String>, service: &str) {
 fn write_target_tmp_file(
     dir_parent_tmp: &str,
     file_data: &Result<String, std::io::Error>,
-    target_uid_gid: UidGid,
+    target_uid_gid: &UidGid,
 ) -> std::fs::File {
     if !esc_privs() {
         std::process::exit(1);
@@ -409,6 +409,137 @@ extern "C" fn handle_sigtstp(
     }
 }
 
+fn child_editor(ro: &RunOptions, edit_file: &Option<String>) {
+    if !esc_privs() {
+        std::process::exit(1);
+    }
+    if !set_privs(&ro.name, ro.original_uid, ro.original_gid) {
+        std::process::exit(1);
+    }
+
+    let editor = get_editor();
+
+    nix::sys::stat::umask(ro.old_umask.unwrap());
+
+    if ro.old_envs.is_some() {
+        for (key, _) in std::env::vars() {
+            std::env::remove_var(key);
+        }
+        for (key, val) in ro.old_envs.as_ref().unwrap().iter() {
+            std::env::set_var(key, val);
+        }
+    }
+
+    let args: Vec<&str> = editor.as_str().split(' ').collect();
+    if args.len() == 1 {
+        Command::new(editor.as_str())
+            .arg(edit_file.as_ref().unwrap())
+            .exec();
+    } else {
+        Command::new(args[0])
+            .args(&args[1..])
+            .arg(edit_file.as_ref().unwrap())
+            .exec();
+    }
+    println!("Could not execute {}", editor.as_str());
+    std::process::exit(1);
+}
+
+fn do_edit_loop(
+    ro: &RunOptions,
+    entry: &EnvOptions,
+    source_file: &Path,
+    service: &str,
+    target_uid_gid: &UidGid,
+    lookup_name: &users::User,
+) {
+    let mut edit_file: Option<String> = None;
+    let mut file_data: Option<String> = None;
+
+    std::env::set_var("PLEASE_SOURCE_FILE", source_file.to_str().unwrap());
+
+    // loop around if resume on failure is set
+    loop {
+        edit_file = Some(setup_temp_edit_file(
+            service,
+            source_file,
+            ro,
+            target_uid_gid,
+            file_data,
+            edit_file,
+        ));
+        std::env::set_var("PLEASE_EDIT_FILE", edit_file.as_ref().unwrap());
+
+        let mut good_edit = false;
+
+        let sig_action = signal::SigAction::new(
+            signal::SigHandler::SigAction(handle_sigtstp),
+            signal::SaFlags::SA_RESTART,
+            signal::SigSet::all(),
+        );
+
+        match unsafe { fork() } {
+            Ok(ForkResult::Parent { .. }) => {
+                unsafe {
+                    signal::sigaction(signal::SIGCHLD, &sig_action).unwrap();
+                };
+
+                match nix::sys::wait::wait() {
+                    Ok(Exited(_pid, ret)) if ret == 0 => {
+                        good_edit = true;
+                    }
+                    Ok(_) => {}
+                    Err(_x) => {}
+                }
+                unsafe {
+                    signal::signal(signal::SIGCHLD, signal::SigHandler::SigDfl).unwrap();
+                };
+            }
+            Ok(ForkResult::Child) => {
+                child_editor(ro, &edit_file);
+            }
+            Err(_) => println!("Fork failed"),
+        }
+
+        if !good_edit {
+            println!("Exiting as editor or child did not close cleanly.");
+            std::process::exit(1);
+        }
+
+        // drop privs to original user and read into memory
+        log_action(service, "permit", ro, &ro.original_command.join(" "));
+        let dir_parent_tmp =
+            source_tmp_file_name(source_file, format!("{}.copy", service).as_str(), &ro.name);
+
+        let file_read = edit_file_to_memory(source_file, edit_file.as_ref().unwrap());
+
+        // become the target user and create file
+        let dir_parent_tmp_file =
+            write_target_tmp_file(&dir_parent_tmp, &file_read, target_uid_gid);
+
+        // original user, remove tmp edit file
+        remove_tmp_edit(ro, edit_file.as_ref().unwrap());
+
+        // rename file to source if exitcmd is clean
+        if rename_to_source(
+            &dir_parent_tmp,
+            source_file,
+            entry,
+            lookup_name,
+            &dir_parent_tmp_file,
+            UidGid {
+                target_uid: target_uid_gid.target_uid,
+                target_gid: runopt_target_gid(ro, lookup_name),
+            },
+            ro,
+        ) {
+            break;
+        }
+
+        file_data = Some(file_read.unwrap());
+    }
+}
+
 /// entry point
 fn main() {
     let args: Vec<String> = std::env::args().collect();
@@ -495,8 +626,10 @@ fn main() {
     }
     let lookup_name = lookup_name.unwrap();
 
-    let target_uid = nix::unistd::Uid::from_raw(lookup_name.uid());
-    let target_gid = nix::unistd::Gid::from_raw(lookup_name.primary_group_id());
+    let target_uid_gid = UidGid {
+        target_uid: nix::unistd::Uid::from_raw(lookup_name.uid()),
+        target_gid: nix::unistd::Gid::from_raw(lookup_name.primary_group_id()),
+    };
 
     let source_file = Path::new(&ro.new_args[0]);
 
@@ -506,130 +639,12 @@ fn main() {
 
     set_environment(&ro, &entry, &original_user, original_uid, &lookup_name);
 
-    let mut edit_file: Option<String> = None;
-    let mut file_data: Option<String> = None;
-
-    std::env::set_var("PLEASE_SOURCE_FILE", source_file.to_str().unwrap());
-
-    // loop around if resume on failure is set
-    loop {
-        edit_file = Some(setup_temp_edit_file(
-            &service,
-            source_file,
-            &ro,
-            UidGid {
-                target_uid,
-                target_gid,
-            },
-            file_data,
-            edit_file,
-        ));
-        std::env::set_var("PLEASE_EDIT_FILE", edit_file.as_ref().unwrap());
-
-        let mut good_edit = false;
-
-        let sig_action = signal::SigAction::new(
-            signal::SigHandler::SigAction(handle_sigtstp),
-            signal::SaFlags::SA_RESTART,
-            signal::SigSet::all(),
-        );
-
-        match unsafe { fork() } {
-            Ok(ForkResult::Parent { .. }) => {
-                unsafe {
-                    signal::sigaction(signal::SIGCHLD, &sig_action).unwrap();
-                };
-
-                match nix::sys::wait::wait() {
-                    Ok(Exited(_pid, ret)) if ret == 0 => {
-                        good_edit = true;
-                    }
-                    Ok(_) => {}
-                    Err(_x) => {}
-                }
-                unsafe {
-                    signal::signal(signal::SIGCHLD, signal::SigHandler::SigDfl).unwrap();
-                };
-            }
-            Ok(ForkResult::Child) => {
-                if !esc_privs() {
-                    std::process::exit(1);
-                }
-                if !set_privs(&ro.name, ro.original_uid, ro.original_gid) {
-                    std::process::exit(1);
-                }
-
-                let editor = get_editor();
-
-                nix::sys::stat::umask(ro.old_umask.unwrap());
-
-                if ro.old_envs.is_some() {
-                    for (key, _) in std::env::vars() {
-                        std::env::remove_var(key);
-                    }
-                    for (key, val) in ro.old_envs.as_ref().unwrap().iter() {
-                        std::env::set_var(key, val);
-                    }
-                }
-
-                let args: Vec<&str> = editor.as_str().split(' ').collect();
-                if args.len() == 1 {
-                    Command::new(editor.as_str())
-                        .arg(edit_file.as_ref().unwrap())
-                        .exec();
-                } else {
-                    Command::new(args[0])
-                        .args(&args[1..])
-                        .arg(edit_file.as_ref().unwrap())
-                        .exec();
-                }
-                println!("Could not execute {}", editor.as_str());
-                std::process::exit(1);
-            }
-            Err(_) => println!("Fork failed"),
-        }
-
-        if !good_edit {
-            println!("Exiting as editor or child did not close cleanly.");
-            std::process::exit(1);
-        }
-
-        // drop privs to original user and read into memory
-        log_action(&service, "permit", &ro, &ro.original_command.join(" "));
-        let dir_parent_tmp =
-            source_tmp_file_name(source_file, format!("{}.copy", service).as_str(), &ro.name);
-
-        let file_read = edit_file_to_memory(source_file, edit_file.as_ref().unwrap());
-
-        // become the target user and create file
-        let dir_parent_tmp_file = write_target_tmp_file(
-            &dir_parent_tmp,
-            &file_read,
-            UidGid {
-                target_uid,
-                target_gid,
-            },
-        );
-
-        // original user, remove tmp edit file
-        remove_tmp_edit(&ro, edit_file.as_ref().unwrap());
-
-        // rename file to source if exitcmd is clean
-        if rename_to_source(
-            &dir_parent_tmp,
-            source_file,
-            &entry,
-            &lookup_name,
-            &dir_parent_tmp_file,
-            UidGid {
-                target_uid,
-                target_gid: runopt_target_gid(&ro, &lookup_name),
-            },
-            &ro,
-        ) {
-            break;
-        }
-
-        file_data = Some(file_read.unwrap());
-    }
+    do_edit_loop(
+        &ro,
+        &entry,
+        source_file,
+        &service,
+        &target_uid_gid,
+        &lookup_name,
+    );
 }
