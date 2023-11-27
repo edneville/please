@@ -25,7 +25,7 @@ use std::collections::HashMap;
 
 use getopts::Options;
 
-use users::*;
+use uzers::*;
 
 /// walk through user ACL
 fn do_list(ro: &mut RunOptions, vec_eo: &[EnvOptions], service: &str) {
@@ -96,7 +96,7 @@ fn do_dir_changes(ro: &RunOptions, service: &str) {
 
 /// setup getopts for argument parsing and help output
 fn general_options(
-    mut ro: &mut RunOptions,
+    ro: &mut RunOptions,
     args: Vec<String>,
     service: &str,
     vec_eo: &mut Vec<EnvOptions>,
