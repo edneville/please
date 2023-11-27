@@ -39,7 +39,7 @@ use nix::sys::signal::Signal;
 use nix::sys::stat::fchmod;
 use nix::sys::wait::WaitStatus::Exited;
 use nix::unistd::{fchown, fork, ForkResult};
-use users::*;
+use uzers::*;
 
 struct UidGid {
     target_uid: nix::unistd::Uid,
@@ -451,7 +451,7 @@ fn do_edit_loop(
     source_file: &Path,
     service: &str,
     target_uid_gid: &UidGid,
-    lookup_name: &users::User,
+    lookup_name: &uzers::User,
 ) {
     let mut edit_file: Option<String> = None;
     let mut file_data: Option<String> = None;

@@ -9,15 +9,7 @@ echo "test that when given a reason and search_path='' then echo not found"
 # that's different, there's no definition for tester in the config, so the
 # message should be just 'echo'
 
-# Could not connect to syslog
-# should have a fix like:
-# [default:syslog]
-# name = .*
-# rule = .*
-# permit = false
-# syslog = .*
-
 echo '/usr/bin/please -r ree echo worked' | su - tester \
-    | grep -E 'You may not execute "/bin/echo worked"'
+    | grep -E 'You may not execute "echo worked"'
 
 

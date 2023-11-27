@@ -33,8 +33,8 @@ use std::io::prelude::*;
 use std::io::BufReader;
 use std::os::unix::io::AsRawFd;
 use std::time::SystemTime;
-use users::os::unix::UserExt;
-use users::*;
+use uzers::os::unix::UserExt;
+use uzers::*;
 
 use getopts::{Matches, Options};
 use nix::unistd::{alarm, gethostname, setegid, seteuid, setgid, setuid};
@@ -2241,7 +2241,7 @@ pub fn prng_alpha_num_string(n: usize) -> String {
         .collect()
 }
 
-pub fn runopt_target_gid(ro: &RunOptions, lookup_name: &users::User) -> nix::unistd::Gid {
+pub fn runopt_target_gid(ro: &RunOptions, lookup_name: &uzers::User) -> nix::unistd::Gid {
     if ro.target_group.is_some() {
         match nix::unistd::Group::from_name(ro.target_group.as_ref().unwrap()) {
             Ok(x) => match x {
