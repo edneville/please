@@ -17,11 +17,10 @@ exclude = ["/bintest"]
 regex = "1.7"
 chrono = "0.4"
 getopts = "0.2"
-nix = ">= 0.25"
+nix = { version = ">= 0.27", features = ["signal", "user", "fs", "term", "hostname"] }
 pam = "0.7"
 uzers = ">= 0.10, < 0.12"
 rpassword = "6"
 syslog= ">= 6.0"
 libc = "0.2"
 rand = "0.8"
-

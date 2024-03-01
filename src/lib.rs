@@ -1509,13 +1509,13 @@ pub fn challenge_password(ro: &RunOptions, entry: &EnvOptions, service: &str) ->
 
                 let tty = std::fs::File::open("/dev/tty");
                 if tty.is_ok() {
-                    let term_res = nix::sys::termios::tcgetattr(tty.as_ref().unwrap().as_raw_fd());
+                    let term_res = nix::sys::termios::tcgetattr(tty.as_ref().unwrap());
                     if let Ok(mut term) = term_res {
                         term.local_flags
                             .set(nix::sys::termios::LocalFlags::ECHO, true);
 
                         let res = nix::sys::termios::tcsetattr(
-                            tty.as_ref().unwrap().as_raw_fd(),
+                            tty.as_ref().unwrap(),
                             nix::sys::termios::SetArg::TCSANOW,
                             &term,
                         );
@@ -2221,7 +2221,7 @@ pub fn group_hash(groups: Vec<Group>) -> HashMap<String, u32> {
 pub fn replace_new_args(new_args: Vec<String>) -> String {
     let mut args = vec![];
     for arg in &new_args {
-        args.push(arg.replace('\\', r#"\\"#).replace(' ', r#"\ "#));
+        args.push(arg.replace('\\', r"\\").replace(' ', r"\ "));
     }
 
     args.join(" ")

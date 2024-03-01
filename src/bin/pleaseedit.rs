@@ -485,7 +485,7 @@ fn do_edit_loop(
                 };
 
                 match nix::sys::wait::wait() {
-                    Ok(Exited(_pid, ret)) if ret == 0 => {
+                    Ok(Exited(_pid, 0)) => {
                         good_edit = true;
                     }
                     Ok(_) => {}
