@@ -3,6 +3,8 @@
 * and_hms -> and_hms_opt
 * macos beta support
 * optionally resume when pleasedit exitcmd fails
+* bump nix to 0.27 and rpassword to 7
+* users -> uzers
 
 0.5.4
 
