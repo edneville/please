@@ -502,7 +502,7 @@ fn do_edit_loop(
         }
 
         if !good_edit {
-            println!("Exiting as editor or child did not close cleanly.");
+            println!("Exiting as editor or child did not close cleanly. Leaving {} in place.", edit_file.as_ref().unwrap());
             std::process::exit(1);
         }
 
