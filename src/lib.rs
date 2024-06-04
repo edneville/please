@@ -396,7 +396,7 @@ pub fn common_opt_arguments(
     service: &str,
     header: &str,
 ) {
-    ro.new_args = matches.free.clone();
+    ro.new_args.clone_from(&matches.free);
 
     if matches.opt_present("r") {
         ro.reason = Some(matches.opt_str("r").unwrap());
@@ -509,7 +509,7 @@ pub fn read_ini(
                 vec_eo.push(opt);
             }
             opt = EnvOptions::new();
-            opt.section = section.clone();
+            opt.section.clone_from(&section);
             opt.file_name = String::from(config_path);
             continue;
         }
@@ -1292,7 +1292,7 @@ pub fn merge_default(default: &EnvOptions, item: &EnvOptions) -> EnvOptions {
 
     if default.reason.is_some() && item.reason.is_none() {
         // println!("merging reason");
-        merged.reason = default.reason.clone();
+        merged.reason.clone_from(&default.reason);
     }
 
     if default.require_pass.is_some() && item.require_pass.is_none() {
@@ -1307,12 +1307,12 @@ pub fn merge_default(default: &EnvOptions, item: &EnvOptions) -> EnvOptions {
 
     if default.exitcmd.is_some() && item.exitcmd.is_none() {
         // println!("merging exitcmd");
-        merged.exitcmd = default.exitcmd.clone();
+        merged.exitcmd.clone_from(&default.exitcmd);
     }
 
     if default.edit_mode.is_some() && item.edit_mode.is_none() {
         // println!("merging edit_mode");
-        merged.edit_mode = default.edit_mode.clone();
+        merged.edit_mode.clone_from(&default.edit_mode);
     }
 
     if default.timeout.is_some() && item.timeout.is_none() {
@@ -1322,12 +1322,12 @@ pub fn merge_default(default: &EnvOptions, item: &EnvOptions) -> EnvOptions {
 
     if default.env_permit.is_some() && item.env_permit.is_none() {
         // println!("merging env_permit");
-        merged.env_permit = default.env_permit.clone();
+        merged.env_permit.clone_from(&default.env_permit);
     }
 
     if default.env_assign.is_some() && item.env_assign.is_none() {
         // println!("merging env_assign");
-        merged.env_assign = default.env_assign.clone();
+        merged.env_assign.clone_from(&default.env_assign);
     }
 
     if default.permit.is_some() && item.permit.is_none() {
@@ -1337,7 +1337,7 @@ pub fn merge_default(default: &EnvOptions, item: &EnvOptions) -> EnvOptions {
 
     if default.search_path.is_some() && item.search_path.is_none() {
         // println!("merging search_path");
-        merged.search_path = default.search_path.clone();
+        merged.search_path.clone_from(&default.search_path);
     }
 
     if default.token_timeout.is_some() && item.token_timeout.is_none() {
@@ -1631,7 +1631,7 @@ pub fn produce_list(vec_eo: &[EnvOptions], ro: &RunOptions) -> Vec<String> {
     let mut ro = ro.clone();
 
     if !ro.target.is_empty() {
-        ro.name = ro.target.clone();
+        ro.name.clone_from(&ro.target);
     }
 
     let mut last_file = "";

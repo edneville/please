@@ -191,6 +191,9 @@ fn build_exitcmd(entry: &EnvOptions, source_file: &str, edit_file: &str) -> Comm
             );
         }
     }
+
+    std::env::set_var("PLEASE_EDIT_FILE", edit_file);
+
     cmd.stdin(Stdio::inherit());
     cmd.stdout(Stdio::inherit());
     cmd.stderr(Stdio::inherit());
@@ -502,7 +505,10 @@ fn do_edit_loop(
         }
 
         if !good_edit {
-            println!("Exiting as editor or child did not close cleanly. Leaving {} in place.", edit_file.as_ref().unwrap());
+            println!(
+                "Exiting as editor or child did not close cleanly. Leaving {} in place.",
+                edit_file.as_ref().unwrap()
+            );
             std::process::exit(1);
         }
 
@@ -550,7 +556,7 @@ fn main() {
     ro.name = original_user.name().to_string_lossy().to_string();
     ro.acl_type = Acltype::Edit;
     ro.syslog = true;
-    ro.original_command = args.clone();
+    ro.original_command.clone_from(&args);
     let mut vec_eo: Vec<EnvOptions> = vec![];
 
     let root_uid = nix::unistd::Uid::from_raw(0);

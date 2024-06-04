@@ -216,7 +216,7 @@ fn main() {
     let original_user = get_user_by_uid(original_uid).unwrap();
     ro.name = original_user.name().to_string_lossy().to_string();
     ro.syslog = true;
-    ro.original_command = args.clone();
+    ro.original_command.clone_from(&args);
     let mut vec_eo: Vec<EnvOptions> = vec![];
 
     let root_uid = nix::unistd::Uid::from_raw(0);
