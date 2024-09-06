@@ -1,3 +1,9 @@
+0.5.6
+
+* uzers >= 10 @nc7s (gitlab#15)
+* set PLEASE_EDIT_FILE environment when editing
+* nix >= 0.28
+
 0.5.5
 
 * and_hms -> and_hms_opt
