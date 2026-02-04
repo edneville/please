@@ -2071,10 +2071,7 @@ pub fn create_token_dir() -> bool {
 }
 
 pub fn boot_secs() -> libc::timespec {
-    let mut tp = libc::timespec {
-        tv_sec: 0,
-        tv_nsec: 0,
-    };
+    let mut tp = unsafe { std::mem::zeroed() };
     #[cfg(target_os = "linux")]
     unsafe {
         libc::clock_gettime(libc::CLOCK_BOOTTIME, &mut tp)

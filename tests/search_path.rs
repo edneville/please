@@ -134,7 +134,7 @@ search_path = /sbin
 [ed]
 name=ed
 target=root
-rule = .*/e2fsck
+rule = .*/usermod
 "
         .to_string();
 
@@ -145,11 +145,11 @@ rule = .*/e2fsck
 
         read_ini_config_str(&config, &mut vec_eo, &ro, false, &mut bytes, &mut ini_list);
 
-        basic_cmd(&mut ro, &"e2fsck".to_string());
+        basic_cmd(&mut ro, &"usermod".to_string());
         let c = can(&vec_eo, &mut ro);
         dbg!(&c);
         assert_eq!(c.permit(), true);
-        assert_eq!(ro.command, "/sbin/e2fsck");
+        assert_eq!(ro.command, "/sbin/usermod");
         assert_eq!(c.search_path, Some("/sbin".to_string()));
     }
 }
